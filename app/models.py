@@ -1,0 +1,57 @@
+from datetime import datetime, timezone
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .core.database import Base
+
+def now(): return datetime.now(timezone.utc)
+
+device_categories = Table("device_categories", Base.metadata,
+    Column("device_id", ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
+    Column("category_id", ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True))
+device_quiz_catalogs = Table("device_quiz_catalogs", Base.metadata,
+    Column("device_id", ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
+    Column("catalog_id", ForeignKey("quiz_catalogs.id", ondelete="CASCADE"), primary_key=True))
+
+class Device(Base):
+    __tablename__="devices"
+    id: Mapped[int]=mapped_column(primary_key=True)
+    device_id: Mapped[str]=mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
+    age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(40), default="dragon")
+    avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
+    weather_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
+    last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
+    battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
+    news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
+    included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
+    weather_location: Mapped[str]=mapped_column(String(120), default=""); latitude: Mapped[float|None]=mapped_column(Float); longitude: Mapped[float|None]=mapped_column(Float)
+    temperature_unit: Mapped[str]=mapped_column(String(2), default="C"); weather_fields: Mapped[list]=mapped_column(JSON, default=lambda:["temperature","rain","wind"])
+    home_slots: Mapped[dict]=mapped_column(JSON, default=lambda:{"slot1":"weather","slot2":"news_count","slot3":"question_of_day","slot4":"none"})
+    pages: Mapped[list["DevicePage"]]=relationship(cascade="all, delete-orphan", order_by="DevicePage.position")
+    categories: Mapped[list["Category"]]=relationship(secondary=device_categories)
+    quiz_catalogs: Mapped[list["QuizCatalog"]]=relationship(secondary=device_quiz_catalogs)
+class DevicePage(Base):
+    __tablename__="device_pages"; __table_args__=(UniqueConstraint("device_id","page_id"),)
+    id: Mapped[int]=mapped_column(primary_key=True); device_id: Mapped[int]=mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    page_id: Mapped[str]=mapped_column(String(40)); title: Mapped[str]=mapped_column(String(80)); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
+    position: Mapped[int]=mapped_column(Integer); settings: Mapped[dict]=mapped_column(JSON, default=dict)
+class Category(Base):
+    __tablename__="categories"; id: Mapped[int]=mapped_column(primary_key=True); slug: Mapped[str]=mapped_column(String(60), unique=True); name: Mapped[str]=mapped_column(String(100))
+class Feed(Base):
+    __tablename__="feeds"; id: Mapped[int]=mapped_column(primary_key=True); name: Mapped[str]=mapped_column(String(120)); url: Mapped[str]=mapped_column(String(1000), unique=True)
+    enabled: Mapped[bool]=mapped_column(Boolean, default=True); category_id: Mapped[int|None]=mapped_column(ForeignKey("categories.id")); category: Mapped[Category|None]=relationship()
+    update_interval: Mapped[int]=mapped_column(Integer, default=15); last_fetch: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); last_success: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); last_error: Mapped[str|None]=mapped_column(Text)
+    auto_publish: Mapped[bool]=mapped_column(Boolean, default=True); image_mode: Mapped[str]=mapped_column(String(20), default="center_crop")
+class Article(Base):
+    __tablename__="articles"; id: Mapped[int]=mapped_column(primary_key=True); external_id: Mapped[str|None]=mapped_column(String(1000)); feed_id: Mapped[int]=mapped_column(ForeignKey("feeds.id", ondelete="CASCADE")); feed: Mapped[Feed]=relationship()
+    category: Mapped[str]=mapped_column(String(60), default="allgemein"); title: Mapped[str]=mapped_column(String(500)); summary: Mapped[str]=mapped_column(Text); content: Mapped[str]=mapped_column(Text, default="")
+    source: Mapped[str]=mapped_column(String(120)); url: Mapped[str]=mapped_column(String(1500)); published_at: Mapped[datetime]=mapped_column(DateTime(timezone=True)); fetched_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now)
+    image_original: Mapped[str|None]=mapped_column(String(500)); image_leap: Mapped[str|None]=mapped_column(String(500)); hash: Mapped[str]=mapped_column(String(64), unique=True, index=True)
+class WeatherCache(Base):
+    __tablename__="weather_cache"; id: Mapped[int]=mapped_column(primary_key=True); device_id: Mapped[int]=mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), unique=True); fetched_at: Mapped[datetime]=mapped_column(DateTime(timezone=True)); data: Mapped[dict]=mapped_column(JSON)
+class QuizCatalog(Base):
+    __tablename__="quiz_catalogs"; id: Mapped[int]=mapped_column(primary_key=True); name: Mapped[str]=mapped_column(String(120)); enabled: Mapped[bool]=mapped_column(Boolean, default=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); questions: Mapped[list["QuizQuestion"]]=relationship(cascade="all, delete-orphan")
+class QuizQuestion(Base):
+    __tablename__="quiz_questions"; id: Mapped[int]=mapped_column(primary_key=True); catalog_id: Mapped[int]=mapped_column(ForeignKey("quiz_catalogs.id", ondelete="CASCADE")); question: Mapped[str]=mapped_column(Text); answers: Mapped[list]=mapped_column(JSON); explanation: Mapped[str]=mapped_column(Text, default=""); min_age: Mapped[int]=mapped_column(Integer, default=0); difficulty: Mapped[int]=mapped_column(Integer, default=1); tags: Mapped[list]=mapped_column(JSON, default=list)
