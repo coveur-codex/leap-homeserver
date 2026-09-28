@@ -1,0 +1,8 @@
+services:
+  leap:
+    build: .
+    container_name: leap-homeserver
+    restart: unless-stopped
+    env_file: [.env]
+    ports: ["8080:8080"]
+    volumes: ["./data:/data"]
