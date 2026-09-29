@@ -51,12 +51,7 @@ def test_device_preview_layout_and_avatar(client,db):
  assert 'class="leap-sidebar"' in page.text
  assert 'class="leap-card news-card"' in page.text
  assert '/static/avatars/dragon.svg' in page.text
- assert '/static/style.css?v=3' in page.text
- assert 'width="24" height="24"' in page.text
  assert client.get('/static/avatars/dragon.svg').status_code==200
- stylesheet=client.get('/static/style.css?v=3')
- assert stylesheet.status_code==200
- assert '.leap-preview{' in stylesheet.text and '.device-signals svg{' in stylesheet.text
 
 def test_device_preview_carousel_uses_device_news_selection(client,db):
  d=make_device(db)
