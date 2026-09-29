@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 from pathlib import Path
 import httpx
@@ -21,3 +22,11 @@ def download_and_process(url: str, article_id: int, mode: str) -> tuple[str,str]
         response=client.get(url); response.raise_for_status()
         if len(response.content)>settings.max_download_bytes: raise ValueError("Bild ist zu groß")
         return process_image(response.content,article_id,mode)
+
+async def download_and_process_async(url: str, article_id: int, mode: str, client: httpx.AsyncClient) -> tuple[str,str]:
+    """Download an article image without blocking the server's event loop."""
+    validate_external_url(url)
+    response=await client.get(url)
+    response.raise_for_status()
+    if len(response.content)>settings.max_download_bytes: raise ValueError("Bild ist zu groß")
+    return await asyncio.to_thread(process_image,response.content,article_id,mode)

@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from fastapi import APIRouter,Depends,File,Form,HTTPException,Request,UploadFile
 from fastapi.responses import HTMLResponse,RedirectResponse
@@ -31,7 +32,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     new_device_id=(device_id or d.device_id).strip()
-    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
+    if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
