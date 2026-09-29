@@ -16,19 +16,19 @@ def dashboard(request:Request,db:Session=Depends(get_db)): return templates.Temp
 @router.get("/devices",response_class=HTMLResponse)
 def devices(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"devices.html",{"devices":db.scalars(select(Device).order_by(Device.name)).all()})
 @router.post("/devices")
-def create_device(device_id:str=Form(),name:str=Form(),child_name:str=Form(""),age:int=Form(8),avatar:str=Form("dragon"),db:Session=Depends(get_db)):
+def create_device(device_id:str=Form(),name:str=Form(),child_name:str=Form(""),age:int=Form(8),avatar:str=Form("dragon"),avatar_name:str=Form(""),db:Session=Depends(get_db)):
     if db.scalar(select(Device).where(Device.device_id==device_id)): raise HTTPException(409,"device_id bereits vorhanden")
-    d=Device(device_id=device_id,name=name,child_name=child_name,age=age,avatar=avatar); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    d=Device(device_id=device_id,name=name,child_name=child_name,age=age,avatar=avatar,avatar_name=avatar_name); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/devices/{id}",response_class=HTMLResponse)
 def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"article":db.scalar(select(Article).order_by(Article.published_at.desc()))})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),avatar_name:str=Form(""),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
-    d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
+    d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
     for pos,pid in enumerate(page_ids,1):
         if page:=next((x for x in d.pages if x.page_id==pid),None): page.enabled=True; page.position=positions.get(pid,pos)
@@ -39,7 +39,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")
