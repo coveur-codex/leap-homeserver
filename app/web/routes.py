@@ -1,4 +1,6 @@
 import json
+import re
+from datetime import datetime
 from fastapi import APIRouter,Depends,File,Form,HTTPException,Request,UploadFile
 from fastapi.responses import HTMLResponse,RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -9,6 +11,7 @@ from app.core.pages import PAGE_REGISTRY
 from app.models import Article,Category,Device,Feed,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import fetch_feed
+from app.services.news import articles_for_device
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
 def redir(p): return RedirectResponse(p,303)
 @router.get("/",response_class=HTMLResponse)
@@ -23,12 +26,15 @@ def create_device(device_id:str=Form(),name:str=Form(),child_name:str=Form(""),a
 def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"article":db.scalar(select(Article).order_by(Article.published_at.desc()))})
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_now":datetime.now()})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),avatar_name:str=Form(""),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
-    d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
+    new_device_id=(device_id or d.device_id).strip()
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
+    if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
+    d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
     for pos,pid in enumerate(page_ids,1):
         if page:=next((x for x in d.pages if x.page_id==pid),None): page.enabled=True; page.position=positions.get(pid,pos)

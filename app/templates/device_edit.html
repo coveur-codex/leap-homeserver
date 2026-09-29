@@ -1,1 +1,52 @@
-{% extends 'base.html' %}{% block content %}<h1>{{device.name}} bearbeiten</h1><form method="post"><div class="tabs"><section><h2>Allgemein</h2><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in ['dragon','jellyfish','walrus','frog','redpanda'] %}<option {% if a==device.avatar %}selected{% endif %}>{{a}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section><section><h2>Seiten</h2><p>Die Reihenfolge der aktivierten Checkboxen entspricht der Registry-Reihenfolge.</p>{% for p in device.pages %}<label><input type="checkbox" name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="8" name="page_positions" value="{{p.position}}" aria-label="Position"> {% if not registry[loop.index0].implemented %}<small>(vorbereitet)</small>{% endif %}</label>{% endfor %}</section><section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section><section><h2>Wetter</h2><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section></div><button>Speichern & Version erhöhen</button></form><div class="preview"><div class="status">08:42 <span>WLAN · Akku 83 %</span></div><div class="screen"><strong>{{device.avatar}} {{device.avatar_name or device.child_name or device.name}}</strong>{% if article %}<img src="/api/v1/assets/news/{{article.id}}/thumb.jpg"><div><b>{{article.title[:72]}}</b><small>{{article.summary[:120]}}</small></div>{% else %}<p>{{device.weather_location or 'Home'}} · Willkommen!</p>{% endif %}</div></div><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<h1>{{device.name}} bearbeiten</h1>
+<form method="post">
+  <div class="tabs">
+    <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required aria-describedby="device-id-help"></label><small id="device-id-help">Muss auch im LEAP-Gerät hinterlegt sein.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in ['dragon','jellyfish','walrus','frog','redpanda'] %}<option {% if a==device.avatar %}selected{% endif %}>{{a}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
+    <section><h2>Seiten</h2><p>Die Reihenfolge der aktivierten Checkboxen entspricht der Registry-Reihenfolge.</p>{% for p in device.pages %}<label><input type="checkbox" name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="8" name="page_positions" value="{{p.position}}" aria-label="Position"> {% if not registry[loop.index0].implemented %}<small>(vorbereitet)</small>{% endif %}</label>{% endfor %}</section>
+    <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
+    <section><h2>Wetter</h2><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
+  </div>
+  <button>Speichern & Version erhöhen</button>
+</form>
+
+<h2 class="preview-heading">Display-Vorschau</h2>
+<div class="leap-preview" aria-label="Vorschau des LEAP-Displays">
+  <aside class="leap-sidebar">
+    <div class="device-signals" aria-label="WLAN, Bluetooth und Akku">
+      <svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 9c5-4 13-4 18 0M6 13c3.5-3 8.5-3 12 0M9.5 17c1.5-1.3 3.5-1.3 5 0"/></svg>
+      <svg width="24" height="24" viewBox="0 0 24 24"><path d="m9 4 7 6-7 5V4Zm0 11 7 5-7 4v-20M4 8l12 12M4 20l12-12"/></svg>
+      <svg class="battery-icon" width="28" height="16" viewBox="0 0 28 16"><rect x="1" y="1" width="23" height="14" rx="2"/><path d="M26 5v6M4 4h15v8H4z"/></svg>
+    </div>
+    <time class="device-time">{{preview_now.strftime('%H:%M')}}</time>
+    <div class="device-date">{{preview_now.strftime('%d.%m.%y')}}</div>
+    <div class="sidebar-rule"></div>
+    <div class="avatar-wrap"><img width="88" height="100" src="/static/avatars/{{device.avatar}}.svg" alt="Avatar {{device.avatar_name or device.child_name or device.name}}"><span>{{device.avatar_name or device.child_name or device.name}}</span></div>
+    <div class="sidebar-rule"></div>
+    <div class="current-card" aria-label="Aktuelle Karte: News"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 8h5v4H7zM14 8h3M14 11h3M7 15h10"/></svg><span>NEWS</span></div>
+  </aside>
+  <article class="leap-card news-card" data-news-carousel>
+    {% for article in preview_articles %}
+    <section class="news-slide{% if loop.first %} active{% endif %}" data-news-slide {% if not loop.first %}hidden{% endif %}>
+      <div class="news-copy">
+        <div class="news-meta"><strong>{{article.source}}</strong><span>{{article.published_at.strftime('%d.%m.%Y')}}</span></div>
+        <h3>{{article.title}}</h3>
+        <p>{{article.summary or article.content}}</p>
+      </div>
+      <div class="news-visual{% if not article.image_leap %} news-visual-placeholder{% endif %}">
+        {% if article.image_leap %}<img src="/api/v1/assets/news/{{article.id}}/thumb.jpg" alt="Bild zum Artikel">{% else %}<svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/><path d="m21 58 20-20 20 20M41 38v54"/></svg>{% endif %}
+      </div>
+    </section>
+    {% else %}
+    <section class="news-slide active empty-news" data-news-slide>
+      <div class="news-copy"><div class="news-meta"><strong>LEAP News</strong><span>{{preview_now.strftime('%d.%m.%Y')}}</span></div><h3>Noch keine passenden Artikel</h3><p>Wähle für dieses Gerät News-Kategorien aus und aktualisiere die zugehörigen Feeds. Dann kannst du die Artikel hier durchblättern.</p></div>
+      <div class="news-visual news-visual-placeholder"><svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/><path d="m21 58 20-20 20 20M41 38v54"/></svg></div>
+    </section>
+    {% endfor %}
+    {% if preview_articles|length > 1 %}<div class="card-actions"><button type="button" data-news-prev aria-label="Vorheriger Artikel">‹</button><span class="slide-count" aria-live="polite">1 / {{preview_articles|length}}</span><button type="button" data-news-next aria-label="Nächster Artikel">›</button></div>{% endif %}
+  </article>
+</div>
+<div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
+<script src="/static/device-preview.js?v=2" defer></script>
+{% endblock %}
