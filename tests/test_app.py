@@ -31,3 +31,38 @@ def test_interest_news_api(client,db):
  d=make_device(db);c=Category(slug="technik",name="Technik");d.categories.append(c);f=Feed(name="F",url="https://x.test",category=c);db.add_all([c,f]);db.flush();db.add(Article(feed=f,category="technik",title="T",summary="S",source="F",url="https://x/a",published_at=datetime.now(timezone.utc),hash="x"));db.commit();assert len(client.get("/api/v1/devices/leap-erik/news").json()["articles"])==1
 def test_quiz_age_filter(client,db):
  d=make_device(db,8);cat=QuizCatalog(name="C");cat.questions=[QuizQuestion(question="jung",answers=["a","b","c","d"],min_age=7),QuizQuestion(question="alt",answers=["a","b","c","d"],min_age=10)];d.quiz_catalogs.append(cat);db.commit();assert [q["q"] for q in client.get("/api/v1/devices/leap-erik/quiz").json()["questions"]]==["jung"]
+
+def test_device_preview_layout_and_avatar(client,db):
+ d=make_device(db)
+ page=client.get(f"/devices/{d.id}")
+ assert page.status_code==200
+ assert 'class="leap-sidebar"' in page.text
+ assert 'class="leap-card news-card"' in page.text
+ assert '/static/avatars/dragon.svg' in page.text
+ assert '/static/style.css?v=3' in page.text
+ assert 'width="24" height="24"' in page.text
+ assert client.get('/static/avatars/dragon.svg').status_code==200
+ stylesheet=client.get('/static/style.css?v=3')
+ assert stylesheet.status_code==200
+ assert '.leap-preview{' in stylesheet.text and '.device-signals svg{' in stylesheet.text
+
+def test_device_preview_carousel_uses_device_news_selection(client,db):
+ d=make_device(db)
+ selected=Category(slug="selected",name="Selected")
+ hidden=Category(slug="hidden",name="Hidden")
+ d.categories.append(selected)
+ selected_feed=Feed(name="Selected Feed",url="https://selected.test",category=selected)
+ hidden_feed=Feed(name="Hidden Feed",url="https://hidden.test",category=hidden)
+ db.add_all([selected,hidden,selected_feed,hidden_feed]);db.flush()
+ now=datetime.now(timezone.utc)
+ db.add_all([
+  Article(feed=selected_feed,category="selected",title="First selected",summary="One",source="Selected Feed",url="https://selected.test/1",published_at=now,hash="selected-1"),
+  Article(feed=selected_feed,category="selected",title="Second selected",summary="Two",source="Selected Feed",url="https://selected.test/2",published_at=now,hash="selected-2"),
+  Article(feed=hidden_feed,category="hidden",title="Must stay hidden",summary="No",source="Hidden Feed",url="https://hidden.test/1",published_at=now,hash="hidden-1"),
+ ]);db.commit()
+ page=client.get(f"/devices/{d.id}")
+ assert page.text.count("data-news-slide") == 2
+ assert "First selected" in page.text and "Second selected" in page.text
+ assert "Must stay hidden" not in page.text
+ assert "data-news-next" in page.text and "1 / 2" in page.text
+ assert client.get('/static/device-preview.js').status_code==200
