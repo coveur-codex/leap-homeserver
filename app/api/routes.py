@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models import Article, Device, Feed, QuizQuestion
+from app.models import Device, QuizQuestion
+from app.services.news import articles_for_device
 from app.services.weather import get_weather
 router=APIRouter(prefix="/api/v1")
 def device_or_404(device_id:str,db:Session)->Device:
@@ -30,10 +31,7 @@ def checkin(device_id:str,data:Checkin,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); d.last_seen=datetime.now(timezone.utc); d.firmware_version=data.firmwareVersion; d.battery=data.battery; d.wifi_rssi=data.wifiRssi; d.free_flash=data.freeFlash; db.commit(); return {"ok":True,"serverTime":d.last_seen}
 @router.get("/devices/{device_id}/news")
 def news(device_id:str,limit:int|None=Query(None,ge=1,le=100),since:datetime|None=None,db:Session=Depends(get_db)):
-    d=device_or_404(device_id,db); wanted={c.slug for c in d.categories}; include=set(d.included_feed_ids); exclude=set(d.excluded_feed_ids)
-    cutoff=max(since or datetime.min.replace(tzinfo=timezone.utc),datetime.now(timezone.utc)-timedelta(hours=d.news_max_age_hours))
-    q=select(Article).join(Feed).where(Article.published_at>=cutoff,~Article.feed_id.in_(exclude)).order_by(Article.published_at.desc())
-    rows=[a for a in db.scalars(q).all() if a.category in wanted or a.feed_id in include][:(limit or d.news_limit)]
+    d=device_or_404(device_id,db); rows=articles_for_device(d,db,limit=limit,since=since)
     return {"version":d.news_version,"articles":[{"id":f"news_{a.id}","category":a.category,"title":a.title,"summary":a.summary,"source":a.source,"published":a.published_at,"image":f"/api/v1/assets/news/{a.id}/thumb.jpg" if a.image_leap else None} for a in rows]}
 @router.get("/devices/{device_id}/weather")
 async def weather(device_id:str,db:Session=Depends(get_db)):
