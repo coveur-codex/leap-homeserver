@@ -20,6 +20,18 @@ def test_config_version(client,db):
  client.post(f"/devices/{d.id}",data={"name":"E","age":64,"avatar":"frog","avatar_name":"Freddy","enabled":"on","page_ids":["home"]});db.refresh(d)
  assert d.config_version==before+1
  assert (d.age,d.avatar,d.avatar_name)==(64,"frog","Freddy")
+
+def test_device_id_can_be_changed_but_must_stay_unique(client,db):
+ d=make_device(db)
+ other=Device(device_id="leap-anna",name="Anna");initialize_pages(other);db.add(other);db.commit()
+ form={"device_id":"leap-papa","name":"Papa","age":42,"avatar":"dragon"}
+ response=client.post(f"/devices/{d.id}",data=form,follow_redirects=False)
+ db.refresh(d)
+ assert response.status_code==303 and d.device_id=="leap-papa"
+ form["device_id"]="leap-anna"
+ assert client.post(f"/devices/{d.id}",data=form).status_code==409
+ form["device_id"]="LEAP Papa"
+ assert client.post(f"/devices/{d.id}",data=form).status_code==422
 def test_clean_html(): assert clean_text("<p>Hallo&nbsp;  Welt</p>")=="Hallo Welt"
 def test_feed_parse_and_dedupe(db):
  c=Category(slug="technik",name="Technik");db.add(c);db.flush();f=Feed(name="Test",url="https://example.com/rss",category=c,image_mode="disabled");db.add(f);db.commit()
