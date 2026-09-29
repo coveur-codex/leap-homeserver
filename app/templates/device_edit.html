@@ -15,16 +15,16 @@
 <div class="leap-preview" aria-label="Vorschau des LEAP-Displays">
   <aside class="leap-sidebar">
     <div class="device-signals" aria-label="WLAN, Bluetooth und Akku">
-      <svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 9c5-4 13-4 18 0M6 13c3.5-3 8.5-3 12 0M9.5 17c1.5-1.3 3.5-1.3 5 0"/></svg>
-      <svg width="24" height="24" viewBox="0 0 24 24"><path d="m9 4 7 6-7 5V4Zm0 11 7 5-7 4v-20M4 8l12 12M4 20l12-12"/></svg>
-      <svg class="battery-icon" width="28" height="16" viewBox="0 0 28 16"><rect x="1" y="1" width="23" height="14" rx="2"/><path d="M26 5v6M4 4h15v8H4z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M3 9c5-4 13-4 18 0M6 13c3.5-3 8.5-3 12 0M9.5 17c1.5-1.3 3.5-1.3 5 0"/></svg>
+      <svg viewBox="0 0 24 24"><path d="m9 4 7 6-7 5V4Zm0 11 7 5-7 4v-20M4 8l12 12M4 20l12-12"/></svg>
+      <svg class="battery-icon" viewBox="0 0 28 16"><rect x="1" y="1" width="23" height="14" rx="2"/><path d="M26 5v6M4 4h15v8H4z"/></svg>
     </div>
     <time class="device-time">{{preview_now.strftime('%H:%M')}}</time>
     <div class="device-date">{{preview_now.strftime('%d.%m.%y')}}</div>
     <div class="sidebar-rule"></div>
-    <div class="avatar-wrap"><img width="88" height="100" src="/static/avatars/{{device.avatar}}.svg" alt="Avatar {{device.avatar_name or device.child_name or device.name}}"><span>{{device.avatar_name or device.child_name or device.name}}</span></div>
+    <div class="avatar-wrap"><img src="/static/avatars/{{device.avatar}}.svg" alt="Avatar {{device.avatar_name or device.child_name or device.name}}"><span>{{device.avatar_name or device.child_name or device.name}}</span></div>
     <div class="sidebar-rule"></div>
-    <div class="current-card" aria-label="Aktuelle Karte: News"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 8h5v4H7zM14 8h3M14 11h3M7 15h10"/></svg><span>NEWS</span></div>
+    <div class="current-card" aria-label="Aktuelle Karte: News"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 8h5v4H7zM14 8h3M14 11h3M7 15h10"/></svg><span>NEWS</span></div>
   </aside>
   <article class="leap-card news-card" data-news-carousel>
     {% for article in preview_articles %}
@@ -48,5 +48,5 @@
   </article>
 </div>
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-preview.js?v=2" defer></script>
+<script src="/static/device-preview.js" defer></script>
 {% endblock %}
