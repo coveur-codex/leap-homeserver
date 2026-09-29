@@ -18,6 +18,7 @@ class Device(Base):
     device_id: Mapped[str]=mapped_column(String(80), unique=True, index=True)
     name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
     age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(40), default="dragon")
+    avatar_name: Mapped[str]=mapped_column(String(100), default="")
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
