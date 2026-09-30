@@ -19,6 +19,7 @@ document.querySelectorAll("[data-news-carousel]").forEach((carousel) => {
 
 document.querySelectorAll(".leap-preview").forEach((preview) => {
   const cards = [...preview.querySelectorAll("[data-preview-card]")];
+  if (!cards.length) return;
   const label = preview.querySelector("[data-card-label]");
   const counter = preview.querySelector("[data-card-count]");
   let current = 0;
@@ -28,9 +29,10 @@ document.querySelectorAll(".leap-preview").forEach((preview) => {
       card.hidden = index !== current;
       card.classList.toggle("active", index === current);
     });
-    label.textContent = cards[current].dataset.previewCard;
-    counter.textContent = `${current + 1} / ${cards.length}`;
+    if (label) label.textContent = cards[current].dataset.previewCard;
+    if (counter) counter.textContent = `${current + 1} / ${cards.length}`;
   };
   preview.querySelector("[data-card-prev]")?.addEventListener("click", () => show(current - 1));
   preview.querySelector("[data-card-next]")?.addEventListener("click", () => show(current + 1));
+  show(0);
 });
