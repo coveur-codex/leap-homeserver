@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from app import __version__
-from app.api.routes import router as api_router
+from app.api.routes import knowledge_asset_router, leap_router, router as api_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import Article,Category,Device,Feed
@@ -47,4 +47,4 @@ async def lifespan(app):
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",minutes=1,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.start();yield;scheduler.shutdown(wait=False)
 app=FastAPI(title="LEAP Home Server",version=__version__,lifespan=lifespan)
-app.mount("/static",StaticFiles(directory="app/static"),name="static");app.include_router(api_router);app.include_router(web_router)
+app.mount("/static",StaticFiles(directory="app/static"),name="static");app.include_router(api_router);app.include_router(leap_router);app.include_router(knowledge_asset_router);app.include_router(web_router)

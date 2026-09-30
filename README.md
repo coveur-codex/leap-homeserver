@@ -37,6 +37,9 @@ die Verwaltungsoberfläche; die Display-Vorschau behält die Gerätefarben.
 - `GET /api/v1/devices/{device_id}/weather`
 - `GET /api/v1/devices/{device_id}/aircraft`
 - `GET /api/v1/devices/{device_id}/quiz`
+- `GET /api/leap/{device_id}/knowledge/article/{articleRef}`
+- `GET /api/leap/{device_id}/knowledge/search?q=wal`
+- `GET /api/leap/{device_id}/knowledge/random`
 - `GET /api/v1/assets/news/{article_id}/thumb.jpg`
 
 ## Entwicklung
@@ -49,4 +52,4 @@ uvicorn app.main:app --reload --port 8080
 pytest
 ```
 
-Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. V1 implementiert keine Wissensprovider, Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik; `knowledge` ist in der Page Registry für V2 vorhanden.
+Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
