@@ -1,1 +1,34 @@
-{% extends 'base.html' %}{% block content %}<h1>Systemstatus</h1><dl><dt>Server-Version</dt><dd>{{version}}</dd><dt>Datenbank</dt><dd>{{database}}</dd><dt>Cachegröße</dt><dd>{{cache_size}} Bytes</dd><dt>Bildspeicher</dt><dd>{{image_size}} Bytes</dd><dt>Feeds</dt><dd>{{feeds}}</dd><dt>Feedfehler</dt><dd>{{errors}}</dd><dt>Scheduler</dt><dd>aktiv (Feeds minütlich geprüft, Cleanup 03:00)</dd></dl>{% endblock %}
+{% extends 'base.html' %}
+{% macro timestamp(value) -%}
+  {% if value %}<time datetime="{{ value.isoformat() }}">{{ value.astimezone().strftime('%d.%m.%Y, %H:%M:%S') }} UTC</time>{% else %}<span class="muted">Noch nie</span>{% endif %}
+{%- endmacro %}
+{% macro state(error) -%}
+  {% if error %}<span class="system-state error">Fehler</span>{% else %}<span class="system-state ok">OK</span>{% endif %}
+{%- endmacro %}
+{% block content %}
+<div class="system-heading"><div><h1>Systemstatus</h1><p class="muted">Stand: {{ timestamp(now) }}</p></div><span class="system-state ok">Server läuft</span></div>
+<div class="stats system-stats">
+  <article><span>Geräte</span><b>{{ active_devices }} / {{ devices }}</b><small>aktiv / gesamt</small></article>
+  <article><span>News-Beiträge</span><b>{{ articles }}</b><small>gespeichert</small></article>
+  <article><span>Datenquellen</span><b>{{ locations|length }}</b><small>Standorte</small></article>
+  <article><span>Feedfehler</span><b{% if errors %} class="error-text"{% endif %}>{{ errors }}</b><small>von {{ feeds }} Feeds</small></article>
+</div>
+<section class="system-section">
+  <h2>Wetter und Flugradar</h2>
+  <p class="muted">Die Daten werden spätestens alle {{ location_interval }} Minuten je Standort geprüft. Flugradar-Radius: {{ aircraft_radius }} NM.</p>
+  {% if locations %}
+  <div class="table-scroll"><table class="system-table">
+    <thead><tr><th>Standort</th><th>Daten</th><th>Zuletzt erfolgreich</th><th>Nächste Prüfung ab</th><th>Status</th></tr></thead>
+    <tbody>{% for location in locations %}
+      <tr><th rowspan="2">{{ location.name }}<small>{{ location.coordinates }}</small></th><td>Wetter</td><td>{{ timestamp(location.weather_at) }}</td><td>{{ timestamp(location.weather_next) }}</td><td>{{ state(location.weather_error) }}{% if location.weather_error %}<small class="error-detail">{{ location.weather_error }}</small>{% endif %}</td></tr>
+      <tr><td>Flugradar</td><td>{{ timestamp(location.aircraft_at) }}</td><td>{{ timestamp(location.aircraft_next) }}</td><td>{{ state(location.aircraft_error) }}{% if location.aircraft_error %}<small class="error-detail">{{ location.aircraft_error }}</small>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty-state">Noch kein Standort mit Wetter- oder Flugradar-Daten vorhanden. Koordinaten können bei einem Gerät hinterlegt werden.</p>{% endif %}
+</section>
+<div class="grid system-grid">
+  <section><h2>Server</h2><dl><dt>Version</dt><dd>{{ version }}</dd><dt>Letzter Start</dt><dd>{{ timestamp(started_at) }}</dd><dt>Laufzeit</dt><dd>{{ uptime.days }} Tage, {{ uptime.seconds // 3600 }} Std., {{ (uptime.seconds % 3600) // 60 }} Min.</dd><dt>Scheduler</dt><dd><span class="system-state ok">Aktiv</span> Feeds und Standortdaten minütlich geprüft; Bereinigung um 03:00 Uhr</dd></dl></section>
+  <section><h2>Datenhaltung</h2><dl><dt>Datenbank</dt><dd><code>{{ database }}</code></dd><dt>Cache</dt><dd>{{ '%.1f'|format(cache_size / 1048576) }} MiB <small>({{ cache_size }} Bytes)</small></dd><dt>Bildspeicher</dt><dd>{{ '%.1f'|format(image_size / 1048576) }} MiB <small>({{ image_size }} Bytes)</small></dd></dl></section>
+  <section><h2>News</h2><dl><dt>Feeds</dt><dd>{{ feeds }}</dd><dt>Letzte erfolgreiche Aktualisierung</dt><dd>{{ timestamp(latest_feed) }}</dd><dt>Fehler</dt><dd>{{ errors }}</dd></dl></section>
+</div>
+{% endblock %}
