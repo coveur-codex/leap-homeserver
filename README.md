@@ -23,6 +23,11 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 3. Unter **Quiz** einen JSON-Katalog hochladen und Geräten zuordnen.
 4. Im Geräteeditor die 428×142-Vorschau prüfen.
 
+Über **Design** in der Kopfzeile lässt sich zwischen **Hell**, **Dunkel** und
+**System** wechseln. Die Auswahl wird pro Browser gespeichert; **System** folgt
+dem Farbschema des Betriebssystems. Standard ist **Hell**. Das Design gilt für
+die Verwaltungsoberfläche; die Display-Vorschau behält die Gerätefarben.
+
 ## Wichtige Geräte-API
 
 - `GET /api/v1/devices/{device_id}/config`
