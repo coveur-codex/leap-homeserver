@@ -30,6 +30,7 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 - `POST /api/v1/devices/{device_id}/checkin`
 - `GET /api/v1/devices/{device_id}/news?limit=20&since=...`
 - `GET /api/v1/devices/{device_id}/weather`
+- `GET /api/v1/devices/{device_id}/aircraft`
 - `GET /api/v1/devices/{device_id}/quiz`
 - `GET /api/v1/assets/news/{article_id}/thumb.jpg`
 
@@ -43,4 +44,4 @@ uvicorn app.main:app --reload --port 8080
 pytest
 ```
 
-V1 implementiert keine Flugzeugradar-/Wissensprovider, Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik. `aircraft` und `knowledge` sind in der Page Registry für V2 vorhanden.
+Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. V1 implementiert keine Wissensprovider, Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik; `knowledge` ist in der Page Registry für V2 vorhanden.

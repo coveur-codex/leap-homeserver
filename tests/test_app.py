@@ -8,6 +8,7 @@ from app.models import Article,Category,Device,Feed,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import clean_text,parse_feed
 from app.services import feeds as feed_service
+from app.services import location_data
 from app.services.images import resize_image
 
 def make_device(db,age=9):
@@ -96,3 +97,44 @@ def test_device_preview_carousel_uses_device_news_selection(client,db):
  assert "Must stay hidden" not in page.text
  assert "data-news-next" in page.text and "1 / 2" in page.text
  assert client.get('/static/device-preview.js').status_code==200
+
+@pytest.mark.asyncio
+async def test_location_refresh_fetches_shared_coordinates_once(db):
+ calls={"weather":0,"aircraft":0}
+ class Weather:
+  async def current(self,latitude,longitude,unit):
+   calls["weather"]+=1
+   return {"updated":"now","unit":"C","current":{"temperature":18,"weatherCode":1,"windSpeed":7},"today":{"min":9,"max":20,"precipitationProbability":5}}
+ class Aircraft:
+  async def nearby(self,latitude,longitude,radius):
+   calls["aircraft"]+=1
+   return {"updated":"now","radiusNm":radius,"aircraft":[{"hex":"abc123","callsign":"LEAP1","registration":"D-TEST","type":"A320","latitude":52.5,"longitude":13.4,"altitudeFeet":12000,"groundSpeedKnots":250,"trackDegrees":90,"distanceNm":3.2}]}
+ first=Device(device_id="leap-one",name="One",weather_location="Berlin",latitude=52.52,longitude=13.405)
+ second=Device(device_id="leap-two",name="Two",weather_location="Berlin",latitude=52.52,longitude=13.405)
+ initialize_pages(first);initialize_pages(second);db.add_all([first,second]);db.commit()
+ count=await location_data.refresh_configured_locations(db,weather_provider=Weather(),aircraft_provider=Aircraft())
+ assert count==1 and calls=={"weather":1,"aircraft":1}
+ assert first.weather_version==2 and second.weather_version==2
+ assert first.aircraft_version==2 and second.aircraft_version==2
+ cache=location_data.cache_for_device(first,db)
+ assert cache.weather_data["location"]=="Berlin"
+ assert cache.aircraft_data["aircraft"][0]["callsign"]=="LEAP1"
+
+def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch):
+ class Weather:
+  async def current(self,latitude,longitude,unit):
+   return {"updated":"now","unit":"C","current":{"temperature":18,"weatherCode":1,"windSpeed":7},"today":{"min":9,"max":20,"precipitationProbability":5}}
+ class Aircraft:
+  async def nearby(self,latitude,longitude,radius):
+   return {"updated":"now","radiusNm":radius,"aircraft":[{"hex":"abc123","callsign":"LEAP1","registration":"D-TEST","type":"A320","latitude":52.5,"longitude":13.4,"altitudeFeet":12000,"groundSpeedKnots":250,"trackDegrees":90,"distanceNm":3.2}]}
+ monkeypatch.setattr(location_data,"OpenMeteoProvider",Weather)
+ monkeypatch.setattr(location_data,"AdsbLolProvider",Aircraft)
+ device=make_device(db);device.weather_location="Berlin";device.latitude=52.52;device.longitude=13.405;db.commit()
+ weather=client.get("/api/v1/devices/leap-erik/weather")
+ aircraft=client.get("/api/v1/devices/leap-erik/aircraft")
+ assert weather.status_code==200 and weather.json()["current"]["temperature"]==18
+ assert aircraft.status_code==200 and aircraft.json()["aircraft"][0]["callsign"]=="LEAP1"
+ assert "aircraftVersion" in client.get("/api/v1/devices/leap-erik/sync").json()
+ preview=client.get(f"/devices/{device.id}").text
+ assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview
+ assert 'data-preview-card="FLUGRADAR"' in preview and "LEAP1" in preview

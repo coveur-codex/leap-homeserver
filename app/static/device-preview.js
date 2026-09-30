@@ -16,3 +16,21 @@ document.querySelectorAll("[data-news-carousel]").forEach((carousel) => {
   carousel.querySelector("[data-news-prev]")?.addEventListener("click", () => show(current - 1));
   carousel.querySelector("[data-news-next]")?.addEventListener("click", () => show(current + 1));
 });
+
+document.querySelectorAll(".leap-preview").forEach((preview) => {
+  const cards = [...preview.querySelectorAll("[data-preview-card]")];
+  const label = preview.querySelector("[data-card-label]");
+  const counter = preview.querySelector("[data-card-count]");
+  let current = 0;
+  const show = (next) => {
+    current = (next + cards.length) % cards.length;
+    cards.forEach((card, index) => {
+      card.hidden = index !== current;
+      card.classList.toggle("active", index === current);
+    });
+    label.textContent = cards[current].dataset.previewCard;
+    counter.textContent = `${current + 1} / ${cards.length}`;
+  };
+  preview.querySelector("[data-card-prev]")?.addEventListener("click", () => show(current - 1));
+  preview.querySelector("[data-card-next]")?.addEventListener("click", () => show(current + 1));
+});
