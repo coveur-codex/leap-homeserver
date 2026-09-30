@@ -75,7 +75,23 @@ def test_device_preview_layout_and_avatar(client,db):
  assert 'class="leap-sidebar"' in page.text
  assert 'class="leap-card news-card"' in page.text
  assert '/static/avatars/dragon.svg' in page.text
+ assert 'data-preview-card="HOME"' in page.text
  assert client.get('/static/avatars/dragon.svg').status_code==200
+
+def test_device_preview_follows_enabled_page_configuration(client,db):
+ d=make_device(db)
+ for page in d.pages:
+  page.enabled=page.page_id in {"home","quiz"}
+  page.position=1 if page.page_id=="quiz" else 2
+ cat=QuizCatalog(name="Wissen")
+ cat.questions=[QuizQuestion(question="Wie viele Kontinente gibt es?",answers=["Fünf","Sechs","Sieben","Acht"],min_age=7)]
+ d.quiz_catalogs.append(cat);db.commit()
+ preview=client.get(f"/devices/{d.id}").text
+ assert preview.index('data-preview-card="QUIZ"') < preview.index('data-preview-card="HOME"')
+ assert 'data-preview-card="WETTER"' not in preview
+ assert 'data-preview-card="NEWS"' not in preview
+ assert "Wie viele Kontinente gibt es?" in preview
+ assert all(answer in preview for answer in ("Fünf","Sechs","Sieben","Acht"))
 
 def test_device_preview_carousel_uses_device_news_selection(client,db):
  d=make_device(db)
@@ -130,6 +146,7 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  monkeypatch.setattr(location_data,"OpenMeteoProvider",Weather)
  monkeypatch.setattr(location_data,"AdsbLolProvider",Aircraft)
  device=make_device(db);device.weather_location="Berlin";device.latitude=52.52;device.longitude=13.405;db.commit()
+ next(page for page in device.pages if page.page_id=="aircraft").enabled=True;db.commit()
  weather=client.get("/api/v1/devices/leap-erik/weather")
  aircraft=client.get("/api/v1/devices/leap-erik/aircraft")
  assert weather.status_code==200 and weather.json()["current"]["temperature"]==18
@@ -137,4 +154,5 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  assert "aircraftVersion" in client.get("/api/v1/devices/leap-erik/sync").json()
  preview=client.get(f"/devices/{device.id}").text
  assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview
+ assert 'data-latitude="52.52"' in preview and 'data-longitude="13.405"' in preview
  assert 'data-preview-card="FLUGRADAR"' in preview and "LEAP1" in preview

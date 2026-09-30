@@ -24,39 +24,50 @@
     <div class="sidebar-rule"></div>
     <div class="avatar-wrap"><img src="/static/avatars/{{device.avatar}}.svg" alt="Avatar {{device.avatar_name or device.child_name or device.name}}"><span>{{device.avatar_name or device.child_name or device.name}}</span></div>
     <div class="sidebar-rule"></div>
-    <div class="current-card" aria-live="polite"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 8h5v4H7zM14 8h3M14 11h3M7 15h10"/></svg><span data-card-label>NEWS</span></div>
+    <div class="current-card" aria-live="polite"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 8h5v4H7zM14 8h3M14 11h3M7 15h10"/></svg><span data-card-label>{{preview_page_ids[0]|upper if preview_page_ids else 'LEER'}}</span></div>
   </aside>
-  <article class="leap-card news-card" data-preview-card="NEWS" data-news-carousel>
-    {% for article in preview_articles %}
-    <section class="news-slide{% if loop.first %} active{% endif %}" data-news-slide {% if not loop.first %}hidden{% endif %}>
-      <div class="news-copy">
-        <div class="news-meta"><strong>{{article.source}}</strong><span>{{article.published_at.strftime('%d.%m.%Y')}}</span></div>
-        <h3>{{article.title}}</h3>
-        <p>{{article.summary or article.content}}</p>
+  {% for page_id in preview_page_ids %}
+    {% if page_id == 'home' %}
+    <article class="leap-card home-card" data-preview-card="HOME"{% if not loop.first %} hidden{% endif %}>
+      <div class="home-welcome"><small>HALLO</small><strong>{{device.child_name or device.name}}!</strong><span>Schön, dass du da bist.</span></div>
+      <div class="home-overview">
+        <div><span aria-hidden="true">☀</span><b>{% if preview_weather %}{{preview_weather.current.temperature|round|int}}°{% else %}–°{% endif %}</b><small>{{device.weather_location or 'Wetter'}}</small></div>
+        <div><span aria-hidden="true">▤</span><b>{{preview_articles|length}}</b><small>NEUE NEWS</small></div>
+        <div><span aria-hidden="true">?</span><b>{% if preview_question %}1{% else %}0{% endif %}</b><small>QUIZ</small></div>
       </div>
-      <div class="news-visual{% if not article.image_leap %} news-visual-placeholder{% endif %}">
-        {% if article.image_leap %}<img src="/api/v1/assets/news/{{article.id}}/thumb.jpg" alt="Bild zum Artikel">{% else %}<svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/><path d="m21 58 20-20 20 20M41 38v54"/></svg>{% endif %}
-      </div>
-    </section>
-    {% else %}
-    <section class="news-slide active empty-news" data-news-slide>
-      <div class="news-copy"><div class="news-meta"><strong>LEAP News</strong><span>{{preview_now.strftime('%d.%m.%Y')}}</span></div><h3>Noch keine passenden Artikel</h3><p>Wähle für dieses Gerät News-Kategorien aus und aktualisiere die zugehörigen Feeds. Dann kannst du die Artikel hier durchblättern.</p></div>
-      <div class="news-visual news-visual-placeholder"><svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/><path d="m21 58 20-20 20 20M41 38v54"/></svg></div>
-    </section>
-    {% endfor %}
-    {% if preview_articles|length > 1 %}<div class="card-actions"><button type="button" data-news-prev aria-label="Vorheriger Artikel">‹</button><span class="slide-count" aria-live="polite">1 / {{preview_articles|length}}</span><button type="button" data-news-next aria-label="Nächster Artikel">›</button></div>{% endif %}
-  </article>
-  <article class="leap-card weather-card" data-preview-card="WETTER" hidden>
-    {% if preview_weather %}
-    <div class="weather-main"><div class="weather-icon" aria-hidden="true">{% if preview_weather.current.weatherCode < 3 %}☀{% elif preview_weather.current.weatherCode < 60 %}☁{% else %}☂{% endif %}</div><div><strong>{{preview_weather.current.temperature|round|int}}°</strong><span>{{preview_weather.location}}</span></div></div>
-    <div class="weather-details"><div><b>{{preview_weather.today.min|round|int}}°</b><span>MIN</span></div><div><b>{{preview_weather.today.max|round|int}}°</b><span>MAX</span></div><div><b>{{preview_weather.today.precipitationProbability|round|int}}%</b><span>REGEN</span></div><div><b>{{preview_weather.current.windSpeed|round|int}}</b><span>WIND</span></div></div>
-    {% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten 15-Minuten-Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}
-  </article>
-  <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR" hidden>
-    <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
-    <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
-  </article>
-  <div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / 3</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>
+    </article>
+    {% elif page_id == 'news' %}
+    <article class="leap-card news-card" data-preview-card="NEWS" data-news-carousel{% if not loop.first %} hidden{% endif %}>
+      {% for article in preview_articles %}
+      <section class="news-slide{% if loop.first %} active{% endif %}" data-news-slide {% if not loop.first %}hidden{% endif %}>
+        <div class="news-copy"><div class="news-meta"><strong>{{article.source}}</strong><span>{{article.published_at.strftime('%d.%m.%Y')}}</span></div><h3>{{article.title}}</h3><p>{{article.summary or article.content}}</p></div>
+        <div class="news-visual{% if not article.image_leap %} news-visual-placeholder{% endif %}">{% if article.image_leap %}<img src="/api/v1/assets/news/{{article.id}}/thumb.jpg" alt="Bild zum Artikel">{% else %}<svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/><path d="m21 58 20-20 20 20M41 38v54"/></svg>{% endif %}</div>
+      </section>
+      {% else %}
+      <section class="news-slide active empty-news" data-news-slide><div class="news-copy"><div class="news-meta"><strong>LEAP News</strong><span>{{preview_now.strftime('%d.%m.%Y')}}</span></div><h3>Noch keine passenden Artikel</h3><p>Wähle News-Kategorien aus und aktualisiere die zugehörigen Feeds.</p></div><div class="news-visual news-visual-placeholder"><svg viewBox="0 0 180 240" aria-hidden="true"><circle cx="136" cy="46" r="25"/><path d="M0 202 55 120l35 46 24-31 66 67v38H0z"/></svg></div></section>
+      {% endfor %}
+      {% if preview_articles|length > 1 %}<div class="card-actions"><button type="button" data-news-prev aria-label="Vorheriger Artikel">‹</button><span class="slide-count" aria-live="polite">1 / {{preview_articles|length}}</span><button type="button" data-news-next aria-label="Nächster Artikel">›</button></div>{% endif %}
+    </article>
+    {% elif page_id == 'weather' %}
+    <article class="leap-card weather-card" data-preview-card="WETTER"{% if not loop.first %} hidden{% endif %}>
+      <div class="weather-copy">{% if preview_weather %}<div class="weather-main"><div class="weather-icon" aria-hidden="true">{% if preview_weather.current.weatherCode < 3 %}☀{% elif preview_weather.current.weatherCode < 60 %}☁{% else %}☂{% endif %}</div><div><strong>{{preview_weather.current.temperature|round|int}}°</strong><span>{{preview_weather.location}}</span></div></div><div class="weather-details"><div><b>{{preview_weather.today.min|round|int}}°</b><span>MIN</span></div><div><b>{{preview_weather.today.max|round|int}}°</b><span>MAX</span></div><div><b>{{preview_weather.today.precipitationProbability|round|int}}%</b><span>REGEN</span></div><div><b>{{preview_weather.current.windSpeed|round|int}}</b><span>WIND</span></div></div>{% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}</div>
+      <div class="weather-radar" data-latitude="{{device.latitude if device.latitude is not none else ''}}" data-longitude="{{device.longitude if device.longitude is not none else ''}}" aria-label="Radarbild; gewählter Standort im Zentrum"><div class="radar-rings"></div><i class="radar-center" aria-hidden="true"></i><span>{{'%.3f'|format(device.latitude) if device.latitude is not none else '–'}}<br>{{'%.3f'|format(device.longitude) if device.longitude is not none else '–'}}</span></div>
+    </article>
+    {% elif page_id == 'quiz' %}
+    <article class="leap-card quiz-card" data-preview-card="QUIZ"{% if not loop.first %} hidden{% endif %}>
+      <div class="quiz-question"><small>FRAGE DES TAGES</small><strong>{% if preview_question %}{{preview_question.question}}{% else %}Noch keine Quizfrage ausgewählt.{% endif %}</strong><span>{% if preview_question %}Wähle die richtige Antwort!{% else %}Ordne dem Gerät einen Quiz-Katalog zu.{% endif %}</span></div>
+      <ol class="quiz-answers">{% if preview_question %}{% for answer in preview_question.answers %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% else %}{% for answer in ['Antwort A','Antwort B','Antwort C','Antwort D'] %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% endif %}</ol>
+    </article>
+    {% elif page_id == 'aircraft' %}
+    <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR"{% if not loop.first %} hidden{% endif %}>
+      <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
+      <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
+    </article>
+    {% endif %}
+  {% else %}
+    <article class="leap-card"><div class="empty-preview"><strong>Keine Vorschau-Seite aktiv</strong><span>Aktiviere Home, News, Wetter, Quiz oder Flugzeuge.</span></div></article>
+  {% endfor %}
+  {% if preview_page_ids|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
 <script src="/static/device-preview.js" defer></script>
