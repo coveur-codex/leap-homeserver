@@ -22,7 +22,7 @@ class Device(Base):
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
-    weather_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
+    weather_version: Mapped[int]=mapped_column(Integer, default=1); aircraft_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
     last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
@@ -52,6 +52,16 @@ class Article(Base):
     image_original: Mapped[str|None]=mapped_column(String(500)); image_leap: Mapped[str|None]=mapped_column(String(500)); hash: Mapped[str]=mapped_column(String(64), unique=True, index=True)
 class WeatherCache(Base):
     __tablename__="weather_cache"; id: Mapped[int]=mapped_column(primary_key=True); device_id: Mapped[int]=mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), unique=True); fetched_at: Mapped[datetime]=mapped_column(DateTime(timezone=True)); data: Mapped[dict]=mapped_column(JSON)
+class LocationCache(Base):
+    __tablename__="location_cache"
+    id: Mapped[int]=mapped_column(primary_key=True)
+    location_key: Mapped[str]=mapped_column(String(80), unique=True, index=True)
+    location: Mapped[str]=mapped_column(String(120), default="")
+    latitude: Mapped[float]=mapped_column(Float); longitude: Mapped[float]=mapped_column(Float)
+    weather_fetched_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); weather_data: Mapped[dict|None]=mapped_column(JSON)
+    weather_error: Mapped[str|None]=mapped_column(Text)
+    aircraft_fetched_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); aircraft_data: Mapped[dict|None]=mapped_column(JSON)
+    aircraft_error: Mapped[str|None]=mapped_column(Text)
 class QuizCatalog(Base):
     __tablename__="quiz_catalogs"; id: Mapped[int]=mapped_column(primary_key=True); name: Mapped[str]=mapped_column(String(120)); enabled: Mapped[bool]=mapped_column(Boolean, default=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); questions: Mapped[list["QuizQuestion"]]=relationship(cascade="all, delete-orphan")
 class QuizQuestion(Base):
