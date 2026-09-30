@@ -43,6 +43,7 @@ def seed():
         db.commit()
 @asynccontextmanager
 async def lifespan(app):
+    app.state.started_at=datetime.now(timezone.utc)
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",minutes=1,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.start();yield;scheduler.shutdown(wait=False)
 app=FastAPI(title="LEAP Home Server",version=__version__,lifespan=lifespan)

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import asyncio
 import pytest
 from PIL import Image
-from app.models import Article,Category,Device,Feed,QuizCatalog,QuizQuestion
+from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import clean_text,parse_feed
 from app.services import feeds as feed_service
@@ -156,3 +156,16 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview
  assert 'data-latitude="52.52"' in preview and 'data-longitude="13.405"' in preview
  assert 'data-preview-card="FLUGRADAR"' in preview and "LEAP1" in preview
+
+
+def test_system_page_shows_runtime_and_refresh_times(client,db):
+ fetched=datetime(2026,9,30,12,0,tzinfo=timezone.utc)
+ db.add(LocationCache(location_key="52.52000,13.40500",location="Berlin",latitude=52.52,longitude=13.405,weather_fetched_at=fetched,weather_data={},aircraft_fetched_at=fetched,aircraft_data={}))
+ db.add(Feed(name="Feed",url="https://example.test/feed",last_success=fetched))
+ db.commit()
+ page=client.get("/system")
+ assert page.status_code==200
+ assert "Letzter Start" in page.text and "Laufzeit" in page.text
+ assert "Wetter und Flugradar" in page.text and "Berlin" in page.text
+ assert page.text.count("30.09.2026, 12:00:00") == 3
+ assert "Nächste Prüfung ab" in page.text and "12:15:00" in page.text
