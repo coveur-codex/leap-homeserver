@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     aircraft_provider_url: str = "https://api.adsb.lol/v2/lat/{latitude}/lon/{longitude}/dist/{radius}"
     request_timeout: float = 10.0
     max_download_bytes: int = 8_000_000
+    knowledge_cache_hours: int = 168
+    knowledge_search_cache_minutes: int = 15
+    klexikon_api_url: str = "https://klexikon.zum.de/api.php"
+    miniklexikon_api_url: str = "https://miniklexikon.zum.de/api.php"
 
 settings = Settings()
 for name in ("database", "cache", "images", "logs"):
