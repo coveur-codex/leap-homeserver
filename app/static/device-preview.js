@@ -36,3 +36,10 @@ document.querySelectorAll(".leap-preview").forEach((preview) => {
   preview.querySelector("[data-card-next]")?.addEventListener("click", () => show(current + 1));
   show(0);
 });
+
+document.querySelectorAll('input[name="knowledge_source"]').forEach((input) => {
+  input.addEventListener("change", () => {
+    const label = document.querySelector("[data-knowledge-source-label]");
+    if (label) label.textContent = input.value === "miniklexikon" ? "MiniKlexikon" : "Klexikon";
+  });
+});

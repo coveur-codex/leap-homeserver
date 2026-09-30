@@ -29,6 +29,8 @@ class Device(Base):
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
     weather_location: Mapped[str]=mapped_column(String(120), default=""); latitude: Mapped[float|None]=mapped_column(Float); longitude: Mapped[float|None]=mapped_column(Float)
     temperature_unit: Mapped[str]=mapped_column(String(2), default="C"); weather_fields: Mapped[list]=mapped_column(JSON, default=lambda:["temperature","rain","wind"])
+    knowledge_source: Mapped[str]=mapped_column(String(20), default="klexikon")
+    knowledge_version: Mapped[int]=mapped_column(Integer, default=1)
     home_slots: Mapped[dict]=mapped_column(JSON, default=lambda:{"slot1":"weather","slot2":"news_count","slot3":"question_of_day","slot4":"none"})
     pages: Mapped[list["DevicePage"]]=relationship(cascade="all, delete-orphan", order_by="DevicePage.position")
     categories: Mapped[list["Category"]]=relationship(secondary=device_categories)

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import asyncio
 import pytest
 from PIL import Image
-from app.models import Article,Category,Device,Feed,QuizCatalog,QuizQuestion
+from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import clean_text,parse_feed
 from app.services import feeds as feed_service
@@ -156,3 +156,84 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview
  assert 'data-latitude="52.52"' in preview and 'data-longitude="13.405"' in preview
  assert 'data-preview-card="FLUGRADAR"' in preview and "LEAP1" in preview
+
+
+def test_system_page_shows_runtime_and_refresh_times(client,db):
+ fetched=datetime(2026,9,30,12,0,tzinfo=timezone.utc)
+ db.add(LocationCache(location_key="52.52000,13.40500",location="Berlin",latitude=52.52,longitude=13.405,weather_fetched_at=fetched,weather_data={},aircraft_fetched_at=fetched,aircraft_data={}))
+ db.add(Feed(name="Feed",url="https://example.test/feed",last_success=fetched))
+ db.commit()
+ page=client.get("/system")
+ assert page.status_code==200
+ assert "Letzter Start" in page.text and "Laufzeit" in page.text
+ assert "Wetter und Flugradar" in page.text and "Berlin" in page.text
+ assert page.text.count("30.09.2026, 12:00:00") == 3
+ assert "Nächste Prüfung ab" in page.text and "12:15:00" in page.text
+
+
+def enable_knowledge(device, db, source="klexikon"):
+ page=next(page for page in device.pages if page.page_id=="knowledge")
+ page.enabled=True;device.knowledge_source=source;db.commit()
+
+
+def test_knowledge_configuration_and_preview(client,db):
+ device=make_device(db)
+ form={"device_id":device.device_id,"name":device.name,"age":device.age,"avatar":device.avatar,"enabled":"on","knowledge_enabled":"on","knowledge_source":"miniklexikon"}
+ response=client.post(f"/devices/{device.id}",data=form,follow_redirects=False)
+ db.refresh(device)
+ assert response.status_code==303 and device.knowledge_source=="miniklexikon"
+ assert next(page for page in device.pages if page.page_id=="knowledge").enabled
+ config=client.get(f"/api/v1/devices/{device.device_id}/config").json()
+ assert config["knowledgeSource"]=="miniklexikon"
+ preview=client.get(f"/devices/{device.id}").text
+ assert 'data-preview-card="WISSEN"' in preview
+ assert "MiniKlexikon" in preview and "knowledge-saturn.svg" in preview
+
+
+def test_knowledge_api_uses_device_source_and_checks_activation(client,db,monkeypatch):
+ device=make_device(db)
+ assert client.get(f"/api/leap/{device.device_id}/knowledge/article/Saturn").status_code==403
+ enable_knowledge(device,db,"miniklexikon")
+ calls=[]
+ async def article(source,title):
+  calls.append(("article",source,title));return {"title":title,"source":source,"text":"Text","image":None,"links":[]}
+ async def search(source,query,limit):
+  calls.append(("search",source,query));return {"source":source,"results":[]}
+ async def random(source):
+  calls.append(("random",source));return {"title":"Zufall","source":source,"text":"Text","image":None,"links":[]}
+ monkeypatch.setattr("app.api.routes.knowledge_service.article",article)
+ monkeypatch.setattr("app.api.routes.knowledge_service.search",search)
+ monkeypatch.setattr("app.api.routes.knowledge_service.random_article",random)
+ assert client.get(f"/api/leap/{device.device_id}/knowledge/article/Saturn").json()["source"]=="miniklexikon"
+ assert client.get(f"/api/leap/{device.device_id}/knowledge/search?q=wal").json()["results"]==[]
+ assert client.get(f"/api/leap/{device.device_id}/knowledge/random").json()["title"]=="Zufall"
+ assert calls==[("article","miniklexikon","Saturn"),("search","miniklexikon","wal"),("random","miniklexikon")]
+ assert client.get("/api/leap/unbekannt/knowledge/random").status_code==404
+
+
+@pytest.mark.asyncio
+async def test_knowledge_article_is_cleaned_linked_and_cached(monkeypatch,tmp_path):
+ from app.services import knowledge
+ monkeypatch.setattr(knowledge.settings,"data_dir",tmp_path)
+ calls=0
+ async def request(source,params,client):
+  nonlocal calls
+  calls+=1
+  return {"query":{"pages":[{"title":"Saturn","extract":"<p>Der <b>Saturn</b> ist ein Planet.</p><p>Er hat Ringe.</p>","thumbnail":{"source":"https://images.example/saturn.jpg"},"links":[{"title":"Planet"},{"title":"Jupiter"}]}]}}
+ async def image(source,url,client): return "a"*32
+ monkeypatch.setattr(knowledge,"_request",request)
+ monkeypatch.setattr(knowledge,"_cache_image",image)
+ first=await knowledge.article("klexikon","Saturn")
+ second=await knowledge.article("klexikon","Saturn")
+ assert calls==1 and first==second
+ assert first["text"]=="Der Saturn ist ein Planet.\n\nEr hat Ringe."
+ assert first["image"].endswith("/"+"a"*32+".jpg")
+ assert first["links"]==[{"title":"Planet","ref":"Planet"},{"title":"Jupiter","ref":"Jupiter"}]
+ assert first["originalUrl"].endswith("/wiki/Saturn") and first["license"]
+
+
+def test_knowledge_search_rejects_invalid_query(client,db):
+ device=make_device(db);enable_knowledge(device,db)
+ response=client.get(f"/api/leap/{device.device_id}/knowledge/search?q=x")
+ assert response.status_code==422
+ assert "zwischen 2 und 80" in response.json()["detail"]

@@ -1,18 +1,20 @@
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter,Depends,File,Form,HTTPException,Request,UploadFile
 from fastapi.responses import HTMLResponse,RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func,select
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.pages import PAGE_REGISTRY
-from app.models import Article,Category,Device,Feed,QuizCatalog,QuizQuestion
+from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
 from app.services.location_data import cache_for_device
+from app.services.knowledge import demo_article
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
 def redir(p): return RedirectResponse(p,303)
 @router.get("/",response_class=HTMLResponse)
@@ -29,29 +31,33 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     if not d: raise HTTPException(404)
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page.enabled]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft"}]
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge"}]
     catalog_ids=[catalog.id for catalog in d.quiz_catalogs if catalog.enabled]
     preview_question=db.scalar(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age).order_by(QuizQuestion.id)) if catalog_ids else None
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_question":preview_question,"preview_now":datetime.now()})
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_question":preview_question,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now()})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_enabled:bool=Form(False),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     new_device_id=(device_id or d.device_id).strip()
     if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
-    d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours
+    if knowledge_source not in {"klexikon","miniklexikon"}: raise HTTPException(422,"Unbekannte Wissensquelle")
+    old_knowledge_source=d.knowledge_source
+    d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
+    if knowledge_enabled: page_ids.append("knowledge")
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
     for pos,pid in enumerate(page_ids,1):
         if page:=next((x for x in d.pages if x.page_id==pid),None): page.enabled=True; page.position=positions.get(pid,pos)
     for page in d.pages:
         if page.page_id not in page_ids: page.enabled=False
+    if old_knowledge_source != knowledge_source: d.knowledge_version+=1
     d.config_version+=1; db.commit(); return redir(f"/devices/{id}")
 @router.post("/devices/{id}/delete")
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")
@@ -82,4 +88,14 @@ async def upload_quiz(name:str=Form(),file:UploadFile=File(),device_ids:list[int
 def system(request:Request,db:Session=Depends(get_db)):
     from app import __version__; from app.core.config import settings
     size=lambda p:sum(x.stat().st_size for x in p.rglob("*") if x.is_file())
-    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":settings.database_url,"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None)))})
+    now=datetime.now(timezone.utc)
+    started_at=getattr(request.app.state,"started_at",now)
+    locations=db.scalars(select(LocationCache).order_by(LocationCache.location,LocationCache.location_key)).all()
+    def aware(value):
+        return value.replace(tzinfo=timezone.utc) if value and value.tzinfo is None else value
+    location_status=[]
+    for location in locations:
+        weather_at=aware(location.weather_fetched_at); aircraft_at=aware(location.aircraft_fetched_at)
+        location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None,"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aircraft_at+timedelta(minutes=settings.weather_cache_minutes) if aircraft_at else None,"aircraft_error":location.aircraft_error})
+    latest_feed=db.scalar(select(func.max(Feed.last_success)))
+    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_radius":settings.aircraft_radius_nm,"started_at":started_at,"uptime":now-started_at,"now":now})
