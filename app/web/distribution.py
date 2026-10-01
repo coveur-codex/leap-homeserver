@@ -22,10 +22,18 @@ def package_or_404(db, package_id):
 @router.get("/assets")
 def assets(request: Request, kind: str = "", db: Session = Depends(get_db)):
     service.ensure_packages(db)
-    query = select(AssetPackage).order_by(AssetPackage.kind, AssetPackage.name)
+    query = select(AssetPackage, AssetVersion.manifest).outerjoin(AssetVersion,
+        (AssetVersion.package_id == AssetPackage.id) & (AssetVersion.version == AssetPackage.current_version)
+    ).order_by(AssetPackage.kind, AssetPackage.name)
     if kind:
         query = query.where(AssetPackage.kind == kind)
-    return templates.TemplateResponse(request, "assets.html", {"packages": db.scalars(query).all(), "kinds": service.KINDS, "kind": kind})
+    rows = db.execute(query).all()
+    package_stats = {}
+    for package, manifest in rows:
+        files = manifest["files"] if manifest else []
+        package_stats[package.id] = {"file_count": len(files), "size": sum(file["size"] for file in files)}
+    return templates.TemplateResponse(request, "assets.html", {
+        "packages": [package for package, _ in rows], "package_stats": package_stats, "kinds": service.KINDS, "kind": kind})
 
 @router.post("/assets")
 def create_package(package_id: str = Form(), name: str = Form(), kind: str = Form(), db: Session = Depends(get_db)):
