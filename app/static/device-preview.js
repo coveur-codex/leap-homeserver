@@ -18,7 +18,8 @@ document.querySelectorAll("[data-news-carousel]").forEach((carousel) => {
 });
 
 document.querySelectorAll(".leap-preview").forEach((preview) => {
-  const cards = [...preview.querySelectorAll("[data-preview-card]")];
+  let cards = [...preview.querySelectorAll("[data-preview-card]")];
+  const allCards = [...cards];
   if (!cards.length) return;
   const label = preview.querySelector("[data-card-label]");
   const counter = preview.querySelector("[data-card-count]");
@@ -34,6 +35,17 @@ document.querySelectorAll(".leap-preview").forEach((preview) => {
   };
   preview.querySelector("[data-card-prev]")?.addEventListener("click", () => show(current - 1));
   preview.querySelector("[data-card-next]")?.addEventListener("click", () => show(current + 1));
+  document.querySelector('[data-communication-toggle]')?.addEventListener('change', (event) => {
+    const enabled = event.target.checked;
+    const status = document.querySelector('[data-communication-status]');
+    if (status) status.textContent = enabled ? 'Aktiv' : 'Inaktiv';
+    allCards.forEach(card => { card.hidden = true; });
+    cards = allCards.filter(card => enabled || card.dataset.previewCard !== 'KOMMUNIKATION');
+    const nav = preview.querySelector('.preview-nav');
+    if (nav) nav.hidden = cards.length < 2;
+    if (cards.length) show(0);
+    else { if (label) label.textContent = 'LEER'; if (counter) counter.textContent = '0 / 0'; }
+  });
   show(0);
 });
 
@@ -41,5 +53,12 @@ document.querySelectorAll('select[name="knowledge_source"]').forEach((input) => 
   input.addEventListener("change", () => {
     const label = document.querySelector("[data-knowledge-source-label]");
     if (label) label.textContent = input.value === "miniklexikon" ? "MiniKlexikon" : "Klexikon";
+  });
+});
+
+// A local display example only; no chat traffic or history is sent to the server.
+document.querySelectorAll('[data-message-choice]').forEach(button => {
+  button.addEventListener('click', () => {
+    document.querySelector('[data-communication-message]').textContent = button.textContent;
   });
 });

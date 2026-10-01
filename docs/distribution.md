@@ -202,3 +202,39 @@ gegen beschädigte Downloads, nicht gegen einen manipulierten Server oder Transp
 Bei Zugriff außerhalb des Heimnetzes sind ein gesicherter Zugang/TLS und ein
 geeignetes Authentifizierungskonzept erforderlich. Hardware-OTA, Signaturprüfung,
 Boot-Selbsttests und atomare LittleFS-Zeiger bleiben Aufgaben der Firmware.
+
+## Kommunikation
+
+Unter `/communication` werden die globalen Nachrichtenvorlagen verwaltet (Text,
+optionales Symbol, Position, aktiv/inaktiv). Die zehn Startvorlagen stammen aus
+`app/defaults/communication-messages.json` und werden nur beim ersten Anlegen des
+Pakets übernommen. Danach ist die Datenbank maßgeblich; gelöschte Vorlagen bleiben
+auch nach einem Neustart gelöscht. Es gibt keine serverseitigen Chats oder Historien.
+
+Jede gespeicherte Änderung veröffentlicht über die vorhandene Asset-Infrastruktur
+eine neue Version von `communication-messages` (Typ `communication`).
+`definition.json` verweist mit `messagesFile` auf `messages.json`:
+
+```json
+{"schemaVersion":1,"messages":[{"id":"dauerhafte-uuid","text":"Hallo!","symbol":"👋","order":1}]}
+```
+
+Nur aktive Vorlagen sind enthalten, sortiert nach `order` und bei Gleichstand nach
+`id`. IDs bleiben beim Bearbeiten und Umsortieren erhalten und werden nach dem
+Löschen nicht wiederverwendet. Text ist auf 120, Symbol auf 16 Unicode-Zeichen
+begrenzt. Ein leeres Paket ist gültig. Bestehende Manifest-URLs, SHA-256-Prüfungen,
+Versionierung und Installationsbestätigungen gelten unverändert.
+
+Die Gerätekonfiguration liefert `communicationEnabled` (standardmäßig `true`).
+Die Seite `communication` übernimmt ihren `enabled`-Wert aus diesem Schalter;
+ihre Position bleibt über die Seiteneinstellungen konfigurierbar. Bei `false`
+erscheint sie nicht in der Vorschau und das Paket fehlt in `desiredAssets` beim
+normalen `POST /api/v1/devices/{device_id}/sync`. Bereits installierte Daten werden
+über die bestehende bestätigte Bereinigung behandelt. Die Firmware muss den
+Schalter beim Senden, Empfangen und Anzeigen berücksichtigen, auch solange ein
+älteres Paket noch lokal liegt.
+
+Alle aktivierten Geräte nutzen einen gemeinsamen ESP-NOW-Gruppenchat. Transport,
+Mesh/Relay und der Umgang mit vorübergehend unterschiedlichen Vorlagenversionen
+liegen in der Firmware. Die Vorschau zeigt nur ein lokales Beispiel mit einem
+normalen vorhandenen Avatar; das Auswählen einer Vorlage versendet nichts.

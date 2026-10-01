@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Kommunikation</h1>
+<p>Ein gemeinsamer Gruppenchat für alle Geräte mit aktivierter Kommunikation. Die Geräte wählen aus diesen vorbereiteten Nachrichten.</p>
+<p>Änderungen werden automatisch als <a href="/assets/{{package.id}}">Asset-Paket (Version {{package.current_version}})</a> gespeichert und beim nächsten Geräte-Sync verteilt. Nur aktive Nachrichten werden übertragen. Kleinere Positionsnummern stehen zuerst.</p>
+{% for message in messages %}
+<section>
+<form method="post" action="/communication/messages" class="communication-editor">
+<input type="hidden" name="expected" value="{{package.current_version}}">
+<input type="hidden" name="message_id" value="{{message.id}}">
+<label>Symbol / Emoji<input name="symbol" maxlength="16" value="{{message.symbol}}"></label>
+<label>Text<input name="text" maxlength="120" required value="{{message.text}}"></label>
+<label>Position<input name="position" type="number" min="1" max="10000" required value="{{message.position}}"></label>
+<label><input name="active" type="checkbox" {% if message.active %}checked{% endif %}> Aktiv</label>
+<button>Speichern</button>
+<button class="danger" formaction="/communication/messages/{{message.id}}/delete" formnovalidate onclick="return confirm('Nachricht löschen?')">Löschen</button>
+</form>
+</section>
+{% else %}<p>Noch keine Nachrichten vorhanden.</p>{% endfor %}
+<h2>Nachricht hinzufügen</h2>
+<form method="post" action="/communication/messages" class="communication-editor">
+<input type="hidden" name="expected" value="{{package.current_version}}">
+<label>Symbol / Emoji (optional)<input name="symbol" maxlength="16"></label>
+<label>Text<input name="text" maxlength="120" required></label>
+<label>Position<input name="position" type="number" min="1" max="10000" required value="{{messages[-1].position + 1 if messages and messages[-1].position < 10000 else 1}}"></label>
+<label><input name="active" type="checkbox" checked> Aktiv</label>
+<button>Hinzufügen</button>
+</form>
+{% endblock %}

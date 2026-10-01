@@ -9,5 +9,6 @@ PAGE_REGISTRY = [
     PageDefinition("home", "Home"), PageDefinition("news", "News"),
     PageDefinition("weather", "Wetter"), PageDefinition("quiz", "Quiz"),
     PageDefinition("games", "Spiele"), PageDefinition("aircraft", "Flugzeuge"),
+    PageDefinition("communication", "Kommunikation"),
     PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
 ]

@@ -17,7 +17,7 @@ from sqlalchemy import select, update
 from app.core.config import settings
 from app.models import AssetPackage, AssetVersion, Device, FirmwareRelease, QuizCatalog, QuizQuestion
 
-KINDS = {"avatar": "Avatare", "common": "Common", "sound": "Sounds", "weather": "Wetter", "game": "Spiele", "quiz": "Quiz", "chill": "Chill"}
+KINDS = {"communication": "Kommunikation", "avatar": "Avatare", "common": "Common", "sound": "Sounds", "weather": "Wetter", "game": "Spiele", "quiz": "Quiz", "chill": "Chill"}
 EVENT_LABELS = {"offered": "Update angeboten", "download_started": "Download begonnen",
     "asset_installed": "Asset installiert", "firmware_installed": "Firmware installiert",
     "boot_success": "Neustart erfolgreich", "firmware_confirmed": "Neue Firmware bestätigt",
@@ -236,7 +236,8 @@ def catalog_package_id(db, catalog):
 
 def ensure_packages(db):
     """Idempotent adoption: original catalogs, question IDs and device links survive."""
-    changed = False
+    from app.services.communication import ensure_package
+    changed = ensure_package(db)
     for catalog in db.scalars(select(QuizCatalog)).all():
         if not db.scalar(select(AssetPackage).where(AssetPackage.catalog_id == catalog.id)):
             package = AssetPackage(id=catalog_package_id(db, catalog), kind="quiz", name=catalog.name, catalog_id=catalog.id, current_version=0)
@@ -256,7 +257,11 @@ def ensure_packages(db):
 
 def desired_packages(db, device):
     avatar = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
+    from app.services.communication import PACKAGE_ID
     ids = {avatar, *(device.content_selection or [])}
+    ids.discard(PACKAGE_ID)
+    if device.communication_enabled:
+        ids.add(PACKAGE_ID)
     catalogs = {c.id for c in device.quiz_catalogs if c.enabled}
     packages = db.scalars(select(AssetPackage).order_by(AssetPackage.id)).all()
     return [p for p in packages if p.id in ids or p.kind == "common" or p.catalog_id in catalogs]
