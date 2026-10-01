@@ -37,7 +37,7 @@ document.querySelectorAll(".leap-preview").forEach((preview) => {
   show(0);
 });
 
-document.querySelectorAll('input[name="knowledge_source"]').forEach((input) => {
+document.querySelectorAll('select[name="knowledge_source"]').forEach((input) => {
   input.addEventListener("change", () => {
     const label = document.querySelector("[data-knowledge-source-label]");
     if (label) label.textContent = input.value === "miniklexikon" ? "MiniKlexikon" : "Klexikon";
