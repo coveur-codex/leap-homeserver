@@ -71,3 +71,5 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 @media(max-width:800px){.communication-received{padding:2% 3%}.communication-received strong,.communication-received p{font-size:2.7vw}.communication-received img{width:7vw;height:7vw}.communication-received small,.communication-options small{font-size:1.4vw}.communication-options{padding:2% 2% 28px}.communication-options button{font-size:2vw;padding:3px 6px;margin-top:3px}}
 
 .preview-nav[hidden]{display:none}
+
+.device-settings-stack{display:flex;flex-direction:column;gap:1rem;align-self:start;min-width:0}.device-settings-stack>button{align-self:start}
