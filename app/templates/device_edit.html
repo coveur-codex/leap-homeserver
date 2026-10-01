@@ -4,19 +4,13 @@
 <form method="post">
   <div class="tabs">
     <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
-    <section><h2>Seiten</h2><label><input type="checkbox" name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}> Kommunikation aktiv</label><small>Alle aktivierten Geräte nehmen am gemeinsamen Gruppenchat teil.</small><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label>{% if p.page_id == "communication" %}<span data-communication-status>{{"Aktiv" if device.communication_enabled else "Inaktiv"}}</span>{% else %}<input type="checkbox" name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}>{% endif %} {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
+    <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
     <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
     <section><h2>Standort</h2><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
     <section><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
   </div>
-  <input type="hidden" name="distribution_settings" value="true">
-  <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
-  <fieldset><legend>Quiz-Kataloge</legend>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}</fieldset>
-  {% for kind in ['chill','sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
   <button>Speichern & Version erhöhen</button>
-</form>
 
-{% include 'device_distribution.html' %}
 <h2 class="preview-heading">Display-Vorschau</h2>
 {% if preview_chill %}<p>Ausgewählte Chill-Inhalte: {% for c in preview_chill %}{{c.name}}{% if c.preview %} <img src="{{c.preview}}" alt="{{c.name}}" style="max-width:100px;max-height:70px">{% endif %} {% endfor %}</p>{% endif %}
 <div class="leap-preview" aria-label="Vorschau des LEAP-Displays">
@@ -90,6 +84,14 @@
   {% endfor %}
   {% if preview_page_ids|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
+  <input type="hidden" name="distribution_settings" value="true">
+  <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
+  <fieldset><legend>Quiz-Kataloge</legend>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}</fieldset>
+  {% for kind in ['chill','sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
+  <button>Speichern & Version erhöhen</button>
+</form>
+
+{% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-preview.js?v=3" defer></script>
+<script src="/static/device-preview.js?v=4" defer></script>
 {% endblock %}

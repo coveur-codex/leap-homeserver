@@ -37,8 +37,6 @@ document.querySelectorAll(".leap-preview").forEach((preview) => {
   preview.querySelector("[data-card-next]")?.addEventListener("click", () => show(current + 1));
   document.querySelector('[data-communication-toggle]')?.addEventListener('change', (event) => {
     const enabled = event.target.checked;
-    const status = document.querySelector('[data-communication-status]');
-    if (status) status.textContent = enabled ? 'Aktiv' : 'Inaktiv';
     allCards.forEach(card => { card.hidden = true; });
     cards = allCards.filter(card => enabled || card.dataset.previewCard !== 'KOMMUNIKATION');
     const nav = preview.querySelector('.preview-nav');
