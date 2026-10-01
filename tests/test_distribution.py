@@ -213,3 +213,86 @@ def test_numerical_firmware_versions(client, db):
     for version in ["0.10.0", "0.9.9", "0.10.0-beta.2"]:
         assert upload_firmware(client, version, "stable").status_code == 303
     assert sync(client)["firmware"]["version"] == "0.10.0"
+
+
+def zip_bytes(entries):
+    from io import BytesIO
+    from zipfile import ZipFile, ZIP_DEFLATED
+    stream = BytesIO()
+    with ZipFile(stream, "w", compression=ZIP_DEFLATED) as archive:
+        for name, content in entries:
+            archive.writestr(name, content)
+    return stream.getvalue()
+
+
+def test_zip_upload_preserves_structure_versions_and_animations(client, db):
+    create(client, "avatar-zip", "avatar")
+    data = zip_bytes([("animations/", b""), ("animations/idle/001.png", b"first"),
+                      ("animations/idle/002.png", b"second"), ("sounds/hello.wav", b"sound")])
+    response = client.post("/assets/avatar-zip/files", data={"expected": 1}, files={"files": ("frames.ZIP", data)}, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    manifest = client.get("/api/v1/packages/avatar-zip/versions/2/manifest").json()
+    mapping = {f["path"]: f for f in manifest["files"]}
+    assert set(mapping) == {"animations/idle/001.png", "animations/idle/002.png", "sounds/hello.wav", "definition.json"}
+    assert client.get(mapping["animations/idle/001.png"]["url"]).content == b"first"
+    assert manifest["definition"]["animations"]["idle"]["frames"] == ["animations/idle/001.png", "animations/idle/002.png"]
+    replacement = zip_bytes([("animations/idle/001.png", b"replaced")])
+    assert client.post("/assets/avatar-zip/files", data={"expected": 2}, files={"files": ("update.zip", replacement)}, follow_redirects=False).status_code == 303
+    latest = client.get("/api/v1/packages/avatar-zip/versions/3/manifest").json()
+    assert len(latest["files"]) == 4
+    assert client.get(mapping["animations/idle/001.png"]["url"]).content == b"first"
+    latest_file = next(f for f in latest["files"] if f["path"] == "animations/idle/001.png")
+    assert client.get(latest_file["url"]).content == b"replaced"
+
+
+def test_zip_target_folder_and_mixed_upload(client, db):
+    create(client, "chill-zip")
+    archive = zip_bytes([("aquarium/fish/frame.png", b"frame")])
+    response = client.post("/assets/chill-zip/files", data={"expected": 1, "folder": "sets"},
+        files=[("files", ("content.zip", archive)), ("files", ("notes.txt", b"notes"))], follow_redirects=False)
+    assert response.status_code == 303
+    manifest = client.get("/api/v1/packages/chill-zip/versions/2/manifest").json()
+    assert {f["path"] for f in manifest["files"]} == {"sets/aquarium/fish/frame.png", "sets/notes.txt", "definition.json"}
+
+
+def test_invalid_zip_leaves_current_version_unchanged(client, db, monkeypatch):
+    import stat
+    import zipfile
+    create(client, "chill-invalid")
+    link = zipfile.ZipInfo("link")
+    link.create_system = 3
+    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+    archives = [b"not a zip", zip_bytes([]), zip_bytes([("../escape.txt", b"x")]),
+        zip_bytes([("/absolute.txt", b"x")]), zip_bytes([("folder/../../escape", b"x")]),
+        zip_bytes([(link, b"/etc/passwd")]), zip_bytes([("manifest.json", b"x")]),
+        zip_bytes([("file", b"x"), ("file/child", b"y")])]
+    for data in archives:
+        response = client.post("/assets/chill-invalid/files", data={"expected": 1}, files={"files": ("bad.zip", data)}, follow_redirects=False)
+        assert response.status_code == 422, response.text
+        assert db.get(AssetPackage, "chill-invalid").current_version == 1
+    monkeypatch.setattr(service, "ASSET_FILE_LIMIT", 1024)
+    oversized = zip_bytes([("big.txt", b"x" * 1025)])
+    assert client.post("/assets/chill-invalid/files", data={"expected": 1}, files={"files": ("big.zip", oversized)}).status_code == 413
+    monkeypatch.setattr(service, "ASSET_UPLOAD_LIMIT", 10)
+    assert client.post("/assets/chill-invalid/files", data={"expected": 1}, files={"files": ("big.zip", zip_bytes([("one", b"x"*6), ("two", b"x"*6)]))}).status_code == 413
+    monkeypatch.setattr(service, "ASSET_UPLOAD_FILES", 1)
+    assert client.post("/assets/chill-invalid/files", data={"expected": 1}, files={"files": ("many.zip", zip_bytes([("one", b"x"), ("two", b"x")]))}).status_code == 413
+    assert db.get(AssetPackage, "chill-invalid").current_version == 1
+
+
+def test_zip_crc_and_duplicate_paths_are_rejected_atomically(client, db):
+    import pytest
+    from zipfile import ZipFile, ZIP_STORED
+    from io import BytesIO
+    create(client, "chill-crc")
+    stream = BytesIO()
+    with ZipFile(stream, "w", compression=ZIP_STORED) as archive:
+        archive.writestr("good.txt", b"good")
+        archive.writestr("bad.txt", b"original payload")
+    damaged = stream.getvalue().replace(b"original payload", b"tampered payload")
+    assert client.post("/assets/chill-crc/files", data={"expected": 1}, files={"files": ("bad.zip", damaged)}).status_code == 422
+    with pytest.warns(UserWarning, match="Duplicate name"):
+        duplicate = zip_bytes([("same.txt", b"a"), ("same.txt", b"b")])
+    assert client.post("/assets/chill-crc/files", data={"expected": 1}, files={"files": ("duplicate.zip", duplicate)}).status_code == 422
+    assert db.get(AssetPackage, "chill-crc").current_version == 1
+    assert len(db.scalars(select(AssetVersion).where(AssetVersion.package_id == "chill-crc")).all()) == 1

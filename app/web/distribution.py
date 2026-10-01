@@ -1,6 +1,8 @@
 import json
 import re
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
+from pathlib import PurePosixPath
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -70,9 +72,22 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     mapping = service.file_map(previous)
     if len(files) > 200:
         raise HTTPException(413, "Maximal 200 Dateien pro Upload")
+    if package.current_version != expected:
+        raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
+    incoming = {}
     for upload in files:
         name = service.safe_name((folder.rstrip("/") + "/" if folder else "") + (upload.filename or ""))
-        mapping[name] = await service.store_upload(upload, 16 * 1024 * 1024)
+        is_zip = (upload.filename or "").lower().endswith(".zip")
+        info = await service.store_upload(upload, service.ASSET_FILE_LIMIT)
+        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder) if is_zip else {name: info}
+        if incoming.keys() & imported.keys():
+            raise HTTPException(422, "Upload enthält doppelte Dateipfade")
+        incoming.update(imported)
+        if len(incoming) > service.ASSET_UPLOAD_FILES or sum(f["size"] for f in incoming.values()) > service.ASSET_UPLOAD_LIMIT:
+            raise HTTPException(413, "Upload überschreitet 1000 Dateien oder 64 MiB entpackte Daten")
+    mapping.update(incoming)
+    if any(str(parent) in mapping for name in mapping for parent in PurePosixPath(name).parents):
+        raise HTTPException(422, "Ein Dateipfad wird zugleich als Ordner verwendet")
     definition = service.editable_definition(previous)
     # Auto-discovered animation folders must include newly uploaded frames.
     for name, animation in definition.get("animations", {}).items():

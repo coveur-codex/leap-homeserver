@@ -6,6 +6,9 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import tempfile
+import stat
+import zipfile
+import zlib
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -78,6 +81,57 @@ def safe_name(name):
     if name in {"definition.json", "manifest.json"}:
         raise HTTPException(422, "Dieser Dateiname wird vom Server erzeugt")
     return name
+
+
+ASSET_FILE_LIMIT = 16 * 1024 * 1024
+ASSET_UPLOAD_LIMIT = 64 * 1024 * 1024
+ASSET_UPLOAD_FILES = 1000
+
+
+def unpack_asset_zip(path, folder=""):
+    """Import individual blobs; never extract archive-controlled paths onto disk."""
+    prefix = folder.rstrip("/") + "/" if folder else ""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            entries = archive.infolist()
+            if len(entries) > ASSET_UPLOAD_FILES:
+                raise HTTPException(413, "ZIP enthält zu viele Einträge (maximal 1000)")
+            names, members, total = set(), [], 0
+            for entry in entries:
+                raw = entry.filename
+                if entry.orig_filename != raw:
+                    raise HTTPException(422, "Ungültiger ZIP-Dateipfad")
+                name = safe_name(prefix + (raw[:-1] if entry.is_dir() else raw))
+                mode = stat.S_IFMT(entry.external_attr >> 16)
+                allowed = {0, stat.S_IFDIR} if entry.is_dir() else {0, stat.S_IFREG}
+                if mode not in allowed or entry.flag_bits & 1:
+                    raise HTTPException(422, "ZIP darf keine Links, Spezialdateien oder verschlüsselten Einträge enthalten")
+                if name in names:
+                    raise HTTPException(422, "ZIP enthält doppelte Pfade")
+                names.add(name)
+                if entry.is_dir():
+                    continue
+                total += entry.file_size
+                if entry.file_size > ASSET_FILE_LIMIT or total > ASSET_UPLOAD_LIMIT:
+                    raise HTTPException(413, "Entpacktes ZIP überschreitet das Größenlimit")
+                members.append((name, entry))
+            if not members:
+                raise HTTPException(422, "ZIP enthält keine Dateien")
+            file_names = {name for name, _ in members}
+            if any(str(parent) in file_names for name in names for parent in PurePosixPath(name).parents):
+                raise HTTPException(422, "ZIP verwendet einen Pfad zugleich als Datei und Ordner")
+            result = {}
+            for name, entry in members:
+                with archive.open(entry) as stream:
+                    data = stream.read(ASSET_FILE_LIMIT + 1)
+                if len(data) > ASSET_FILE_LIMIT:
+                    raise HTTPException(413, "Entpackte Datei ist zu groß")
+                if len(data) != entry.file_size:
+                    raise HTTPException(422, "Unvollständige ZIP-Datei")
+                result[name] = store_bytes(data)
+            return result
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, NotImplementedError, RuntimeError, EOFError, zlib.error):
+        raise HTTPException(422, "ZIP ist beschädigt oder verwendet eine nicht unterstützte Komprimierung")
 
 
 def current(db, package):
