@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import asyncio
 import pytest
 from PIL import Image
+from bs4 import BeautifulSoup
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages
 from app.services.feeds import clean_text,parse_feed
@@ -178,7 +179,14 @@ def enable_knowledge(device, db, source="klexikon"):
 
 def test_knowledge_configuration_and_preview(client,db):
  device=make_device(db)
- form={"device_id":device.device_id,"name":device.name,"age":device.age,"avatar":device.avatar,"enabled":"on","knowledge_enabled":"on","knowledge_source":"miniklexikon"}
+ settings=BeautifulSoup(client.get(f"/devices/{device.id}").text,"html.parser")
+ pages=settings.find("h2",string="Seiten").parent
+ assert pages.select_one('input[name="page_ids"][value="knowledge"]') is not None
+ assert len(pages.select('input[name="page_positions"][type="number"]'))==len(device.pages)
+ assert settings.find("h2",string="Standort") is not None
+ assert settings.select_one('input[name="knowledge_enabled"]') is None
+ form={"device_id":device.device_id,"name":device.name,"age":device.age,"avatar":device.avatar,"enabled":"on","page_ids":["home","knowledge"],"knowledge_source":"miniklexikon"}
+ form["page_positions"]=[2 if page.page_id=="home" else 1 if page.page_id=="knowledge" else page.position for page in device.pages]
  response=client.post(f"/devices/{device.id}",data=form,follow_redirects=False)
  db.refresh(device)
  assert response.status_code==303 and device.knowledge_source=="miniklexikon"
@@ -188,6 +196,18 @@ def test_knowledge_configuration_and_preview(client,db):
  preview=client.get(f"/devices/{device.id}").text
  assert 'data-preview-card="WISSEN"' in preview
  assert "MiniKlexikon" in preview and "knowledge-saturn.svg" in preview
+ assert preview.index('data-preview-card="WISSEN"') < preview.index('data-preview-card="HOME"')
+ settings=BeautifulSoup(preview,"html.parser")
+ assert settings.select_one('select[name="knowledge_source"] option[selected]')["value"]=="miniklexikon"
+ assert settings.select_one('input[name="page_ids"][value="knowledge"]').has_attr("checked")
+ form["page_ids"]=["home"]
+ response=client.post(f"/devices/{device.id}",data=form,follow_redirects=False)
+ assert response.status_code==303
+ config=client.get(f"/api/v1/devices/{device.device_id}/config").json()
+ assert config["knowledgeSource"]=="miniklexikon"
+ assert not next(page for page in config["pages"] if page["id"]=="knowledge")["enabled"]
+ assert 'data-preview-card="WISSEN"' not in client.get(f"/devices/{device.id}").text
+ assert client.get(f"/api/leap/{device.device_id}/knowledge/article/Saturn").status_code==403
 
 
 def test_knowledge_api_uses_device_source_and_checks_activation(client,db,monkeypatch):
