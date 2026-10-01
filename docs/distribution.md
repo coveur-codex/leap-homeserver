@@ -9,6 +9,19 @@ Registry und die Auswahlregeln in `app/services/distribution.py` ergänzt werden
 Ein Paket erhält eine stabile ID und fortlaufende ganzzahlige Versionen (v1, v2,
 …). Datei-Upload, Ersetzen, Löschen, Metadaten- oder Quiz-Änderungen erzeugen eine
 neue Version. Mehrere Dateien eines Uploads gehören zu einer gemeinsamen Version.
+ZIP-Uploads werden serverseitig entpackt. Alle relativen Dateipfade einschließlich
+eines obersten Archivordners bleiben erhalten; der optionale Zielordner wird
+vorangestellt. Leere Verzeichnisse benötigen keinen Manifest-Eintrag. ZIPs innerhalb
+eines Archivs werden als Dateien übernommen, nicht rekursiv entpackt. Bestehende
+Dateien mit gleichem Pfad werden ausschließlich in der neuen Version ersetzt;
+andere Dateien bleiben erhalten. Der ganze Upload erzeugt genau eine Version.
+Archive und Einzeldateien dürfen je 16 MiB groß sein. Pro Upload sind maximal
+1000 Dateien und 64 MiB entpackte Daten erlaubt (je ZIP maximal 1000 Einträge
+inklusive Ordner). Pfad-Traversal, absolute Pfade, Links, verschlüsselte Einträge,
+doppelte Pfade und beschädigte Archive werden abgelehnt. Bei einem Fehler bleibt
+die aktuelle Paketversion unverändert. Wie andere Upload-Blobs bleibt auch das
+hochgeladene Archiv intern gespeichert, wird aber nicht an Geräte verteilt.
+
 Ältere Versionen und Dateien bleiben erreichbar. Parallele Bearbeitungen verwenden
 `expected` als Versionsprüfung; veraltete Formulare liefern HTTP 409.
 
