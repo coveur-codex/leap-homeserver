@@ -14,6 +14,8 @@ from app.services.devices import initialize_pages
 from app.services.feeds import fetch_feed
 from app.services.location_data import refresh_configured_locations
 from app.web.routes import router as web_router
+from app.api.distribution import router as distribution_api
+from app.web.distribution import router as distribution_web
 logging.basicConfig(level=settings.log_level,format='%(asctime)s %(levelname)s %(name)s %(message)s')
 log=logging.getLogger("leap"); START=time.monotonic()
 async def scheduled_feeds():
@@ -44,7 +46,13 @@ def seed():
 @asynccontextmanager
 async def lifespan(app):
     app.state.started_at=datetime.now(timezone.utc)
+    from app.services.distribution import ensure_packages
+    with SessionLocal() as db:
+        ensure_packages(db)
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",minutes=1,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.start();yield;scheduler.shutdown(wait=False)
 app=FastAPI(title="LEAP Home Server",version=__version__,lifespan=lifespan)
 app.mount("/static",StaticFiles(directory="app/static"),name="static");app.include_router(api_router);app.include_router(leap_router);app.include_router(knowledge_asset_router);app.include_router(web_router)
+
+app.include_router(distribution_api)
+app.include_router(distribution_web)

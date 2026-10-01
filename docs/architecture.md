@@ -17,3 +17,7 @@ LEAP Home Server ist ein modularer Monolith: FastAPI stellt HTML und REST bereit
 Statt nur eines globalen Content-Zählers verwendet V1 `newsVersion`, `weatherVersion`, `aircraftVersion` und `quizVersion`. Das verhindert unnötige Downloads. `/version` bietet aus Kompatibilitätsgründen zusätzlich das Maximum als `contentVersion`; `/sync` liefert die differenzierten Werte. `configVersion` steigt bei jeder Geräteeditor-Speicherung.
 
 SQLite kann dank SQLAlchemy später gegen PostgreSQL ersetzt werden. Ein einzelner Scheduler-Prozess ist für V1 vorgesehen; bei mehreren Web-Workern muss die Scheduler-Rolle separiert werden.
+
+## Versionierte Assets und OTA
+
+Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.

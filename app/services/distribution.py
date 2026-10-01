@@ -1,0 +1,262 @@
+"""Immutable manifests and content-addressed files in the persistent data volume."""
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import tempfile
+from uuid import uuid4
+
+from fastapi import HTTPException
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select, update
+from app.core.config import settings
+from app.models import AssetPackage, AssetVersion, Device, FirmwareRelease, QuizCatalog, QuizQuestion
+
+KINDS = {"avatar": "Avatare", "common": "Common", "sound": "Sounds", "weather": "Wetter", "game": "Spiele", "quiz": "Quiz", "chill": "Chill"}
+EVENT_LABELS = {"offered": "Update angeboten", "download_started": "Download begonnen",
+    "asset_installed": "Asset installiert", "firmware_installed": "Firmware installiert",
+    "boot_success": "Neustart erfolgreich", "firmware_confirmed": "Neue Firmware bestätigt",
+    "sync_success": "Sync erfolgreich", "update_failed": "Update fehlgeschlagen",
+    "checksum_failed": "Prüfsumme falsch", "download_aborted": "Download abgebrochen", "rollback": "Rollback durchgeführt"}
+BUILTINS = {"dragon": "Drachi", "jellyfish": "Qualle", "walrus": "Walross", "frog": "Frosch", "redpanda": "Roter Panda"}
+
+
+def blob_path(digest):
+    if not re.fullmatch(r"[a-f0-9]{64}", digest):
+        raise HTTPException(404)
+    return settings.data_dir / "distribution" / "blobs" / digest[:2] / digest
+
+
+def store_bytes(data):
+    digest = hashlib.sha256(data).hexdigest()
+    path = blob_path(digest)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Each writer has its own temporary file. The final address is immutable.
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as out:
+        temp = Path(out.name)
+        out.write(data)
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(temp, path)
+    return {"sha256": digest, "size": len(data)}
+
+
+async def store_upload(upload, limit):
+    root = settings.data_dir / "distribution" / "staging"
+    root.mkdir(parents=True, exist_ok=True)
+    temp = root / str(uuid4())
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with temp.open("xb") as out:
+            while chunk := await upload.read(65536):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(413, "Datei zu groß")
+                digest.update(chunk)
+                out.write(chunk)
+            out.flush()
+            os.fsync(out.fileno())
+        if not size:
+            raise HTTPException(422, "Leere Datei")
+        target = blob_path(digest.hexdigest())
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(temp, target)
+        return {"sha256": digest.hexdigest(), "size": size}
+    finally:
+        temp.unlink(missing_ok=True)
+        await upload.close()
+
+
+def safe_name(name):
+    if (not name or len(name) > 180 or name.startswith("/") or "\\" in name
+            or any(part in {"", ".", ".."} for part in name.split("/"))
+            or not re.fullmatch(r"[a-zA-Z0-9_. /-]+", name)):
+        raise HTTPException(422, "Ungültiger relativer Dateipfad")
+    if name in {"definition.json", "manifest.json"}:
+        raise HTTPException(422, "Dieser Dateiname wird vom Server erzeugt")
+    return name
+
+
+def current(db, package):
+    return db.scalar(select(AssetVersion).where(AssetVersion.package_id == package.id, AssetVersion.version == package.current_version))
+
+
+def publish(db, package, files, metadata, expected):
+    if package.current_version != expected:
+        raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
+    if not isinstance(metadata, dict):
+        raise HTTPException(422, "Definition muss ein JSON-Objekt sein")
+    metadata = dict(metadata)
+    minimum = metadata.get("minFirmware")
+    if minimum is not None:
+        version_key(minimum)
+    animations = metadata.get("animations", {})
+    if not isinstance(animations, dict):
+        raise HTTPException(422, "animations muss ein Objekt sein")
+    for name, animation in animations.items():
+        if not isinstance(animation, dict) or not isinstance(animation.get("frames"), list) or not animation["frames"]:
+            raise HTTPException(422, "Animationen benötigen eine nicht leere frames-Liste")
+        if any(not isinstance(frame, str) or frame not in files for frame in animation["frames"]):
+            raise HTTPException(422, "Animationsframe fehlt im Paket")
+        timing = animation.get("frameDurationMs", 100)
+        if isinstance(timing, bool) or not isinstance(timing, int) or timing < 1:
+            raise HTTPException(422, "frameDurationMs muss positiv sein")
+    # A folder animations/<name>/ automatically becomes an animation.
+    if package.kind == "avatar":
+        animations = dict(animations)
+        for path in sorted(files):
+            parts = PurePosixPath(path).parts
+            if len(parts) >= 3 and parts[0] == "animations" and parts[1] not in metadata.get("animations", {}):
+                animations.setdefault(parts[1], {"frames": [], "frameDurationMs": 100})["frames"].append(path)
+        metadata["animations"] = animations
+    preview = metadata.get("preview")
+    if preview and (not isinstance(preview, str) or preview not in files):
+        raise HTTPException(422, "Vorschaudatei fehlt im Paket")
+    version = expected + 1
+    definition = {**metadata, "id": package.id, "name": package.name, "type": package.kind, "version": version}
+    files = {name: info for name, info in files.items() if name != "definition.json"}
+    files["definition.json"] = store_bytes(json.dumps(definition, ensure_ascii=False, sort_keys=True).encode())
+    manifest = {"schemaVersion": 1, "packageId": package.id, "type": package.kind, "version": version,
+                "definition": definition, "files": [{"path": name, **info,
+                "url": f"/api/v1/packages/{package.id}/versions/{version}/files/{name}"} for name, info in sorted(files.items())]}
+    result = db.execute(update(AssetPackage).where(AssetPackage.id == package.id, AssetPackage.current_version == expected)
+                        .values(current_version=version).execution_options(synchronize_session=False))
+    if result.rowcount != 1:
+        raise HTTPException(409, "Gleichzeitige Änderung. Bitte neu laden.")
+    db.add(AssetVersion(package_id=package.id, version=version, manifest=manifest))
+    db.flush()
+    db.refresh(package)
+    return manifest
+
+
+def file_map(version):
+    return {f["path"]: {"sha256": f["sha256"], "size": f["size"]} for f in version.manifest["files"] if f["path"] != "definition.json"} if version else {}
+
+
+def editable_definition(version):
+    return {k: copy.deepcopy(v) for k, v in version.manifest["definition"].items() if k not in {"id", "name", "type", "version"}} if version else {}
+
+
+class Question(BaseModel):
+    q: str = Field(min_length=1, max_length=10000)
+    a: list[str] = Field(min_length=4, max_length=4)
+    explanation: str = Field(default="", max_length=10000)
+    minAge: int = Field(default=0, ge=0, le=120)
+    difficulty: int = Field(default=1, ge=1, le=10)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+
+
+def parse_questions(raw):
+    try:
+        data = json.loads(raw)
+        rows = data if isinstance(data, list) else data["questions"]
+        if not isinstance(rows, list) or len(rows) > 10000:
+            raise ValueError()
+        return [Question.model_validate(row).model_dump() for row in rows]
+    except (ValueError, TypeError, KeyError, ValidationError):
+        raise HTTPException(422, "Ungültige Quiz-Daten: pro Frage q und vier Antworten a angeben")
+
+
+def quiz_data(catalog):
+    return [{"q": q.question, "a": q.answers, "explanation": q.explanation, "minAge": q.min_age,
+             "difficulty": q.difficulty, "tags": q.tags} for q in catalog.questions]
+
+
+def publish_quiz(db, package, catalog, expected):
+    files = {"questions.json": store_bytes(json.dumps({"questions": quiz_data(catalog)}, ensure_ascii=False).encode())}
+    return publish(db, package, files, {"questionsFile": "questions.json", "questionCount": len(catalog.questions)}, expected)
+
+
+def catalog_package_id(db, catalog):
+    base = f"quiz-{catalog.id}"
+    candidate = base
+    suffix = 1
+    while db.get(AssetPackage, candidate):
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def ensure_packages(db):
+    """Idempotent adoption: original catalogs, question IDs and device links survive."""
+    changed = False
+    for catalog in db.scalars(select(QuizCatalog)).all():
+        if not db.scalar(select(AssetPackage).where(AssetPackage.catalog_id == catalog.id)):
+            package = AssetPackage(id=catalog_package_id(db, catalog), kind="quiz", name=catalog.name, catalog_id=catalog.id, current_version=0)
+            db.add(package); db.flush()
+            publish_quiz(db, package, catalog, 0)
+            changed = True
+    for key, label in BUILTINS.items():
+        if not db.get(AssetPackage, "avatar-" + key):
+            package = AssetPackage(id="avatar-" + key, kind="avatar", name=label, current_version=0)
+            db.add(package); db.flush()
+            publish(db, package, {"preview.svg": store_bytes((Path("app/static/avatars") / f"{key}.svg").read_bytes())},
+                    {"preview": "preview.svg", "format": "svg", "animations": {}}, 0)
+            changed = True
+    if changed:
+        db.commit()
+
+
+def desired_packages(db, device):
+    avatar = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
+    ids = {avatar, *(device.content_selection or [])}
+    catalogs = {c.id for c in device.quiz_catalogs if c.enabled}
+    packages = db.scalars(select(AssetPackage).order_by(AssetPackage.id)).all()
+    return [p for p in packages if p.id in ids or p.kind == "common" or p.catalog_id in catalogs]
+
+
+def version_key(version):
+    # A deliberately small SemVer subset suitable for firmware release names.
+    match = re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-beta\.(0|[1-9][0-9]*))?", str(version))
+    if not match or len(str(version)) > 40:
+        raise HTTPException(422, "Version muss X.Y.Z oder X.Y.Z-beta.N sein")
+    major, minor, patch, beta = match.groups()
+    return (int(major), int(minor), int(patch), beta is None, int(beta or 0))
+
+
+def firmware_target(db, device):
+    releases = db.scalars(select(FirmwareRelease)).all()
+    releases = [r for r in releases if device.firmware_channel == "beta" or r.channel == "stable"]
+    return max(releases, key=lambda r: version_key(r.version), default=None)
+
+
+def firmware_offer(db, device, installed):
+    release = firmware_target(db, device)
+    if not release or release.version == installed:
+        return None
+    try:
+        if installed and version_key(release.version) <= version_key(installed):
+            return None
+    except HTTPException:
+        # Unknown legacy version: require an explicit valid report before automatic OTA.
+        return None
+    return {"id": release.id, "version": release.version, "channel": release.channel,
+            "size": release.size, "sha256": release.sha256, "url": f"/api/v1/firmware/{release.id}/binary"}
+
+
+def device_context(db, device):
+    from app.models import SyncRun, SyncEvent
+    packages = db.scalars(select(AssetPackage).order_by(AssetPackage.name)).all()
+    desired = desired_packages(db, device)
+    runs = db.scalars(select(SyncRun).where(SyncRun.device_id == device.id).order_by(SyncRun.created_at.desc()).limit(20)).all()
+    events = db.scalars(select(SyncEvent).where(SyncEvent.run_id.in_([r.id for r in runs])).order_by(SyncEvent.id.desc()).limit(100)).all() if runs else []
+    avatar_id = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
+    avatar = db.get(AssetPackage, avatar_id)
+    preview = None
+    if avatar and (v := current(db, avatar)):
+        path = v.manifest["definition"].get("preview")
+        preview = next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)
+        if not preview:
+            preview = next((f["url"] for f in v.manifest["files"] if f["path"].lower().endswith((".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"))), None)
+    chill = []
+    for package in desired:
+        if package.kind == "chill":
+            v = current(db, package)
+            path = v.manifest["definition"].get("preview")
+            chill.append({"name": package.name, "preview": next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)})
+    return {"sync_labels": EVENT_LABELS, "firmware_pending": firmware_offer(db, device, device.firmware_version), "preview_chill": chill, "asset_packages": packages, "desired_packages": desired, "firmware_target": firmware_target(db, device),
+            "sync_runs": runs, "sync_events": events, "asset_avatar_preview": preview,
+            "pending_assets": [p for p in desired if device.installed_assets.get(p.id) != p.current_version], "asset_kinds": KINDS}

@@ -17,13 +17,18 @@ class Device(Base):
     id: Mapped[int]=mapped_column(primary_key=True)
     device_id: Mapped[str]=mapped_column(String(80), unique=True, index=True)
     name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
-    age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(40), default="dragon")
+    age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(100), default="dragon")
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
     weather_version: Mapped[int]=mapped_column(Integer, default=1); aircraft_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
     last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
+    firmware_channel: Mapped[str] = mapped_column(String(10), default="stable")
+    confirmed_firmware: Mapped[str|None] = mapped_column(String(40))
+    last_sync: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+    installed_assets: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_selection: Mapped[list] = mapped_column(JSON, default=list)
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
@@ -68,3 +73,46 @@ class QuizCatalog(Base):
     __tablename__="quiz_catalogs"; id: Mapped[int]=mapped_column(primary_key=True); name: Mapped[str]=mapped_column(String(120)); enabled: Mapped[bool]=mapped_column(Boolean, default=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); questions: Mapped[list["QuizQuestion"]]=relationship(cascade="all, delete-orphan")
 class QuizQuestion(Base):
     __tablename__="quiz_questions"; id: Mapped[int]=mapped_column(primary_key=True); catalog_id: Mapped[int]=mapped_column(ForeignKey("quiz_catalogs.id", ondelete="CASCADE")); question: Mapped[str]=mapped_column(Text); answers: Mapped[list]=mapped_column(JSON); explanation: Mapped[str]=mapped_column(Text, default=""); min_age: Mapped[int]=mapped_column(Integer, default=0); difficulty: Mapped[int]=mapped_column(Integer, default=1); tags: Mapped[list]=mapped_column(JSON, default=list)
+
+class AssetPackage(Base):
+    __tablename__ = "asset_packages"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    current_version: Mapped[int] = mapped_column(Integer, default=0)
+    catalog_id: Mapped[int|None] = mapped_column(ForeignKey("quiz_catalogs.id"), unique=True)
+
+class AssetVersion(Base):
+    __tablename__ = "asset_versions"
+    __table_args__ = (UniqueConstraint("package_id", "version"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[str] = mapped_column(ForeignKey("asset_packages.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    manifest: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class FirmwareRelease(Base):
+    __tablename__ = "firmware_releases"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(String(40), unique=True)
+    channel: Mapped[str] = mapped_column(String(10))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    sha256: Mapped[str] = mapped_column(String(64))
+    size: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class SyncRun(Base):
+    __tablename__ = "sync_runs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    plan: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(40), default="offered")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class SyncEvent(Base):
+    __tablename__ = "sync_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("sync_runs.id", ondelete="CASCADE"), index=True)
+    event: Mapped[str] = mapped_column(String(40))
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

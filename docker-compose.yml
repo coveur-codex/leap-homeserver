@@ -5,4 +5,5 @@ services:
     restart: unless-stopped
     env_file: [.env]
     ports: ["8080:8080"]
+    # Enthält Datenbank, Bilder sowie distribution/ für Assets und Firmware.
     volumes: ["./data:/data"]
