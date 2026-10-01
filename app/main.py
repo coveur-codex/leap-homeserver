@@ -56,3 +56,5 @@ app.mount("/static",StaticFiles(directory="app/static"),name="static");app.inclu
 
 app.include_router(distribution_api)
 app.include_router(distribution_web)
+from app.web.communication import router as communication_web
+app.include_router(communication_web)

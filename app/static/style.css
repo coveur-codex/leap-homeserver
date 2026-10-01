@@ -65,3 +65,9 @@ details { margin: 1rem 0; }
 summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); border-radius: .4rem; }
+
+.communication-editor{display:flex;flex-wrap:wrap;align-items:end;gap:12px}.communication-editor label{flex:1;min-width:90px}.communication-editor label:nth-of-type(2){flex:3;min-width:200px}
+.communication-card{display:flex!important}.communication-received{flex:1;min-width:0;padding:20px 24px;overflow:hidden}.communication-received small,.communication-options small{display:block;color:#527064;font-size:11px;font-weight:800}.communication-received strong{display:block;color:#173d2f;font-size:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.communication-received img{height:64px;width:64px;object-fit:contain}.communication-received p{margin:4px 0;padding:8px 12px;border-radius:12px;background:#e4f0e9;color:#173d2f;font-size:22px;overflow-wrap:anywhere}.communication-options{flex:0 0 42%;min-width:0;padding:16px 14px 32px;background:#e4f0e9;overflow-y:auto}.communication-options button{display:block;width:100%;margin-top:6px;padding:7px 10px;text-align:left;font-size:15px;background:white;color:#29483b;border:1px solid #c2d4ca;overflow-wrap:anywhere}.communication-options span{color:#29483b}
+@media(max-width:800px){.communication-received{padding:2% 3%}.communication-received strong,.communication-received p{font-size:2.7vw}.communication-received img{width:7vw;height:7vw}.communication-received small,.communication-options small{font-size:1.4vw}.communication-options{padding:2% 2% 28px}.communication-options button{font-size:2vw;padding:3px 6px;margin-top:3px}}
+
+.preview-nav[hidden]{display:none}

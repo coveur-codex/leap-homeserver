@@ -19,6 +19,7 @@ class Device(Base):
     name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
     age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(100), default="dragon")
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
+    communication_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
@@ -116,3 +117,13 @@ class SyncEvent(Base):
     event: Mapped[str] = mapped_column(String(40))
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CommunicationMessage(Base):
+    """Global prepared messages, not chat history."""
+    __tablename__ = "communication_messages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    text: Mapped[str] = mapped_column(String(120))
+    symbol: Mapped[str] = mapped_column(String(16), default="")
+    position: Mapped[int] = mapped_column(Integer, default=1)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)

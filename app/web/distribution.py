@@ -39,6 +39,8 @@ def assets(request: Request, kind: str = "", db: Session = Depends(get_db)):
 def create_package(package_id: str = Form(), name: str = Form(), kind: str = Form(), db: Session = Depends(get_db)):
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", package_id) or len(package_id) > 100 or kind not in service.KINDS or not name.strip() or len(name) > 120:
         raise HTTPException(422, "Gültige Paket-ID, Name und Kategorie angeben")
+    if kind == "communication" or package_id == "communication-messages":
+        raise HTTPException(422, "Das gemeinsame Paket wird unter Kommunikation verwaltet")
     if kind == "avatar" and not package_id.startswith("avatar-"):
         raise HTTPException(422, "Avatar-Paket-IDs beginnen mit avatar-")
     if db.get(AssetPackage, package_id):
@@ -74,8 +76,8 @@ def edit_package(package_id: str, request: Request, version: int | None = None, 
 @router.post("/assets/{package_id}/files")
 async def upload_files(package_id: str, files: list[UploadFile] = File(), folder: str = Form(""), expected: int = Form(), db: Session = Depends(get_db)):
     package = package_or_404(db, package_id)
-    if package.kind == "quiz":
-        raise HTTPException(422, "Quiz-Inhalte über den Quiz-Editor bearbeiten")
+    if package.kind in {"quiz", "communication"}:
+        raise HTTPException(422, "Generierte Inhalte über den jeweiligen Inhaltseditor bearbeiten")
     previous = service.current(db, package)
     mapping = service.file_map(previous)
     if len(files) > 200:
@@ -108,8 +110,8 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
 @router.post("/assets/{package_id}/files/delete")
 def delete_file(package_id: str, path: str = Form(), expected: int = Form(), db: Session = Depends(get_db)):
     package = package_or_404(db, package_id)
-    if package.kind == "quiz":
-        raise HTTPException(422, "Quiz-Inhalte über den Quiz-Editor bearbeiten")
+    if package.kind in {"quiz", "communication"}:
+        raise HTTPException(422, "Generierte Inhalte über den jeweiligen Inhaltseditor bearbeiten")
     previous = service.current(db, package)
     mapping = service.file_map(previous)
     if path not in mapping:
@@ -128,8 +130,8 @@ def delete_file(package_id: str, path: str = Form(), expected: int = Form(), db:
 @router.post("/assets/{package_id}/definition")
 def edit_definition(package_id: str, definition: str = Form(), expected: int = Form(), db: Session = Depends(get_db)):
     package = package_or_404(db, package_id)
-    if package.kind == "quiz":
-        raise HTTPException(422, "Quiz-Definition wird automatisch erzeugt")
+    if package.kind in {"quiz", "communication"}:
+        raise HTTPException(422, "Diese Definition wird automatisch erzeugt")
     if len(definition) > 1_000_000:
         raise HTTPException(413)
     try:
