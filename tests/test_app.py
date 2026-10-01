@@ -75,7 +75,7 @@ def test_device_preview_layout_and_avatar(client,db):
  assert page.status_code==200
  assert 'class="leap-sidebar"' in page.text
  assert 'class="leap-card news-card"' in page.text
- assert '/static/avatars/dragon.svg' in page.text
+ assert '/api/v1/packages/avatar-dragon/versions/1/files/preview.svg' in page.text
  assert 'data-preview-card="HOME"' in page.text
  assert client.get('/static/avatars/dragon.svg').status_code==200
 

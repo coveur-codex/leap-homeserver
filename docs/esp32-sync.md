@@ -8,3 +8,7 @@
 6. Regelmäßig `POST /checkin` senden. Ein Check-in ist keine Voraussetzung für die Offline-Nutzung.
 
 News kann über `since` inkrementell geladen werden; Geräte sollten dennoch auf Artikel-ID deduplizieren. Wetter und Flugradar werden als kleine Snapshots ersetzt. Antworten externer Provider dürfen nie direkt verarbeitet werden. Empfohlen sind kurze HTTP-Timeouts, exponentielles Backoff und keine dauerhafte Verbindung.
+
+## Versionierte Assets und OTA
+
+Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.

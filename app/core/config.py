@@ -25,5 +25,5 @@ class Settings(BaseSettings):
     miniklexikon_api_url: str = "https://miniklexikon.zum.de/api.php"
 
 settings = Settings()
-for name in ("database", "cache", "images", "logs"):
+for name in ("database", "cache", "images", "logs", "distribution"):
     (settings.data_dir / name).mkdir(parents=True, exist_ok=True)
