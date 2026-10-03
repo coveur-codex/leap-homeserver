@@ -41,3 +41,24 @@ normalerweise alle 15 Minuten. Quellenangabe: RainViewer, https://www.rainviewer
 `image` verweist auf `/api/v1/assets/weather-radar/{sha256}.png` mit fester
 Content-Length und unveränderlicher URL. Ein äußerer Vier-Sekunden-Timeout
 begrenzt den Providerabruf für den ESP32-HTTP-Timeout. Keine Datenbankmigration.
+
+
+## Gerätebilder und Flugzeugpositionen (Firmware beta.5)
+
+Die Flugzeugantwort enthält zusätzlich `center: {latitude, longitude}` aus dem
+konfigurierten Gerätestandort. `radiusNm` legt den Kartenmaßstab fest; Positionen
+und `trackDegrees` der Flugzeuge bleiben unverändert. Die Firmware zeichnet daraus
+eine nordorientierte Positionsansicht, keine Straßenkarte oder Live-Verfolgung.
+
+Alle fünf Standard-Avatarpakete enthalten ein transparentes `preview.png` mit
+80×80 Pixeln und einen entsprechenden Idle-Frame. Unveränderte originale
+SVG-only-Standardpakete werden durch `ensure_packages` idempotent in eine neue,
+unveränderliche Paketversion übernommen. Eigene/hochgeladene Versionen werden
+nicht überschrieben; alte Versionen bleiben für vorhandene Geräte verfügbar.
+Die PNGs sind mit CairoSVG 2.7.1 aus den mitgelieferten SVGs erzeugt; CairoSVG wird
+zur Laufzeit nicht benötigt.
+
+Wissensartikel liefern bereits `image` als lokale JPEG-URL aus dem Originalartikel.
+Die Firmware zeigt dieses Bild rechts mit erhaltenem Seitenverhältnis; fehlt ein
+Bild, bleibt der Text nutzbar. Die Datei wird auch beim späteren Sync nachgeladen,
+falls der erste Download fehlgeschlagen ist.

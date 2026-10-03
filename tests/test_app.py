@@ -75,7 +75,7 @@ def test_device_preview_layout_and_avatar(client,db):
  assert page.status_code==200
  assert 'class="leap-sidebar"' in page.text
  assert 'class="leap-card news-card"' in page.text
- assert '/api/v1/packages/avatar-dragon/versions/1/files/preview.svg' in page.text
+ assert '/api/v1/packages/avatar-dragon/versions/1/files/preview.png' in page.text
  assert 'data-preview-card="HOME"' in page.text
  assert client.get('/static/avatars/dragon.svg').status_code==200
 
@@ -152,6 +152,7 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  aircraft=client.get("/api/v1/devices/leap-erik/aircraft")
  assert weather.status_code==200 and weather.json()["current"]["temperature"]==18
  assert aircraft.status_code==200 and aircraft.json()["aircraft"][0]["callsign"]=="LEAP1"
+ assert aircraft.json()["center"] == {"latitude":52.52,"longitude":13.405}
  assert "aircraftVersion" in client.get("/api/v1/devices/leap-erik/sync").json()
  preview=client.get(f"/devices/{device.id}").text
  assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview

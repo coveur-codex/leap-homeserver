@@ -296,3 +296,42 @@ def test_zip_crc_and_duplicate_paths_are_rejected_atomically(client, db):
     assert client.post("/assets/chill-crc/files", data={"expected": 1}, files={"files": ("duplicate.zip", duplicate)}).status_code == 422
     assert db.get(AssetPackage, "chill-crc").current_version == 1
     assert len(db.scalars(select(AssetVersion).where(AssetVersion.package_id == "chill-crc")).all()) == 1
+
+
+def test_builtin_avatars_have_device_pngs(client, db):
+    from PIL import Image
+    from io import BytesIO
+    from app.services.distribution import BUILTINS, blob_path, current, ensure_packages
+    for key in BUILTINS:
+        package = db.get(AssetPackage, "avatar-" + key)
+        manifest = current(db, package).manifest
+        assert manifest["definition"]["preview"] == "preview.png"
+        assert manifest["definition"]["animations"]["idle"]["frames"] == ["preview.png"]
+        image = next(f for f in manifest["files"] if f["path"] == "preview.png")
+        response = client.get(image["url"])
+        assert response.status_code == 200
+        with Image.open(BytesIO(response.content)) as png:
+            assert png.size == (80, 80) and png.format == "PNG"
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 1
+
+
+def test_only_original_svg_builtins_are_upgraded(db):
+    from pathlib import Path
+    from app.services.distribution import publish, store_bytes, ensure_packages, current
+    for key, data in [("dragon", Path("app/static/avatars/dragon.svg").read_bytes()),
+                      ("frog", b'<svg xmlns="http://www.w3.org/2000/svg"><text>Custom</text></svg>')]:
+        package = AssetPackage(id="avatar-" + key, kind="avatar", name=key, current_version=0)
+        db.add(package)
+        db.flush()
+        publish(db, package, {"preview.svg": store_bytes(data)},
+                {"preview": "preview.svg", "format": "svg", "animations": {}}, 0)
+    db.commit()
+    old = db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-dragon", AssetVersion.version == 1)).manifest
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 2
+    assert db.get(AssetPackage, "avatar-frog").current_version == 1
+    assert current(db, db.get(AssetPackage, "avatar-frog")).manifest["definition"]["preview"] == "preview.svg"
+    assert db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-dragon", AssetVersion.version == 1)).manifest == old
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 2

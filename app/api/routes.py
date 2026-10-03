@@ -66,7 +66,8 @@ async def aircraft(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
     try:
         data=await data_for_device(d,db,"aircraft")
-        return {"version":d.aircraft_version,**data}
+        return {"version":d.aircraft_version,**data,
+                "center":{"latitude":d.latitude,"longitude":d.longitude}}
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception: raise HTTPException(503,"Flugradar derzeit nicht verfügbar")
 @router.get("/devices/{device_id}/quiz")

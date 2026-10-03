@@ -245,11 +245,23 @@ def ensure_packages(db):
             publish_quiz(db, package, catalog, 0)
             changed = True
     for key, label in BUILTINS.items():
-        if not db.get(AssetPackage, "avatar-" + key):
+        package = db.get(AssetPackage, "avatar-" + key)
+        svg = (Path("app/static/avatars") / f"{key}.svg").read_bytes()
+        original_files = {"preview.svg": {"sha256": hashlib.sha256(svg).hexdigest(), "size": len(svg)}}
+        original_definition = {"preview": "preview.svg", "format": "svg", "animations": {}}
+        if not package:
             package = AssetPackage(id="avatar-" + key, kind="avatar", name=label, current_version=0)
             db.add(package); db.flush()
-            publish(db, package, {"preview.svg": store_bytes((Path("app/static/avatars") / f"{key}.svg").read_bytes())},
-                    {"preview": "preview.svg", "format": "svg", "animations": {}}, 0)
+        version = current(db, package)
+        # Upgrade only the exact original built-in. Never replace uploaded/custom avatars.
+        original = (package.kind == "avatar" and package.current_version == 1
+                    and file_map(version) == original_files
+                    and editable_definition(version) == original_definition)
+        if package.current_version == 0 or original:
+            png = (Path("app/static/avatars") / f"{key}.png").read_bytes()
+            publish(db, package, {"preview.svg": store_bytes(svg), "preview.png": store_bytes(png)},
+                    {"preview": "preview.png", "format": "png", "animations": {
+                        "idle": {"frames": ["preview.png"], "frameDurationMs": 1000}}}, package.current_version)
             changed = True
     if changed:
         db.commit()
