@@ -79,3 +79,10 @@ def test_invalid_pet_definition_rejected(client, db, pet):
     assert response.status_code == 422
     package = db.scalar(select(AssetPackage).where(AssetPackage.id == "avatar-pet"))
     assert package.current_version == 2
+
+
+def test_pet_preview_reuses_builtin_avatar_without_new_assets(client, db):
+    d = device(db)
+    context = service.device_context(db, d)
+    idle = context["pet_preview"]["animations"]["idle"]
+    assert idle["frames"] and idle["frames"][0].endswith("/preview.png")

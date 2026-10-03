@@ -366,11 +366,20 @@ def device_context(db, device):
     preview = None
     pet_preview = {"animations": {}, "backgrounds": {}}
     if avatar and (v := current(db, avatar)):
-        pet = v.manifest["definition"].get("tamagotchi", {})
+        definition = v.manifest["definition"]
+        pet = definition.get("tamagotchi", {})
+        animations = dict(pet.get("animations", {}))
+        if "idle" not in animations:
+            idle = definition.get("animations", {}).get("idle", {})
+            frames = [p for p in idle.get("frames", []) if p.lower().endswith(".png")]
+            if not frames and str(definition.get("preview", "")).lower().endswith(".png"):
+                frames = [definition["preview"]]
+            if frames:
+                animations["idle"] = {**idle, "frames": frames}
         urls = {f["path"]: f["url"] for f in v.manifest["files"]}
         pet_preview = {"backgrounds": {k: urls.get(p) for k, p in pet.get("backgrounds", {}).items()},
                        "animations": {k: {**a, "frames": [urls[p] for p in a["frames"] if p in urls]}
-                                      for k, a in pet.get("animations", {}).items()}}
+                                      for k, a in animations.items()}}
         path = v.manifest["definition"].get("preview")
         preview = next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)
         if not preview:
