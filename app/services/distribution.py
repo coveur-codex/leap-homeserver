@@ -148,12 +148,45 @@ def discover_pet(files):
         parts = PurePosixPath(path).parts
         if not path.lower().endswith(".png"):
             continue
-        if len(parts) >= 2 and parts[-2] in PET_STATES:
-            animations.setdefault(parts[-2], {"frames": [], "frameDurationMs": 400})["frames"].append(path)
+        if len(parts) >= 2 and parts[-2].lower() in PET_STATES:
+            animations.setdefault(parts[-2].lower(), {"frames": [], "frameDurationMs": 400})["frames"].append(path)
         for period in ("day", "night"):
-            if PurePosixPath(path).stem == f"background_{period}" or (len(parts) >= 2 and parts[-2] == f"background_{period}"):
+            if PurePosixPath(path).stem.lower() == f"background_{period}" or (len(parts) >= 2 and parts[-2].lower() == f"background_{period}"):
                 backgrounds.setdefault(period, path)
     return {"animations": animations, "backgrounds": backgrounds}
+
+
+def with_pet_metadata(files, metadata):
+    """Enrich legacy uploads, retaining explicit pet and sidebar definitions."""
+    metadata = copy.deepcopy(metadata)
+    discovered = discover_pet(files)
+    root_animations = metadata.get("animations", {})
+    root_pet = {name: animation for name, animation in root_animations.items()
+                if name in PET_STATES and isinstance(animation, dict)
+                and (name != "idle" or len(animation.get("frames", [])) > 1)
+                and any(isinstance(p, str) and p.lower().endswith(".png") and p in files
+                        for p in animation.get("frames", []))}
+    if not (discovered["animations"] or discovered["backgrounds"] or root_pet or "tamagotchi" in metadata):
+        return metadata
+    pet = metadata.setdefault("tamagotchi", {})
+    if not isinstance(pet, dict):
+        raise HTTPException(422, "tamagotchi muss ein Objekt sein")
+    animations = pet.setdefault("animations", {})
+    backgrounds = pet.setdefault("backgrounds", {})
+    if not isinstance(animations, dict) or not isinstance(backgrounds, dict):
+        raise HTTPException(422, "Tamagotchi animations/backgrounds müssen Objekte sein")
+    for name, animation in discovered["animations"].items():
+        animations.setdefault(name, animation)
+    for name, animation in root_pet.items():
+        # Generic animation paths are also supported, even without state folders.
+        frames = [p for p in animation.get("frames", []) if isinstance(p, str) and p.lower().endswith(".png") and p in files]
+        if frames:
+            animations.setdefault(name, {**animation, "frames": frames})
+    for period, path in discovered["backgrounds"].items():
+        backgrounds.setdefault(period, path)
+    if "idle" not in root_animations and "idle" in animations and not any(p.startswith("animations/idle/") for p in files):
+        metadata["animations"] = {**root_animations, "idle": copy.deepcopy(animations["idle"])}
+    return metadata
 
 
 def validate_animations(animations, files):
@@ -181,30 +214,16 @@ def publish(db, package, files, metadata, expected):
     animations = metadata.get("animations", {})
     validate_animations(animations, files)
     if package.kind == "avatar":
-        discovered = discover_pet(files)
+        metadata = with_pet_metadata(files, metadata)
+        animations = metadata.get("animations", {})
         pet = metadata.get("tamagotchi", {})
-        if not isinstance(pet, dict):
-            raise HTTPException(422, "tamagotchi muss ein Objekt sein")
-        pet = copy.deepcopy(pet)
-        pet_animations = pet.setdefault("animations", {})
-        backgrounds = pet.setdefault("backgrounds", {})
+        pet_animations = pet.get("animations", {})
         validate_animations(pet_animations, files)
         if any(not frame.lower().endswith(".png") for a in pet_animations.values() for frame in a["frames"]):
             raise HTTPException(422, "Tamagotchi-Frames müssen PNG sein")
-        if not isinstance(backgrounds, dict):
-            raise HTTPException(422, "backgrounds muss ein Objekt sein")
-        for name, animation in discovered["animations"].items():
-            pet_animations.setdefault(name, animation)
-        for period, path in discovered["backgrounds"].items():
-            backgrounds.setdefault(period, path)
-        for period, path in backgrounds.items():
+        for period, path in pet.get("backgrounds", {}).items():
             if period not in {"day", "night"} or not isinstance(path, str) or not path.lower().endswith(".png") or path not in files:
                 raise HTTPException(422, "Ungültiger Tamagotchi-Hintergrund")
-        if pet_animations or backgrounds:
-            metadata["tamagotchi"] = pet
-            if "idle" not in animations and "idle" in pet_animations and not any(p.startswith("animations/idle/") for p in files):
-                animations = {**animations, "idle": copy.deepcopy(pet_animations["idle"])}
-                metadata["animations"] = animations
     # A folder animations/<name>/ automatically becomes an animation.
     if package.kind == "avatar":
         animations = dict(animations)
@@ -309,6 +328,18 @@ def ensure_packages(db):
             publish(db, package, {"preview.svg": store_bytes(svg), "preview.png": store_bytes(png)},
                     {"preview": "preview.png", "format": "png", "animations": {
                         "idle": {"frames": ["preview.png"], "frameDurationMs": 1000}}}, package.current_version)
+            changed = True
+    # Existing uploads predate pet metadata. Publish a new immutable version once;
+    # unchanged files keep their hashes and are reused by the regular device sync.
+    for package in db.scalars(select(AssetPackage).where(AssetPackage.kind == "avatar")).all():
+        version = current(db, package)
+        if not version:
+            continue
+        files = file_map(version)
+        metadata = editable_definition(version)
+        enriched = with_pet_metadata(files, metadata)
+        if enriched != metadata:
+            publish(db, package, files, enriched, package.current_version)
             changed = True
     if changed:
         db.commit()

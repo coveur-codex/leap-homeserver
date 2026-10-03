@@ -81,3 +81,13 @@ gewählten Paketframes darstellen; Snake ist eine statische Layoutvorschau. Sie
 zeigt keinen tatsächlichen Spielstand des Gerätes. Fehlende Assets blockieren
 weder Vorschau noch Spiel. Hintergrundwechsel in der Vorschau nutzt Europe/Berlin;
 die Firmware nutzt ihre bestehende konfigurierbare Geräte-Zeitzone.
+
+
+Ab Firmware beta.11 werden beim Quiz alle zugeordneten Kataloge gemeinsam
+zufällig gemischt. Die Auswahl und Reihenfolge entstehen auf dem Gerät.
+Ältere Avatar-Uploads mit Tier-/Hintergrunddateien, aber ohne Tamagotchi-Metadaten,
+werden beim Serverstart bzw. regulären Sync automatisch erkannt und erhalten
+einmalig eine ergänzte Paketversion. Kein erneuter Upload nötig; Originaldateien,
+ältere Versionen und explizite Definitionen bleiben erhalten. Danach das Gerät
+synchronisieren lassen. Die Firmware kann die beschriebenen Ordner auch ohne
+neue Metadaten direkt aus bestehenden Manifesten auflösen.
