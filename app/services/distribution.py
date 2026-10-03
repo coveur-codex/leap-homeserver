@@ -138,6 +138,37 @@ def current(db, package):
     return db.scalar(select(AssetVersion).where(AssetVersion.package_id == package.id, AssetVersion.version == package.current_version))
 
 
+PET_STATES = {"idle", "happy", "sad", "hungry", "tired", "dirty", "eating", "playing", "sleeping"}
+
+
+def discover_pet(files):
+    """Keep archive paths intact, including optional outer folders."""
+    animations, backgrounds = {}, {}
+    for path in sorted(files):
+        parts = PurePosixPath(path).parts
+        if not path.lower().endswith(".png"):
+            continue
+        if len(parts) >= 2 and parts[-2] in PET_STATES:
+            animations.setdefault(parts[-2], {"frames": [], "frameDurationMs": 400})["frames"].append(path)
+        for period in ("day", "night"):
+            if PurePosixPath(path).stem == f"background_{period}" or (len(parts) >= 2 and parts[-2] == f"background_{period}"):
+                backgrounds.setdefault(period, path)
+    return {"animations": animations, "backgrounds": backgrounds}
+
+
+def validate_animations(animations, files):
+    if not isinstance(animations, dict):
+        raise HTTPException(422, "animations muss ein Objekt sein")
+    for animation in animations.values():
+        if not isinstance(animation, dict) or not isinstance(animation.get("frames"), list) or not animation["frames"]:
+            raise HTTPException(422, "Animationen benötigen eine nicht leere frames-Liste")
+        if any(not isinstance(frame, str) or frame not in files for frame in animation["frames"]):
+            raise HTTPException(422, "Animationsframe fehlt im Paket")
+        timing = animation.get("frameDurationMs", 100)
+        if isinstance(timing, bool) or not isinstance(timing, int) or timing < 1:
+            raise HTTPException(422, "frameDurationMs muss positiv sein")
+
+
 def publish(db, package, files, metadata, expected):
     if package.current_version != expected:
         raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
@@ -148,16 +179,32 @@ def publish(db, package, files, metadata, expected):
     if minimum is not None:
         version_key(minimum)
     animations = metadata.get("animations", {})
-    if not isinstance(animations, dict):
-        raise HTTPException(422, "animations muss ein Objekt sein")
-    for name, animation in animations.items():
-        if not isinstance(animation, dict) or not isinstance(animation.get("frames"), list) or not animation["frames"]:
-            raise HTTPException(422, "Animationen benötigen eine nicht leere frames-Liste")
-        if any(not isinstance(frame, str) or frame not in files for frame in animation["frames"]):
-            raise HTTPException(422, "Animationsframe fehlt im Paket")
-        timing = animation.get("frameDurationMs", 100)
-        if isinstance(timing, bool) or not isinstance(timing, int) or timing < 1:
-            raise HTTPException(422, "frameDurationMs muss positiv sein")
+    validate_animations(animations, files)
+    if package.kind == "avatar":
+        discovered = discover_pet(files)
+        pet = metadata.get("tamagotchi", {})
+        if not isinstance(pet, dict):
+            raise HTTPException(422, "tamagotchi muss ein Objekt sein")
+        pet = copy.deepcopy(pet)
+        pet_animations = pet.setdefault("animations", {})
+        backgrounds = pet.setdefault("backgrounds", {})
+        validate_animations(pet_animations, files)
+        if any(not frame.lower().endswith(".png") for a in pet_animations.values() for frame in a["frames"]):
+            raise HTTPException(422, "Tamagotchi-Frames müssen PNG sein")
+        if not isinstance(backgrounds, dict):
+            raise HTTPException(422, "backgrounds muss ein Objekt sein")
+        for name, animation in discovered["animations"].items():
+            pet_animations.setdefault(name, animation)
+        for period, path in discovered["backgrounds"].items():
+            backgrounds.setdefault(period, path)
+        for period, path in backgrounds.items():
+            if period not in {"day", "night"} or not isinstance(path, str) or not path.lower().endswith(".png") or path not in files:
+                raise HTTPException(422, "Ungültiger Tamagotchi-Hintergrund")
+        if pet_animations or backgrounds:
+            metadata["tamagotchi"] = pet
+            if "idle" not in animations and "idle" in pet_animations and not any(p.startswith("animations/idle/") for p in files):
+                animations = {**animations, "idle": copy.deepcopy(pet_animations["idle"])}
+                metadata["animations"] = animations
     # A folder animations/<name>/ automatically becomes an animation.
     if package.kind == "avatar":
         animations = dict(animations)
@@ -317,7 +364,13 @@ def device_context(db, device):
     avatar_id = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
     avatar = db.get(AssetPackage, avatar_id)
     preview = None
+    pet_preview = {"animations": {}, "backgrounds": {}}
     if avatar and (v := current(db, avatar)):
+        pet = v.manifest["definition"].get("tamagotchi", {})
+        urls = {f["path"]: f["url"] for f in v.manifest["files"]}
+        pet_preview = {"backgrounds": {k: urls.get(p) for k, p in pet.get("backgrounds", {}).items()},
+                       "animations": {k: {**a, "frames": [urls[p] for p in a["frames"] if p in urls]}
+                                      for k, a in pet.get("animations", {}).items()}}
         path = v.manifest["definition"].get("preview")
         preview = next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)
         if not preview:
@@ -329,5 +382,5 @@ def device_context(db, device):
             path = v.manifest["definition"].get("preview")
             chill.append({"name": package.name, "preview": next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)})
     return {"sync_labels": EVENT_LABELS, "firmware_pending": firmware_offer(db, device, device.firmware_version), "preview_chill": chill, "asset_packages": packages, "desired_packages": desired, "firmware_target": firmware_target(db, device),
-            "sync_runs": runs, "sync_events": events, "asset_avatar_preview": preview,
+            "sync_runs": runs, "sync_events": events, "asset_avatar_preview": preview, "pet_preview": pet_preview,
             "pending_assets": [p for p in desired if device.installed_assets.get(p.id) != p.current_version], "asset_kinds": KINDS}

@@ -103,6 +103,11 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     for name, animation in definition.get("animations", {}).items():
         prefix = f"animations/{name}/"
         animation["frames"] = sorted(set(animation["frames"]) | {p for p in mapping if p.startswith(prefix)})
+    pet = definition.get("tamagotchi", {})
+    discovered = service.discover_pet(mapping)
+    for name, animation in pet.get("animations", {}).items():
+        if name in discovered["animations"]:
+            animation["frames"] = sorted(set(animation["frames"]) | set(discovered["animations"][name]["frames"]))
     service.publish(db, package, mapping, definition, expected)
     db.commit()
     return redir(f"/assets/{package.id}")
@@ -121,6 +126,10 @@ def delete_file(package_id: str, path: str = Form(), expected: int = Form(), db:
     animations = definition.get("animations", {})
     definition["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
         for name, animation in animations.items() if any(f != path for f in animation["frames"])}
+    pet = definition.get("tamagotchi", {})
+    pet["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
+                         for name, animation in pet.get("animations", {}).items() if any(f != path for f in animation["frames"])}
+    pet["backgrounds"] = {period: p for period, p in pet.get("backgrounds", {}).items() if p != path}
     if definition.get("preview") == path:
         definition.pop("preview")
     service.publish(db, package, mapping, definition, expected)

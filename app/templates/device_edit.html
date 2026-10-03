@@ -71,7 +71,22 @@
       <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
       <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
     </article>
-    {% elif page_id == 'communication' %}
+    {% elif page_id == 'games' %}
+    <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>
+      <div class="games-preview-menu" data-games-menu>
+        <strong>Spiele</strong>
+        <button type="button" data-game-open="pet">Mein Haustier</button>
+        <button type="button" data-game-open="snake">Snake</button>
+        <span>Auch weiterhin: Heiße Kartoffel, Simon, Kipp-Labyrinth</span>
+      </div>
+      <div class="pet-preview" data-pet-preview hidden>
+        <div class="pet-scene" data-pet-scene><img data-pet-image alt="Haustier" hidden><span data-pet-fallback>♥</span></div>
+        <div class="pet-actions">{% for action in ['Füttern', 'Spielen', 'Waschen', 'Schlafen'] %}<button type="button" data-pet-action="{{loop.index0}}">{{action}}</button>{% endfor %}<button type="button" data-game-back>Zurück</button></div>
+      </div>
+      <div class="snake-preview" data-snake-preview hidden><strong>Snake · Punkte 0 · Rekord 0</strong><div class="snake-example"><i></i><b></b></div><span>Rechter Schalter: Richtungen · Linke Mitte: zurück</span><button type="button" data-game-back>Zurück</button></div>
+      <script type="application/json" data-pet-assets>{{pet_preview|tojson}}</script>
+    </article>
+  {% elif page_id == 'communication' %}
     <article class="leap-card communication-card" data-preview-card="KOMMUNIKATION"{% if not loop.first %} hidden{% endif %}>
       <div class="communication-received"><small>GRUPPENCHAT · BEISPIEL</small>
         <strong>{{device.child_name or device.name}}</strong>
@@ -99,5 +114,5 @@
 
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-preview.js?v=4" defer></script>
+<script src="/static/device-preview.js?v=5" defer></script>
 {% endblock %}

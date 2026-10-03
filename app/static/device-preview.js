@@ -60,3 +60,41 @@ document.querySelectorAll('[data-message-choice]').forEach(button => {
     document.querySelector('[data-communication-message]').textContent = button.textContent;
   });
 });
+
+// Asset/layout preview. Pet needs and Snake rounds remain local to the device.
+document.querySelectorAll('.games-card').forEach(card => {
+  const assets = JSON.parse(card.querySelector('[data-pet-assets]').textContent);
+  const menu = card.querySelector('[data-games-menu]');
+  const pet = card.querySelector('[data-pet-preview]');
+  const snake = card.querySelector('[data-snake-preview]');
+  const image = card.querySelector('[data-pet-image]');
+  const fallback = card.querySelector('[data-pet-fallback]');
+  let animation = 'idle', frame = 0, lastFrame = 0, actionUntil = 0;
+  card.querySelectorAll('[data-game-open]').forEach(button => button.addEventListener('click', () => {
+    menu.hidden = true;
+    pet.hidden = button.dataset.gameOpen !== 'pet';
+    snake.hidden = button.dataset.gameOpen !== 'snake';
+    animation = 'idle'; actionUntil = 0; frame = 0;
+  }));
+  card.querySelectorAll('[data-game-back]').forEach(button => button.addEventListener('click', () => {
+    menu.hidden = false; pet.hidden = snake.hidden = true;
+  }));
+  card.querySelectorAll('[data-pet-action]').forEach(button => button.addEventListener('click', () => {
+    animation = ['eating', 'playing', 'happy', 'sleeping'][Number(button.dataset.petAction)];
+    actionUntil = Date.now() + 3000; frame = 0; lastFrame = 0;
+  }));
+  image.addEventListener('error', () => { image.hidden = true; fallback.hidden = false; });
+  setInterval(() => {
+    if (pet.hidden || card.hidden) return;
+    const now = Date.now();
+    if (actionUntil && now >= actionUntil) { animation = 'idle'; actionUntil = 0; frame = 0; }
+    const hour = Number(new Intl.DateTimeFormat('en', {hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/Berlin'}).format(new Date()));
+    const background = assets.backgrounds[hour < 7 || hour >= 20 ? 'night' : 'day'];
+    card.querySelector('[data-pet-scene]').style.backgroundImage = background ? `url("${background}")` : '';
+    const current = assets.animations[animation] || assets.animations.idle;
+    if (current?.frames.length && now - lastFrame >= Math.max(250, current.frameDurationMs || 400)) {
+      image.src = current.frames[frame++ % current.frames.length];
+      image.hidden = false; fallback.hidden = true; lastFrame = now;
+    }
+  }, 100);
+});
