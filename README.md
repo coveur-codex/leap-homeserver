@@ -23,7 +23,8 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 3. Unter **Assets** Pakete verwalten, Dateien hochladen und Quiz-Fragen bearbeiten oder importieren. Avatar, Chill, Quiz und weitere Inhalte in den Geräteeinstellungen auswählen.
 4. Unter **Firmware** eine ESP32-S3 App-Binary hochladen und zunächst als Beta testen; anschließend als Stable freigeben. Den Kanal je Gerät einstellen.
 5. Unter **Kommunikation** gemeinsame Nachrichtenvorlagen bearbeiten, aktivieren und über die Position sortieren. **Kommunikation aktiv** steuert pro Gerät Teilnahme und Kommunikationsseite; neue Geräte und bestehende Geräte nach der Migration sind standardmäßig aktiviert. Vorlagen werden als gemeinsames Asset-Paket synchronisiert.
-6. Im Geräteeditor die 428×142-Vorschau prüfen.
+6. Unter **Geräte → Quiz → Mathe-Quiz** Rechenart und Grenze einstellen (z. B. Addition bis 20, Subtraktion bis 100 oder Multiplikation bis 10 für das kleine Einmaleins). Leap erzeugt Aufgaben zufällig und offline mit vier Antworten, Rechenweg und Stellenwerttafel. Auf dem Gerät beginnt die Quizseite mit der Katalogauswahl einschließlich Mathe-Quiz.
+7. Im Geräteeditor die 428×142-Vorschau prüfen.
 
 Über **Design** in der Kopfzeile lässt sich zwischen **Hell**, **Dunkel** und
 **System** wechseln. Die Auswahl wird pro Browser gespeichert; **System** folgt

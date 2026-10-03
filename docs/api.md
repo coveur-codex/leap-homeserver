@@ -62,3 +62,20 @@ Wissensartikel liefern bereits `image` als lokale JPEG-URL aus dem Originalartik
 Die Firmware zeigt dieses Bild rechts mit erhaltenem Seitenverhältnis; fehlt ein
 Bild, bleibt der Text nutzbar. Die Datei wird auch beim späteren Sync nachgeladen,
 falls der erste Download fehlgeschlagen ist.
+
+## Mathe-Quiz und Katalogauswahl
+
+`config.mathQuiz` enthält `{ "operation": "add", "limit": 20 }` pro Gerät.
+Rechenarten: `add`, `subtract`, `multiply`. Bei Addition/Subtraktion liegen
+Operanden und Ergebnis zwischen 0 und `limit` (3–1000). Bei Multiplikation
+liegen beide Faktoren zwischen 1 und `limit` (3–20; 10 für das kleine Einmaleins).
+Die Firmware erzeugt jede Aufgabe offline; es werden keine Mathe-Fragen gespeichert
+oder heruntergeladen. Ohne Einstellung gilt Addition bis 20.
+
+`quiz.catalogs` liefert die aktiven zugewiesenen Kataloge mit `id` und `name`;
+jede Zeile in `quiz.questions` enthält zusätzlich `catalogId`. Das bisherige
+`questions`-Array bleibt für ältere Firmware erhalten. Neue Firmware zeigt zuerst
+die Katalogauswahl und lädt Fragen ausschließlich aus dem gewählten Katalog.
+Versionierte Quiz-Pakete verwenden weiterhin `definition.name` und `questionsFile`.
+Migration `0007` setzt bestehende Geräte auf Addition bis 20 und erhöht ihre
+Konfigurationsversion, damit die Einstellung beim nächsten Sync übertragen wird.

@@ -91,8 +91,9 @@ def test_device_preview_follows_enabled_page_configuration(client,db):
  assert preview.index('data-preview-card="QUIZ"') < preview.index('data-preview-card="HOME"')
  assert 'data-preview-card="WETTER"' not in preview
  assert 'data-preview-card="NEWS"' not in preview
- assert "Wie viele Kontinente gibt es?" in preview
- assert all(answer in preview for answer in ("Fünf","Sechs","Sieben","Acht"))
+ assert "Katalog auswählen" in preview and "Wissen" in preview and "Mathe-Quiz" in preview
+ assert "Wie viele Kontinente gibt es?" not in preview
+ assert all(answer not in preview for answer in ("Fünf","Sechs","Sieben","Acht"))
 
 def test_device_preview_carousel_uses_device_news_selection(client,db):
  d=make_device(db)
