@@ -34,7 +34,7 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     distribution_service.ensure_packages(db)
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication"}]
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games"}]
     catalog_ids=[catalog.id for catalog in d.quiz_catalogs if catalog.enabled]
     preview_question=db.scalar(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age).order_by(QuizQuestion.id)) if catalog_ids else None
     return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_question":preview_question,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})

@@ -59,3 +59,25 @@ pytest
 Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
 
 Assets, Datenübernahme, Firmware-Kanäle und das vollständige ESP32-Installationsprotokoll: [`docs/distribution.md`](docs/distribution.md). Die Server-APIs sind implementiert; der Geräteclient muss das dort beschriebene Verfahren in seiner Firmware umsetzen.
+
+## Haustier und Snake (Firmware beta.10)
+
+Die Geräte-Konfiguration bietet im bestehenden Spielebereich `tamagotchi` und
+`snake` zusätzlich zu den bisherigen Spielen an. Beide laufen lokal. Bedürfnisse
+und Snake-Rekord werden auf dem Gerät gespeichert.
+
+Für das Haustier das gewählte Avatarpaket unter Assets bearbeiten und ein ZIP mit
+80×80-PNG-Frames in `idle`, `happy`, `sad`, `hungry`, `tired`, `dirty`, `eating`,
+`playing`, `sleeping` hochladen. Je vier Frames, alphabetische Reihenfolge und
+400 ms Standarddauer. `data/pet/` und ein äußerer ZIP-Ordner bleiben erhalten.
+256×142-PNG-Hintergründe heißen `background_day.png`/`background_night.png` oder
+liegen in gleichnamigen Ordnern. Der Import ergänzt die Paketdefinition unter
+`tamagotchi.animations` und `tamagotchi.backgrounds.day/night`; Metadaten lassen
+sich im vorhandenen Definitionseditor bearbeiten. Die normalen versionierten
+Manifeste, Zuweisungen und Sync-Downloads gelten auch für diese Dateien.
+
+Die Geräte-Vorschau zeigt die neuen Spiele und kann die Haustieraktionen mit den
+gewählten Paketframes darstellen; Snake ist eine statische Layoutvorschau. Sie
+zeigt keinen tatsächlichen Spielstand des Gerätes. Fehlende Assets blockieren
+weder Vorschau noch Spiel. Hintergrundwechsel in der Vorschau nutzt Europe/Berlin;
+die Firmware nutzt ihre bestehende konfigurierbare Geräte-Zeitzone.

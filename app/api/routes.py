@@ -24,7 +24,7 @@ class Checkin(BaseModel):
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
-    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"knowledgeSource":d.knowledge_source,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":True} for x in ("hot_potato","simon_motion","tilt_maze")],"homeSlots":d.home_slots}
+    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"knowledgeSource":d.knowledge_source,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":True} for x in ("tamagotchi","snake","hot_potato","simon_motion","tilt_maze")],"homeSlots":d.home_slots}
 @router.get("/devices/{device_id}/version")
 def version(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"contentVersion":max(d.news_version,d.weather_version,d.aircraft_version,d.quiz_version,d.knowledge_version)}
