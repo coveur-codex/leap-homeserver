@@ -86,3 +86,47 @@ def test_pet_preview_reuses_builtin_avatar_without_new_assets(client, db):
     context = service.device_context(db, d)
     idle = context["pet_preview"]["animations"]["idle"]
     assert idle["frames"] and idle["frames"][0].endswith("/preview.png")
+
+
+def test_existing_pet_upload_is_upgraded_once_and_synced(client, db):
+    """Simulate a package written by the server before pet metadata existed."""
+    import copy
+    from app.models import AssetVersion
+    d = device(db)
+    create(client, "avatar-old-pet", "avatar")
+    d.avatar = "avatar-old-pet"
+    db.commit()
+    assert client.post("/assets/avatar-old-pet/files", data={"expected": 1}, files={"files": ("old.zip", pet_zip())}, follow_redirects=False).status_code == 303
+    version = db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-old-pet", AssetVersion.version == 2))
+    old = copy.deepcopy(version.manifest)
+    old["definition"].pop("tamagotchi")
+    old["definition"]["animations"] = {"idle": {"frames": ["Example/data/pet/idle/frame_01.png"], "frameDurationMs": 1000}}
+    info = service.store_bytes(json.dumps(old["definition"], ensure_ascii=False, sort_keys=True).encode())
+    next(f for f in old["files"] if f["path"] == "definition.json").update(info)
+    version.manifest = old
+    db.commit()
+    service.ensure_packages(db)
+    package = db.get(AssetPackage, "avatar-old-pet")
+    assert package.current_version == 3
+    new = service.current(db, package).manifest
+    assert len(new["definition"]["tamagotchi"]["animations"]["idle"]["frames"]) == 4
+    assert set(new["definition"]["tamagotchi"]["backgrounds"]) == {"day", "night"}
+    assert new["definition"]["animations"] == old["definition"]["animations"]
+    assert service.file_map(service.current(db, package)) == service.file_map(version)
+    assert "tamagotchi" not in version.manifest["definition"]
+    service.ensure_packages(db)
+    assert package.current_version == 3
+    plan = sync(client, {"avatar-old-pet": 2}, firmware="1.0.0-beta.11")
+    assert next(u for u in plan["assetUpdates"] if u["packageId"] == "avatar-old-pet")["version"] == 3
+    definition_file = next(f for f in new["files"] if f["path"] == "definition.json")
+    assert client.get(definition_file["url"]).json() == new["definition"]
+
+
+def test_existing_generic_animation_metadata_can_drive_pet(client, db):
+    create(client, "avatar-generic", "avatar")
+    assert client.post("/assets/avatar-generic/files", data={"expected": 1}, files=[("files", ("one.png", b"png")), ("files", ("two.png", b"png"))], follow_redirects=False).status_code == 303
+    definition = {"animations": {"idle": {"frames": ["two.png", "one.png"], "frameDurationMs": 700},
+                                 "happy": {"frames": ["one.png", "two.png"], "frameDurationMs": 600}}}
+    assert client.post("/assets/avatar-generic/definition", data={"expected": 2, "definition": json.dumps(definition)}, follow_redirects=False).status_code == 303
+    manifest = client.get("/api/v1/packages/avatar-generic/versions/3/manifest").json()
+    assert manifest["definition"]["tamagotchi"]["animations"] == definition["animations"]
