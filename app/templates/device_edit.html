@@ -8,6 +8,16 @@
     <div class="device-settings-stack">
     <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
     <section><h2>Quiz</h2>
+  <fieldset><legend>Mathe-Quiz</legend>
+    <input type="hidden" name="math_settings" value="true">
+    <label>Rechenart<select name="math_operation">
+      <option value="add" {% if device.math_quiz.operation == 'add' %}selected{% endif %}>Addition (+)</option>
+      <option value="subtract" {% if device.math_quiz.operation == 'subtract' %}selected{% endif %}>Subtraktion (−)</option>
+      <option value="multiply" {% if device.math_quiz.operation == 'multiply' %}selected{% endif %}>Multiplikation (×)</option>
+    </select></label>
+    <label>Zahlenbereich / größte Malreihe<input type="number" name="math_limit" value="{{device.math_quiz.limit}}" min="3" max="1000" required></label>
+    <p>Zum Beispiel: + bis 20, − bis 100 oder Multiplikation bis 10 für das kleine Einmaleins. Bei + und − bleiben Zahlen und Ergebnis im gewählten Bereich; bei × sind beide Faktoren 1 bis zur Grenze (maximal 20). Aufgaben entstehen zufällig auf dem Gerät, auch offline.</p>
+  </fieldset>
   <fieldset><legend>Quiz-Themen</legend>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}</fieldset>
     </section>
     </div>
@@ -63,8 +73,8 @@
     </article>
     {% elif page_id == 'quiz' %}
     <article class="leap-card quiz-card" data-preview-card="QUIZ"{% if not loop.first %} hidden{% endif %}>
-      <div class="quiz-question"><small>FRAGE DES TAGES</small><strong>{% if preview_question %}{{preview_question.question}}{% else %}Noch keine Quizfrage ausgewählt.{% endif %}</strong><span>{% if preview_question %}Wähle die richtige Antwort!{% else %}Ordne dem Gerät einen Quiz-Katalog zu.{% endif %}</span></div>
-      <ol class="quiz-answers">{% if preview_question %}{% for answer in preview_question.answers %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% else %}{% for answer in ['Antwort A','Antwort B','Antwort C','Antwort D'] %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% endif %}</ol>
+      <div class="quiz-question"><small>QUIZ</small><strong>Katalog auswählen</strong><span>Wähle ein Thema und beantworte seine Fragen.</span></div>
+      <ol class="quiz-answers">{% for catalog in device.quiz_catalogs if catalog.enabled %}<li><span>{{catalog.name}}</span></li>{% endfor %}<li><span>Mathe-Quiz</span></li></ol>
     </article>
     {% elif page_id == 'aircraft' %}
     <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR"{% if not loop.first %} hidden{% endif %}>
