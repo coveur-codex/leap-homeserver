@@ -20,3 +20,24 @@ Dieselben drei Geräteendpunkte stehen passend zur bisherigen API auch unter `/a
 ## Versionierte Assets und OTA
 
 Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.
+
+
+## Regenradar für Geräte
+
+`GET /api/v1/devices/{device_id}/weather/radar` liefert `available`, `stale`
+und bei vorhandenem Bild `image`, `updated` (UTC), `source`, `sourceUrl`,
+`latitude`, `longitude`. Ohne konfigurierten Standort: 422; unbekanntes oder
+inaktives Gerät: 404. Provider-Ausfälle liefern 200 mit `available: false` oder
+mit dem letzten Bild und `stale: true`, unabhängig vom normalen Wetterabruf.
+
+RainViewer-Beobachtungen werden auf dem Server auf 112×112 PNG reduziert,
+nordorientiert um den Standort zentriert (Zoom 7), mit Standortpunkt und
+Orientierungsringen. Das ist ein Niederschlags-Layer ohne Straßenkarte,
+keine Vorhersage. Der Server benötigt HTTPS-Zugriff auf
+`api.rainviewer.com` und `tilecache.rainviewer.com`. Metadaten/Bilder werden
+höchstens alle zehn Minuten pro Standort angefordert; der Geräte-Sync erfolgt
+normalerweise alle 15 Minuten. Quellenangabe: RainViewer, https://www.rainviewer.com/.
+
+`image` verweist auf `/api/v1/assets/weather-radar/{sha256}.png` mit fester
+Content-Length und unveränderlicher URL. Ein äußerer Vier-Sekunden-Timeout
+begrenzt den Providerabruf für den ESP32-HTTP-Timeout. Keine Datenbankmigration.

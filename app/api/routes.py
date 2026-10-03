@@ -44,6 +44,23 @@ async def weather(device_id:str,db:Session=Depends(get_db)):
     try:return await data_for_device(d,db,"weather")
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception as e: raise HTTPException(503,"Wetterdienst derzeit nicht verfügbar")
+@router.get("/devices/{device_id}/weather/radar")
+async def weather_radar(device_id:str,db:Session=Depends(get_db)):
+    from app.services.radar import radar_for_location
+    d=device_or_404(device_id,db)
+    if d.latitude is None or d.longitude is None:
+        raise HTTPException(422,"Standort ist nicht konfiguriert")
+    try: return await radar_for_location(d.latitude,d.longitude)
+    except ValueError as e: raise HTTPException(422,str(e))
+
+@router.get("/assets/weather-radar/{image_id}.png")
+def weather_radar_image(image_id:str):
+    if not re.fullmatch(r"[a-f0-9]{64}",image_id): raise HTTPException(404)
+    from app.core.config import settings
+    path=settings.data_dir/"images"/"weather-radar"/f"{image_id}.png"
+    if not path.is_file(): raise HTTPException(404)
+    return FileResponse(path,media_type="image/png",headers={"Cache-Control":"public, max-age=86400, immutable"})
+
 @router.get("/devices/{device_id}/aircraft")
 async def aircraft(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
