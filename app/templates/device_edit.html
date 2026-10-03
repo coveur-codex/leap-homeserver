@@ -78,8 +78,9 @@
     </article>
     {% elif page_id == 'aircraft' %}
     <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR"{% if not loop.first %} hidden{% endif %}>
-      <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
-      <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
+      <script type="application/json" data-aircraft-snapshot>{{ (preview_aircraft or {})|tojson }}</script>
+      <div class="aircraft-list" data-aircraft-list><div class="news-meta"><strong>IN DER NÄHE</strong></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% set plane = preview_aircraft.aircraft[0] %}<b>{{plane.callsign or plane.registration or plane.hex}}</b><p>{{plane.typeName or 'Unbekannter Flugzeugtyp'}}</p><p>{{(plane.distanceNm * 1.852)|round(1)}} km · {% if plane.altitudeFeet is not none %}{{(plane.altitudeFeet * 0.3048)|round|int}} m{% else %}Höhe unbekannt{% endif %}</p>{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong></div>{% endif %}</div>
+      <div class="radar-panel"><div class="radar-scope" data-aircraft-scope aria-label="Flugzeuge im Umkreis"></div><small data-aircraft-status></small></div>
     </article>
     {% elif page_id == 'games' %}
     <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>
@@ -125,4 +126,5 @@
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
 <script src="/static/device-preview.js?v=5" defer></script>
+<script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
 {% endblock %}
