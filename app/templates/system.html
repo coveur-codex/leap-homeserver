@@ -15,7 +15,7 @@
 </div>
 <section class="system-section">
   <h2>Wetter und Flugradar</h2>
-  <p class="muted">Die Daten werden spätestens alle {{ location_interval }} Minuten je Standort geprüft. Flugradar-Radius: {{ aircraft_radius }} NM.</p>
+  <p class="muted">Wetter wird alle {{ location_interval }} Minuten, Flugradar alle {{ aircraft_interval }} Sekunden je Standort aktualisiert. Flugradar-Radius: {{ aircraft_radius }} km.</p>
   {% if locations %}
   <div class="table-scroll"><table class="system-table">
     <thead><tr><th>Standort</th><th>Daten</th><th>Zuletzt erfolgreich</th><th>Nächste Prüfung ab</th><th>Status</th></tr></thead>

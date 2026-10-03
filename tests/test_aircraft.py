@@ -1,9 +1,7 @@
-import math
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.core.config import settings
 from app.models import LocationCache
 from app.services import aircraft, location_data
 from app.services.aircraft_names import airport_name

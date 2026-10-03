@@ -57,7 +57,7 @@ uvicorn app.main:app --reload --port 8080
 pytest
 ```
 
-Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
+Wetter wird alle 15 Minuten, Flugradar standardmäßig alle 30 Sekunden (`LEAP_AIRCRAFT_CACHE_SECONDS`) einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
 
 Assets, Datenübernahme, Firmware-Kanäle und das vollständige ESP32-Installationsprotokoll: [`docs/distribution.md`](docs/distribution.md). Die Server-APIs sind implementiert; der Geräteclient muss das dort beschriebene Verfahren in seiner Firmware umsetzen.
 
@@ -92,3 +92,5 @@ einmalig eine ergänzte Paketversion. Kein erneuter Upload nötig; Originaldatei
 ältere Versionen und explizite Definitionen bleiben erhalten. Danach das Gerät
 synchronisieren lassen. Die Firmware kann die beschriebenen Ordner auch ohne
 neue Metadaten direkt aus bestehenden Manifesten auflösen.
+
+Vorschau-Regressionsprüfung (Node.js): `node tests/test_aircraft_preview.cjs`.

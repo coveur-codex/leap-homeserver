@@ -7,15 +7,20 @@
   const list = card.querySelector('[data-aircraft-list]');
   const scope = card.querySelector('[data-aircraft-scope]');
   const status = card.querySelector('[data-aircraft-status]');
+  const details = document.createElement('div');
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.onclick = () => { selected = (selected + 1) % snapshot.aircraft.length; render(); };
+  list.replaceChildren(details, next);
   const rad = Math.PI / 180;
   function position(plane, age) {
     let lat = plane.latitude, lon = plane.longitude;
     const seconds = age + (plane.positionAgeSeconds || 0);
     const predicted = Number.isFinite(plane.groundSpeedKnots) && plane.groundSpeedKnots >= 0 &&
-      Number.isFinite(plane.trackDegrees) && seconds >= 0 && seconds <= 120;
+      Number.isFinite(plane.trackDegrees) && seconds >= 0;
     if (predicted) {
       const a = lat * rad, heading = plane.trackDegrees * rad;
-      const d = plane.groundSpeedKnots * seconds / 3600 / 3440.065;
+      const d = plane.groundSpeedKnots * Math.min(seconds, 120) / 3600 / 3440.065;
       const b = Math.asin(Math.sin(a) * Math.cos(d) + Math.cos(a) * Math.sin(d) * Math.cos(heading));
       lon += Math.atan2(Math.sin(heading) * Math.sin(d) * Math.cos(a), Math.cos(d) - Math.sin(a) * Math.sin(b)) / rad;
       lon = (lon + 540) % 360 - 180;
@@ -35,15 +40,16 @@
   function line(tag, text) {
     const element = document.createElement(tag);
     element.textContent = text;
-    list.append(element);
+    details.append(element);
   }
   function render() {
     if (card.hidden) return;
     const planes = snapshot.aircraft || [];
     const age = (Number.isFinite(snapshot.ageSeconds) ? snapshot.ageSeconds :
-      Math.max(0, (Date.now() - Date.parse(snapshot.updated)) / 1000)) + (performance.now() - received) / 1000;
+      (Number.isFinite(Date.parse(snapshot.updated)) ? Math.max(0, (Date.now() - Date.parse(snapshot.updated)) / 1000) : 121)) + (performance.now() - received) / 1000;
     scope.replaceChildren();
-    list.replaceChildren();
+    details.replaceChildren();
+    next.hidden = !planes.length;
     if (!planes.length) { line('strong', 'Keine Flugdaten'); status.textContent = ''; return; }
     selected %= planes.length;
     const points = planes.map(plane => position(plane, age));
@@ -68,10 +74,7 @@
     line('p', `Tempo: ${Number.isFinite(plane.groundSpeedKnots) ? Math.round(plane.groundSpeedKnots * 1.852) + ' km/h' : 'unbekannt'}`);
     if (plane.originName) line('p', `Start: ${plane.originName}`);
     if (plane.destinationName) line('p', `Ziel: ${plane.destinationName}`);
-    const next = document.createElement('button');
-    next.type = 'button'; next.textContent = `Nächstes Flugzeug (${selected + 1}/${planes.length})`;
-    next.onclick = () => { selected = (selected + 1) % planes.length; render(); };
-    list.append(next);
+    next.textContent = `Nächstes Flugzeug (${selected + 1}/${planes.length})`;
     status.textContent = `${Math.round(radius)} km · ${points[selected].old ? 'Alte Position' : points[selected].predicted ? 'Position geschätzt' : 'Gemeldete Position'}`;
   }
   async function refresh() {

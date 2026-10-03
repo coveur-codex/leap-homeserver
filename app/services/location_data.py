@@ -102,4 +102,11 @@ async def data_for_device(device: Device, db: Session, kind: str) -> dict:
         fetched_at = getattr(cache, f"{kind}_fetched_at")
     if not data:
         raise RuntimeError(getattr(cache, f"{kind}_error") or f"{kind} nicht verfügbar")
-    return {**data, "ageSeconds": max(0, (datetime.now(timezone.utc) - fetched_at.replace(tzinfo=timezone.utc)).total_seconds()), "stale": not _fresh(fetched_at, datetime.now(timezone.utc), kind)}
+    observed_at = fetched_at
+    if kind == "aircraft":
+        try:
+            observed_at = datetime.fromisoformat(data.get("updated", "")).replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            pass
+    age = max(0, (datetime.now(timezone.utc) - observed_at.replace(tzinfo=timezone.utc)).total_seconds()) if observed_at else 121
+    return {**data, "ageSeconds": age, "stale": not _fresh(fetched_at, datetime.now(timezone.utc), kind)}

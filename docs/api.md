@@ -79,3 +79,29 @@ die Katalogauswahl und lädt Fragen ausschließlich aus dem gewählten Katalog.
 Versionierte Quiz-Pakete verwenden weiterhin `definition.name` und `questionsFile`.
 Migration `0007` setzt bestehende Geräte auf Addition bis 20 und erhöht ihre
 Konfigurationsversion, damit die Einstellung beim nächsten Sync übertragen wird.
+
+## Flugradar
+
+`GET /api/v1/devices/{device_id}/aircraft` liefert `center` (latitude/longitude),
+`updated` (UTC), `ageSeconds` (Alter des Snapshots), `radiusKm` und `aircraft`.
+Je Flugzeug kommen `typeName`, `distanceKm`, `altitudeMeters`, `groundSpeedKmh`,
+`positionAgeSeconds` (Alter der Position bei Erfassung), `originName` und
+`destinationName` hinzu. Die bisherigen Felder `type`, `distanceNm`,
+`altitudeFeet`, `groundSpeedKnots`, `trackDegrees` und `radiusNm` bleiben erhalten.
+Unbekannte Messwerte und Routen sind `null`; unbekannte Typen heißen
+„Unbekannter Flugzeugtyp“. Der lokale Namenskatalog deckt verbreitete Flugzeuge
+und Flughäfen ab; unbekannte Flughafencodes werden als Fallback angezeigt.
+Start und Ziel werden ausschließlich aus gelieferten `origin`/`destination`
+oder `route.origin`/`route.destination` übernommen. ADS-B-Positionen allein
+enthalten keine Flugroute; die Standardquelle liefert diese Angaben nicht immer.
+Es gibt dafür keine zusätzlichen externen Einzelabfragen.
+
+Der gemeinsame Flugradar-Cache wird standardmäßig alle 30 Sekunden erneuert,
+auch bei mehreren Geräten am selben Standort. Bei Providerfehlern bleiben
+Beobachtung und ursprünglicher Zeitstempel mit `stale: true` erhalten.
+Die Webvorschau holt bei sichtbarer Radarkarte alle 30 Sekunden Daten und
+berechnet alle zwei Sekunden die Position entlang eines Großkreises aus
+Geschwindigkeit, Flugrichtung und Beobachtungsalter. Entfernung und Radar
+verwenden dieselbe geschätzte Position. Nach 120 Sekunden endet die Fortschreibung
+und die Position wird als alt gekennzeichnet. Höhe und Tempo bleiben die zuletzt
+gemeldeten Werte; geschätzte Positionen werden als solche beschriftet.
