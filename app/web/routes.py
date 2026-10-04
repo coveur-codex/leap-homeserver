@@ -14,10 +14,12 @@ from app.services import communication
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
 from app.services.location_data import cache_for_device
+from app.services.weather_icons import weather_icon, weather_label
 from app.services.knowledge import demo_article
 from app.services import distribution as distribution_service
 from app.models import AssetPackage
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
+templates.env.globals.update(weather_icon=weather_icon, weather_label=weather_label)
 def redir(p): return RedirectResponse(p,303)
 @router.get("/",response_class=HTMLResponse)
 def dashboard(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"dashboard.html",{"devices":db.scalars(select(Device)).all(),"device_count":db.scalar(select(func.count(Device.id))),"feed_count":db.scalar(select(func.count(Feed.id)).where(Feed.enabled==True)),"article_count":db.scalar(select(func.count(Article.id))),"feed_errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None)))})
