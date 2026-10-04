@@ -105,3 +105,22 @@ Geschwindigkeit, Flugrichtung und Beobachtungsalter. Entfernung und Radar
 verwenden dieselbe geschätzte Position. Nach 120 Sekunden endet die Fortschreibung
 und die Position wird als alt gekennzeichnet. Höhe und Tempo bleiben die zuletzt
 gemeldeten Werte; geschätzte Positionen werden als solche beschriftet.
+
+## Wetter und nächster Tag
+
+`weather` enthält weiterhin `current` und `today`. Neu sind `timezone`,
+`current.isDay` und `tomorrow`. Die beiden Tagesobjekte enthalten `date`
+(ISO-Datum am konfigurierten Standort), `weatherCode` (WMO), `min`, `max` und
+`precipitationProbability`. Open-Meteo wird für zwei Tage in der lokalen
+Standort-Zeitzone abgefragt; „morgen“ ist das zweite Tagesobjekt der Quelle,
+keine Berechnung aus dem UTC-Datum des Servers. Wind wird ausdrücklich in
+km/h angefordert. Fehlende Vorhersage: `tomorrow: null`; fehlende Einzelwerte:
+`null`. Der bestehende Standortcache und die Temperatur-Einheiten C/F bleiben
+unverändert. Nach der Aktualisierung eines bestehenden Caches erscheinen die
+neuen Felder automatisch.
+
+Die Gerätevorschau zeichnet Wetter-Icons als SVG aus geometrischen Formen und
+zeigt aktuelles Wetter sowie eine Morgen-Karte mit Wetterlage, Temperaturspanne,
+Datum und Regenwahrscheinlichkeit. Alle WMO-Codes einschließlich Schnee,
+Nebel, gefrierendem Niederschlag und Gewitter/Hagel sind berücksichtigt;
+klare Nächte erhalten einen Mond. Unbekannte Codes erhalten ein Fragezeichen.
