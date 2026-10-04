@@ -124,3 +124,17 @@ zeigt aktuelles Wetter sowie eine Morgen-Karte mit Wetterlage, Temperaturspanne,
 Datum und Regenwahrscheinlichkeit. Alle WMO-Codes einschließlich Schnee,
 Nebel, gefrierendem Niederschlag und Gewitter/Hagel sind berücksichtigt;
 klare Nächte erhalten einen Mond. Unbekannte Codes erhalten ein Fragezeichen.
+
+## Kleine Quiz-Antworten für Geräte (Firmware beta.16)
+
+`GET /api/v1/devices/{id}/quiz?metadataOnly=true` liefert Version und alle aktiven
+zugewiesenen Kataloge (`id`, `name`), aber `questions: []`. Die Firmware nutzt
+dies, sobald versionierte Quiz-Pakete installiert sind; Fragen werden aus den
+vollständigen Offline-Paketen gelesen. Der große Katalog wird dadurch nicht
+zusätzlich im Content-Snapshot gespeichert.
+
+Ohne installierte Pakete nutzt die Firmware `?limitPerCatalog=200`: eine zufällige,
+ohne Wiederholung ausgewählte Stichprobe von höchstens 200 altersgerechten Fragen
+je Katalog. Zulässiger Bereich 1–200. Ohne diese Parameter bleibt die bisherige
+vollständige Antwort erhalten. Versionierte Paketdateien bleiben vollständig;
+die Begrenzung betrifft ausschließlich den Legacy-Content-Endpunkt.
