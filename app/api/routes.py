@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -71,9 +72,16 @@ async def aircraft(device_id:str,db:Session=Depends(get_db)):
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception: raise HTTPException(503,"Flugradar derzeit nicht verfügbar")
 @router.get("/devices/{device_id}/quiz")
-def quiz(device_id:str,db:Session=Depends(get_db)):
+def quiz(device_id:str,db:Session=Depends(get_db),limitPerCatalog:int|None=Query(None,ge=1,le=200),metadataOnly:bool=False):
     d=device_or_404(device_id,db); catalog_ids=[c.id for c in d.quiz_catalogs if c.enabled]
-    rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all() if catalog_ids else []
+    rows=[]
+    if not metadataOnly and catalog_ids:
+        rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all()
+        if limitPerCatalog is not None:
+            # Preserve every assigned catalog; only the legacy device fallback is sampled.
+            rows=[q for catalog_id in catalog_ids for q in random.sample(
+                [q for q in rows if q.catalog_id==catalog_id],
+                min(limitPerCatalog,sum(q.catalog_id==catalog_id for q in rows)))]
     return {"version":d.quiz_version,"catalogs":[{"id":c.id,"name":c.name} for c in d.quiz_catalogs if c.enabled],"questions":[{"id":q.id,"catalogId":q.catalog_id,"q":q.question,"a":q.answers,"explanation":q.explanation,"minAge":q.min_age,"difficulty":q.difficulty,"tags":q.tags} for q in rows]}
 @router.get("/assets/news/{article_id}/{variant}.jpg")
 def asset(article_id:int,variant:str):
