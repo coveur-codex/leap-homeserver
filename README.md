@@ -94,3 +94,10 @@ synchronisieren lassen. Die Firmware kann die beschriebenen Ordner auch ohne
 neue Metadaten direkt aus bestehenden Manifesten auflösen.
 
 Vorschau-Regressionsprüfung (Node.js): `node tests/test_aircraft_preview.cjs`.
+
+
+Chill V1: Weltraum, Lagerfeuer und Schnee werden beim Start als Asset-Pakete
+bereitgestellt. Pro Gerät unter „Firmware & Inhalte“ eine Szene auswählen;
+Download beim nächsten regulären Sync (Firmware ab 1.0.0-beta.18). Die
+Display-Vorschau zeigt die ausgewählte Szene. Details in
+[Asset-Verteilung](docs/distribution.md#chill-v1).

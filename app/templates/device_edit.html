@@ -121,11 +121,17 @@
   {% else %}
     <article class="leap-card"><div class="empty-preview"><strong>Keine Vorschau-Seite aktiv</strong><span>Aktiviere Home, News, Wetter, Wissen, Quiz, Flugzeuge oder Kommunikation.</span></div></article>
   {% endfor %}
-  {% if preview_page_ids|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
+  {% for c in preview_chill %}<article class="leap-card chill-card" data-preview-card="RUHEZEIT" data-scene="{{c.scene}}" hidden>
+    <canvas data-chill-preview data-scene="{{c.scene}}" width="428" height="142" aria-label="{{c.name}}"></canvas>
+    {% for s in c.sprites %}<img hidden data-chill-sprite data-role="{{s.role}}" data-x="{{s.x|default(0)}}" data-y="{{s.y|default(0)}}" data-width="{{s.size[0]}}" data-height="{{s.size[1]}}" src="{{s.url}}" alt="">{% endfor %}
+    <input type="range" min="0" max="100" value="{{c.slider}}" data-chill-slider aria-label="Chill-Intensität">
+  </article>{% endfor %}
+  {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
   <input type="hidden" name="distribution_settings" value="true">
   <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
-  {% for kind in ['chill','sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
+  <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+  {% for kind in ['sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
   <button>Speichern & Version erhöhen</button>
 </form>
 

@@ -85,11 +85,12 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if package.current_version != expected:
         raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
     incoming = {}
+    imported_definition = {}
     for upload in files:
         name = service.safe_name((folder.rstrip("/") + "/" if folder else "") + (upload.filename or ""))
         is_zip = (upload.filename or "").lower().endswith(".zip")
         info = await service.store_upload(upload, service.ASSET_FILE_LIMIT)
-        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder) if is_zip else {name: info}
+        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder, imported_definition if package.kind == "chill" else None) if is_zip else {name: info}
         if incoming.keys() & imported.keys():
             raise HTTPException(422, "Upload enthält doppelte Dateipfade")
         incoming.update(imported)
@@ -99,6 +100,7 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if any(str(parent) in mapping for name in mapping for parent in PurePosixPath(name).parents):
         raise HTTPException(422, "Ein Dateipfad wird zugleich als Ordner verwendet")
     definition = service.editable_definition(previous)
+    definition.update(imported_definition)
     # Auto-discovered animation folders must include newly uploaded frames.
     for name, animation in definition.get("animations", {}).items():
         prefix = f"animations/{name}/"
