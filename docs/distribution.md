@@ -238,3 +238,27 @@ Alle aktivierten Geräte nutzen einen gemeinsamen ESP-NOW-Gruppenchat. Transport
 Mesh/Relay und der Umgang mit vorübergehend unterschiedlichen Vorlagenversionen
 liegen in der Firmware. Die Vorschau zeigt nur ein lokales Beispiel mit einem
 normalen vorhandenen Avatar; das Auswählen einer Vorlage versendet nichts.
+
+## Chill V1
+
+Die mitgelieferten ZIPs unter `app/defaults/chill/` stammen aus den drei
+bereitgestellten Paketen; alle PNG-Sprites bleiben unverändert. Beim Start werden
+`chill-space`, `chill-fire` und `chill-snow` einmalig über dieselbe Blob-/Manifest-
+Veröffentlichung wie andere Pakete angelegt. Bestehende Pakete und bearbeitete
+Versionen werden nicht überschrieben. Die normalisierten ZIP-Manifeste enthalten
+`scene`, Sprite-Platzierungen, explizite Flammenframes und
+`minFirmware=1.0.0-beta.18`. Original-Manifeste mit `pattern` und Framezahl sind
+beim ZIP-Upload im vorhandenen Chill-Paketeditor ebenfalls unterstützt; das
+Quellmanifest wird in `definition.json` übersetzt, nicht als Syncmanifest geladen.
+README bleibt im ZIP, wird nicht an das Gerät übertragen.
+
+Pro Gerät unter „Firmware & Inhalte → Chill-Szene“ eine Szene oder „Aus“ wählen.
+Die bestehende `content_selection` speichert die Auswahl, ohne neue DB-Spalte oder
+Migration. Alte Mehrfachauswahlen verwenden deterministisch die erste Paket-ID;
+neue Mehrfachauswahlen werden abgewiesen. Der nächste reguläre Sync bietet genau
+das gewählte Paket an. Erst nach erfolgreicher Inventaraktivierung und
+`boot_success` werden ersetzte Pakete über die bestehenden `removeVersions`
+freigegeben. Die Display-Vorschau enthält eine Vollbild-Chill-Karte mit den
+Paket-Sprites, prozeduralen Effekten und Slider; Auswahländerungen sind nach dem
+Speichern sichtbar. Der Sliderwert in der Vorschau ist ein Beispiel, während die
+Firmware ihn pro Szene lokal speichert.

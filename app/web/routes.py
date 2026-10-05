@@ -39,7 +39,7 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games"}]
     return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     if math_settings:
@@ -52,6 +52,11 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     if distribution_settings:
         distribution_service.ensure_packages(db)
         if firmware_channel not in {"stable", "beta"}: raise HTTPException(422,"Ungültiger Firmware-Kanal")
+        if chill_id:
+            chill_package=db.get(AssetPackage,chill_id)
+            if not chill_package or chill_package.kind!="chill": raise HTTPException(422,"Unbekannte Chill-Szene")
+            content_ids=[*content_ids,chill_id]
+        if sum(1 for key in set(content_ids) if (p:=db.get(AssetPackage,key)) and p.kind=="chill")>1: raise HTTPException(422,"Bitte genau eine Chill-Szene auswählen")
         if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
         if any(not db.get(QuizCatalog,key) for key in quiz_catalog_ids): raise HTTPException(422,"Unbekannter Quiz-Katalog")
         avatar_id=avatar if avatar.startswith("avatar-") else "avatar-"+avatar
