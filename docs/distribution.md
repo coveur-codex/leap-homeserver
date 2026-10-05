@@ -31,6 +31,17 @@ ein direkter Einzeldatei-Upload unter diesem reservierten Namen bleibt gesperrt.
 Ältere Versionen und Dateien bleiben erreichbar. Parallele Bearbeitungen verwenden
 `expected` als Versionsprüfung; veraltete Formulare liefern HTTP 409.
 
+Selbst angelegte Pakete lassen sich im Paketeditor unter **Assetpaket löschen**
+entfernen. Eine Bestätigungsseite zeigt Paket-ID, Anzahl der Versionen und
+betroffene Geräte. Erst nach ausdrücklicher Bestätigung werden das Paket und
+alle Versionen gelöscht; eine zwischenzeitliche Paketänderung erfordert eine
+neue Bestätigung. Quizpakete werden samt Katalog, Fragen und Gerätezuordnungen
+gelöscht. Geräte mit einem gelöschten Avatar wechseln auf Drachi. Andere
+Inhaltszuordnungen werden entfernt, bereits installierte Versionen erst über den
+normalen bestätigten Sync zur Bereinigung freigegeben. Gemeinsam genutzte Blobs
+bleiben im Speicher. Automatisch bereitgestellte Standardavatare, Chill-Szenen
+und das gemeinsame Kommunikationspaket sind vor dem Löschen geschützt.
+
 Die Migration `0005` ergänzt die Tabellen ohne vorhandene Quiz-Daten zu ersetzen.
 Beim Start werden bestehende Quiz-Kataloge einmalig als `quiz-<Katalog-ID>` übernommen.
 Frage-IDs, Altersgrenzen, Antworten und Geräteverknüpfungen bleiben erhalten.

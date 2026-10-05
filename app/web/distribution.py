@@ -71,7 +71,27 @@ def edit_package(package_id: str, request: Request, version: int | None = None, 
     return templates.TemplateResponse(request, "asset_edit.html", {"package": package, "versions": versions, "selected": selected,
         "definition": json.dumps(service.editable_definition(selected), ensure_ascii=False, indent=2),
         "quiz_json": json.dumps({"questions": service.quiz_data(catalog)}, ensure_ascii=False, indent=2) if catalog else None,
-        "catalog": catalog, "kinds": service.KINDS})
+        "catalog": catalog, "kinds": service.KINDS, "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.get("/assets/{package_id}/delete")
+def confirm_delete_package(package_id: str, request: Request, db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    versions = db.scalars(select(AssetVersion).where(AssetVersion.package_id == package.id)).all()
+    return templates.TemplateResponse(request, "asset_delete.html", {"package": package,
+        "version_count": len(versions), "devices": service.package_devices(db, package),
+        "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.post("/assets/{package_id}/delete")
+def delete_package(package_id: str, expected: int = Form(), confirmed: bool = Form(False), db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    if not confirmed:
+        raise HTTPException(422, "Bitte das endgültige Löschen des Assetpakets bestätigen.")
+    kind = package.kind
+    service.delete_package(db, package, expected)
+    db.commit()
+    return redir(f"/assets?kind={kind}")
 
 @router.post("/assets/{package_id}/files")
 async def upload_files(package_id: str, files: list[UploadFile] = File(), folder: str = Form(""), expected: int = Form(), db: Session = Depends(get_db)):

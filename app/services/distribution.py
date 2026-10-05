@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from app.core.config import settings
 from app.models import AssetPackage, AssetVersion, Device, FirmwareRelease, QuizCatalog, QuizQuestion
 
@@ -154,6 +154,56 @@ def unpack_asset_zip(path, folder="", metadata=None):
 
 def current(db, package):
     return db.scalar(select(AssetVersion).where(AssetVersion.package_id == package.id, AssetVersion.version == package.current_version))
+
+
+def deletion_block_reason(package):
+    if package.kind == "communication":
+        return "Das gemeinsame Kommunikationspaket wird vom Server verwaltet."
+    defaults = {"avatar-" + key for key in BUILTINS}
+    defaults.update(path.name.removesuffix("-v1.zip") for path in
+                    (Path(__file__).resolve().parents[1] / "defaults" / "chill").glob("*.zip"))
+    if package.id in defaults:
+        return "Dieses Standardpaket wird automatisch vom Server bereitgestellt."
+    return None
+
+
+def package_devices(db, package):
+    return [device for device in db.scalars(select(Device).order_by(Device.name)).all()
+            if package.kind == "common" or package.id in (device.content_selection or [])
+            or package.id in (device.installed_assets or {})
+            or package.id == (device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar)
+            or any(catalog.id == package.catalog_id for catalog in device.quiz_catalogs)]
+
+
+def delete_package(db, package, expected):
+    reason = deletion_block_reason(package)
+    if reason:
+        raise HTTPException(422, reason)
+    # Claim the version before changing related rows, as publication does.
+    result = db.execute(update(AssetPackage).where(AssetPackage.id == package.id,
+        AssetPackage.current_version == expected).values(current_version=expected)
+        .execution_options(synchronize_session=False))
+    if result.rowcount != 1:
+        raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
+    catalog = db.get(QuizCatalog, package.catalog_id) if package.catalog_id else None
+    for device in package_devices(db, package):
+        device.content_selection = [key for key in (device.content_selection or []) if key != package.id]
+        avatar = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
+        if avatar == package.id:
+            device.avatar = "dragon"
+        if catalog in device.quiz_catalogs:
+            device.quiz_catalogs.remove(catalog)
+            device.quiz_version += 1
+        device.config_version += 1
+        # Keep reported installed assets until the regular sync confirms cleanup.
+    db.execute(delete(AssetVersion).where(AssetVersion.package_id == package.id))
+    db.delete(package)
+    db.flush()
+    if catalog:
+        # Otherwise ensure_packages would recreate the deleted quiz package.
+        db.delete(catalog)
+        db.flush()
+    # Content-addressed blobs can be shared by other packages and are retained.
 
 
 PET_STATES = {"idle", "happy", "sad", "hungry", "tired", "dirty", "eating", "playing", "sleeping"}
