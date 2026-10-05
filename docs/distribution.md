@@ -21,6 +21,12 @@ inklusive Ordner). Pfad-Traversal, absolute Pfade, Links, verschlüsselte Eintr�
 doppelte Pfade und beschädigte Archive werden abgelehnt. Bei einem Fehler bleibt
 die aktuelle Paketversion unverändert. Wie andere Upload-Blobs bleibt auch das
 hochgeladene Archiv intern gespeichert, wird aber nicht an Geräte verteilt.
+Ohne Zielordner wird eine `definition.json` im Archivstamm übersprungen: Der
+Server erzeugt sie für die neue Version aus den Paketmetadaten. Bei Chill-Paketen
+werden diese weiterhin aus dem unterstützten `manifest.json` im Archivstamm
+übernommen. Die übersprungene Definition unterliegt weiterhin den ZIP-Prüfungen
+und Größenlimits. Ein ZIP, das nur diese Definition enthält, wird abgelehnt;
+ein direkter Einzeldatei-Upload unter diesem reservierten Namen bleibt gesperrt.
 
 Ältere Versionen und Dateien bleiben erreichbar. Parallele Bearbeitungen verwenden
 `expected` als Versionsprüfung; veraltete Formulare liefern HTTP 409.

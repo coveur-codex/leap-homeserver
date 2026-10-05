@@ -103,7 +103,10 @@ def unpack_asset_zip(path, folder="", metadata=None):
                     raise HTTPException(422, "Ungültiger ZIP-Dateipfad")
                 # A Chill manifest describes sprites; it is not the immutable sync manifest.
                 is_manifest = metadata is not None and not folder and raw == "manifest.json"
-                name = raw if is_manifest else safe_name(prefix + (raw[:-1] if entry.is_dir() else raw))
+                # Bundles may contain an old generated definition. Never import it
+                # over the definition published from the current package metadata.
+                is_definition = not folder and raw == "definition.json"
+                name = raw if is_manifest or is_definition else safe_name(prefix + (raw[:-1] if entry.is_dir() else raw))
                 mode = stat.S_IFMT(entry.external_attr >> 16)
                 allowed = {0, stat.S_IFDIR} if entry.is_dir() else {0, stat.S_IFREG}
                 if mode not in allowed or entry.flag_bits & 1:
@@ -130,6 +133,8 @@ def unpack_asset_zip(path, folder="", metadata=None):
                     raise HTTPException(413, "Entpackte Datei ist zu groß")
                 if len(data) != entry.file_size:
                     raise HTTPException(422, "Unvollständige ZIP-Datei")
+                if name == "definition.json":
+                    continue
                 if name == "manifest.json" and metadata is not None:
                     try:
                         source = json.loads(data)
@@ -140,6 +145,8 @@ def unpack_asset_zip(path, folder="", metadata=None):
                         raise HTTPException(422, "Ungültiges Chill-Manifest")
                 elif name != "README.txt" or metadata is None:
                     result[name] = store_bytes(data)
+            if not result and not metadata:
+                raise HTTPException(422, "ZIP enthält keine importierbaren Dateien")
             return result
     except (zipfile.BadZipFile, zipfile.LargeZipFile, NotImplementedError, RuntimeError, EOFError, zlib.error):
         raise HTTPException(422, "ZIP ist beschädigt oder verwendet eine nicht unterstützte Komprimierung")
