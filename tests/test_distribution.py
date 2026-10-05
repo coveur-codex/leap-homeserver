@@ -335,3 +335,46 @@ def test_only_original_svg_builtins_are_upgraded(db):
     assert db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-dragon", AssetVersion.version == 1)).manifest == old
     ensure_packages(db)
     assert db.get(AssetPackage, "avatar-dragon").current_version == 2
+
+
+def test_zip_generated_definition_is_ignored_but_direct_upload_is_rejected(client, db):
+    create(client, 'chill-generated')
+    archive = zip_bytes([('definition.json', b'old generated metadata'), ('fish.png', b'frame'),
+                         ('nested/definition.json', b'content metadata')])
+    response = client.post('/assets/chill-generated/files', data={'expected': 1},
+        files={'files': ('assets.zip', archive)}, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    manifest = client.get('/api/v1/packages/chill-generated/versions/2/manifest').json()
+    mapping = {f['path']: f for f in manifest['files']}
+    assert set(mapping) == {'definition.json', 'fish.png', 'nested/definition.json'}
+    assert client.get(mapping['definition.json']['url']).json() == manifest['definition']
+    assert client.get(mapping['nested/definition.json']['url']).content == b'content metadata'
+    for filename, content in [('definition.json', b'old generated metadata'),
+                              ('only-definition.zip', zip_bytes([('definition.json', b'old generated metadata')]))]:
+        response = client.post('/assets/chill-generated/files', data={'expected': 2},
+            files={'files': (filename, content)}, follow_redirects=False)
+        assert response.status_code == 422, response.text
+        assert db.get(AssetPackage, 'chill-generated').current_version == 2
+
+
+def test_zip_ignored_definition_still_validates_archive(client, db):
+    import stat
+    from zipfile import ZipInfo, ZipFile, ZIP_STORED
+    from io import BytesIO
+    create(client, 'chill-generated-invalid')
+    link = ZipInfo('definition.json')
+    link.create_system = 3
+    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+    stream = BytesIO()
+    with ZipFile(stream, 'w', compression=ZIP_STORED) as archive:
+        archive.writestr('definition.json', b'original payload')
+        archive.writestr('fish.png', b'frame')
+    damaged = stream.getvalue().replace(b'original payload', b'tampered payload')
+    archives = [zip_bytes([(link, b'/etc/passwd'), ('fish.png', b'frame')]), damaged,
+                zip_bytes([('definition.json', b'ignored'), ('../escape.txt', b'bad')]),
+                zip_bytes([('definition.json/', b''), ('fish.png', b'frame')])]
+    for archive in archives:
+        response = client.post('/assets/chill-generated-invalid/files', data={'expected': 1},
+            files={'files': ('bad.zip', archive)}, follow_redirects=False)
+        assert response.status_code == 422, response.text
+        assert db.get(AssetPackage, 'chill-generated-invalid').current_version == 1

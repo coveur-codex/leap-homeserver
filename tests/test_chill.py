@@ -93,3 +93,29 @@ def test_malformed_zip_metadata_and_unsupported_scene_are_rejected(client, db):
         response = client.post('/assets/chill-snow/files', data={'expected': 1}, files={'files': ('bad.zip', raw.getvalue())})
         assert response.status_code == 422, response.text
         assert db.get(AssetPackage, 'chill-snow').current_version == 1
+
+
+def test_chill_zip_with_generated_definition_imports_scene(client, db):
+    # Exported asset bundles may include the homeserver's generated definition.
+    with zipfile.ZipFile(BUNDLES / 'chill-snow-v1.zip') as source:
+        raw = BytesIO()
+        with zipfile.ZipFile(raw, 'w') as archive:
+            archive.writestr('definition.json', '{"id":"old-package","version":999}')
+            for name in source.namelist():
+                archive.writestr(name, source.read(name))
+    old = service.current(db, db.get(AssetPackage, 'chill-fire')).manifest
+    response = client.post('/assets/chill-fire/files', data={'expected': 1},
+        files={'files': ('chill-assets.zip', raw.getvalue())}, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    manifest = service.current(db, db.get(AssetPackage, 'chill-fire')).manifest
+    assert manifest['definition']['scene'] == 'snow'
+    assert manifest['definition']['id'] == 'chill-fire'
+    assert manifest['definition']['version'] == 2
+    mapping = {f['path']: f for f in manifest['files']}
+    assert 'manifest.json' not in mapping
+    assert client.get(mapping['definition.json']['url']).json() == manifest['definition']
+    with zipfile.ZipFile(BUNDLES / 'chill-snow-v1.zip') as source:
+        for name in source.namelist():
+            if name.endswith('.png'):
+                assert client.get(mapping[name]['url']).content == source.read(name)
+    assert client.get('/api/v1/packages/chill-fire/versions/1/manifest').json() == old
