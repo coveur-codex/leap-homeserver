@@ -31,6 +31,7 @@ class Device(Base):
     installed_assets: Mapped[dict] = mapped_column(JSON, default=dict)
     content_selection: Mapped[list] = mapped_column(JSON, default=list)
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
+    memory_usage: Mapped[dict|None] = mapped_column(JSON)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
     weather_location: Mapped[str]=mapped_column(String(120), default=""); latitude: Mapped[float|None]=mapped_column(Float); longitude: Mapped[float|None]=mapped_column(Float)

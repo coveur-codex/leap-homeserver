@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
+{% from 'device_memory.html' import memory_status %}
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
+{{memory_status(device)}}
 <form method="post">
   <div class="tabs">
     <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>

@@ -73,3 +73,8 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 .preview-nav[hidden]{display:none}
 
 .device-settings-stack{display:flex;flex-direction:column;gap:1rem;align-self:start;min-width:0}.device-settings-stack>button{align-self:start}
+
+.device-memory{margin:1rem 0}
+.device-memory dl{display:grid;grid-template-columns:1fr auto;gap:.4rem 1rem;margin:.5rem 0;padding:0;box-shadow:none;background:transparent}
+.device-memory dd{margin:0;font-variant-numeric:tabular-nums}
+.device-memory small{color:var(--muted)}
