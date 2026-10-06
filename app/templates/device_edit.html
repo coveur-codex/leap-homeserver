@@ -95,9 +95,9 @@
     <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>
       <div class="games-preview-menu" data-games-menu>
         <strong>Spiele</strong>
-        <button type="button" data-game-open="pet">Mein Haustier</button>
-        <button type="button" data-game-open="snake">Snake</button>
-        <span>Auch weiterhin: Heiße Kartoffel, Simon, Kipp-Labyrinth</span>
+        {% for game_id, title in game_registry if game_id in device.enabled_games %}
+          {% if game_id in ['tamagotchi', 'snake'] %}<button type="button" data-game-open="{{'pet' if game_id == 'tamagotchi' else 'snake'}}">{{title}}</button>{% else %}<span>{{title}}</span>{% endif %}
+        {% else %}<span>Keine Spiele freigegeben.</span>{% endfor %}
       </div>
       <div class="pet-preview" data-pet-preview hidden>
         <div class="pet-scene" data-pet-scene><img data-pet-image alt="Haustier" hidden><span data-pet-fallback>♥</span></div>
@@ -131,6 +131,11 @@
   </article>{% endfor %}
   {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
+  <section><h2>Spiele auf dem Gerät</h2>
+    <p>Ausgewählte Spiele werden auf der Seite „Spiele“ angezeigt und sind spielbar. Die Spieleseite muss dafür aktiviert sein.</p>
+    <input type="hidden" name="game_settings" value="true">
+    {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
+  </section>
   <input type="hidden" name="distribution_settings" value="true">
   <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
   <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>

@@ -23,7 +23,7 @@ def pet_zip():
 def test_games_config_and_pet_sync(client, db):
     d = device(db)
     response = client.get("/api/v1/devices/leap-test/config").json()
-    assert {g["id"] for g in response["games"]} == {"tamagotchi", "snake", "hot_potato", "simon_motion", "tilt_maze", "connect_four"}
+    assert {g["id"] for g in response["games"]} == {"tamagotchi", "snake", "hot_potato", "simon_motion", "tilt_maze", "connect_four", "kitchen", "crab_journey"}
     create(client, "avatar-pet", "avatar")
     d.avatar = "avatar-pet"
     db.commit()

@@ -8,6 +8,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.pages import PAGE_REGISTRY
+from app.core.games import GAME_REGISTRY
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages, page_enabled
 from app.services import communication
@@ -52,9 +53,9 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
     preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games"}]
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     if math_settings:
@@ -64,6 +65,8 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
     if knowledge_source not in {"klexikon","miniklexikon"}: raise HTTPException(422,"Unbekannte Wissensquelle")
+    if game_settings and any(key not in {gid for gid, _ in GAME_REGISTRY} for key in game_ids):
+        raise HTTPException(422,"Unbekanntes Spiel")
     if distribution_settings:
         distribution_service.ensure_packages(db)
         if firmware_channel not in {"stable", "beta"}: raise HTTPException(422,"Ungültiger Firmware-Kanal")
@@ -84,6 +87,8 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         d.quiz_catalogs=[db.get(QuizCatalog,key) for key in set(quiz_catalog_ids)]
         d.quiz_version+=1
     if math_settings: d.math_quiz={"operation":math_operation,"limit":math_limit}
+    if game_settings:
+        d.enabled_games=[gid for gid, _ in GAME_REGISTRY if gid in game_ids]
     old_knowledge_source=d.knowledge_source
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.communication_enabled=communication_enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
@@ -101,7 +106,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,content_selection=list(old.content_selection),quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")

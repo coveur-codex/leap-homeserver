@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .core.database import Base
+from .core.games import DEFAULT_GAMES
 
 def now(): return datetime.now(timezone.utc)
 
@@ -30,6 +31,7 @@ class Device(Base):
     confirmed_firmware: Mapped[str|None] = mapped_column(String(40))
     last_sync: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
     installed_assets: Mapped[dict] = mapped_column(JSON, default=dict)
+    enabled_games: Mapped[list] = mapped_column(JSON, default=lambda: list(DEFAULT_GAMES))
     content_selection: Mapped[list] = mapped_column(JSON, default=list)
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
     memory_usage: Mapped[dict|None] = mapped_column(JSON)
