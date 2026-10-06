@@ -416,6 +416,8 @@ def quiz_data(catalog):
 
 
 def publish_quiz(db, package, catalog, expected):
+    # Newly added questions need their persistent IDs before JSON serialization.
+    db.flush()
     files = {"questions.json": store_bytes(json.dumps({"questions": quiz_data(catalog)}, ensure_ascii=False).encode())}
     return publish(db, package, files, {"questionsFile": "questions.json", "questionCount": len(catalog.questions)}, expected)
 

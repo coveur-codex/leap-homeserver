@@ -1,13 +1,14 @@
 from importlib import import_module
+import json
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, select, text
 
-from app.models import Device, QuizAttempt, QuizCatalog, QuizQuestion
+from app.models import AssetPackage, Device, QuizAttempt, QuizCatalog, QuizQuestion
 from app.services.devices import initialize_pages
-from app.services.distribution import quiz_data
+from app.services.distribution import quiz_data, publish_quiz, current, file_map, blob_path
 
 
 def device(db, name="child"):
@@ -65,6 +66,8 @@ def test_legacy_package_offline_timestamp_and_device_isolation(client, db):
     data = attempt(kind="catalog")
     data.update(question="<script>alert('x')</script>", questionId=None, answeredAt=None,
                 elapsedMs=None, selectedIndex=1)
+    # Existing catalogs allow long answer strings; valid offline events must not block retries.
+    data["answers"][0] = "a" * 10001
     assert client.post("/api/v1/devices/child/quiz-attempts", json=data).status_code == 200
     # Dedupe is scoped per device, and an offline event is accepted after reassignment.
     assert client.post("/api/v1/devices/other/quiz-attempts", json=data).status_code == 200
@@ -115,6 +118,17 @@ def test_published_questions_keep_ids(db):
     db.commit()
     rows = quiz_data(catalog)
     assert rows[0]["id"] == catalog.questions[0].id and rows[0]["catalogId"] == catalog.id
+    package = AssetPackage(id="quiz-test", kind="quiz", name="Tiere", catalog_id=catalog.id, current_version=0)
+    db.add(package)
+    # The question editor appends new rows without flushing them first.
+    new = QuizQuestion(question="Neu?", answers=["1", "2", "3", "4"])
+    catalog.questions.append(new)
+    publish_quiz(db, package, catalog, 0)
+    db.commit()
+    info = file_map(current(db, package))["questions.json"]
+    published = json.loads(blob_path(info["sha256"]).read_text())["questions"]
+    assert published[-1]["id"] == new.id and new.id is not None
+    assert published[-1]["catalogId"] == catalog.id
 
 
 def test_tracking_migration_preserves_data(tmp_path):

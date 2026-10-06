@@ -23,7 +23,7 @@ class Attempt(BaseModel):
     questionId: str | int | None = None
     questionIndex: int = Field(ge=0)
     question: str = Field(min_length=1, max_length=10000)
-    answers: list[Annotated[str, Field(max_length=10000)]] = Field(min_length=4, max_length=4)
+    answers: list[Annotated[str, Field(max_length=524288)]] = Field(min_length=4, max_length=4)
     selectedIndex: int = Field(ge=0, le=3)
     correctIndex: int = Field(ge=0, le=3)
     elapsedMs: int | None = Field(None, ge=0, le=4294967295)
