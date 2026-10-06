@@ -411,7 +411,7 @@ def parse_questions(raw):
 
 
 def quiz_data(catalog):
-    return [{"q": q.question, "a": q.answers, "explanation": q.explanation, "minAge": q.min_age,
+    return [{"id": q.id, "catalogId": q.catalog_id, "q": q.question, "a": q.answers, "explanation": q.explanation, "minAge": q.min_age,
              "difficulty": q.difficulty, "tags": q.tags} for q in catalog.questions]
 
 

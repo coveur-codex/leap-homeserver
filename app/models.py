@@ -129,3 +129,14 @@ class CommunicationMessage(Base):
     symbol: Mapped[str] = mapped_column(String(16), default="")
     position: Mapped[int] = mapped_column(Integer, default=1)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+    __table_args__ = (UniqueConstraint("device_id", "event_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str] = mapped_column(String(64))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    correct: Mapped[bool] = mapped_column(Boolean)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

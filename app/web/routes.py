@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter,Depends,File,Form,HTTPException,Request,UploadFile
+from fastapi import APIRouter,Depends,File,Form,HTTPException,Query,Request,UploadFile
 from fastapi.responses import HTMLResponse,RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func,select
@@ -17,7 +17,7 @@ from app.services.location_data import cache_for_device
 from app.services.weather_icons import weather_icon, weather_label
 from app.services.knowledge import demo_article
 from app.services import distribution as distribution_service
-from app.models import AssetPackage
+from app.models import AssetPackage, QuizAttempt
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
 templates.env.globals.update(weather_icon=weather_icon, weather_label=weather_label)
 def redir(p): return RedirectResponse(p,303)
@@ -25,6 +25,21 @@ def redir(p): return RedirectResponse(p,303)
 def dashboard(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"dashboard.html",{"devices":db.scalars(select(Device)).all(),"device_count":db.scalar(select(func.count(Device.id))),"feed_count":db.scalar(select(func.count(Feed.id)).where(Feed.enabled==True)),"article_count":db.scalar(select(func.count(Article.id))),"feed_errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None)))})
 @router.get("/devices",response_class=HTMLResponse)
 def devices(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"devices.html",{"devices":db.scalars(select(Device).order_by(Device.name)).all()})
+
+@router.get("/devices/{id}/quiz-results", response_class=HTMLResponse)
+def quiz_results(id: int, request: Request, offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    device = db.get(Device, id)
+    if not device:
+        raise HTTPException(404)
+    query = select(QuizAttempt).where(QuizAttempt.device_id == id)
+    rows = db.scalars(query.order_by(QuizAttempt.id.desc()).offset(offset).limit(51)).all()
+    total = db.scalar(select(func.count(QuizAttempt.id)).where(QuizAttempt.device_id == id))
+    correct = db.scalar(select(func.count(QuizAttempt.id)).where(
+        QuizAttempt.device_id == id, QuizAttempt.correct == True))
+    return templates.TemplateResponse(request, "quiz_results.html", {
+        "device": device, "attempts": rows[:50], "total": total, "correct": correct,
+        "offset": offset, "has_more": len(rows) > 50})
+
 @router.post("/devices")
 def create_device(device_id:str=Form(),name:str=Form(),child_name:str=Form(""),age:int=Form(8),avatar:str=Form("dragon"),avatar_name:str=Form(""),db:Session=Depends(get_db)):
     if db.scalar(select(Device).where(Device.device_id==device_id)): raise HTTPException(409,"device_id bereits vorhanden")
