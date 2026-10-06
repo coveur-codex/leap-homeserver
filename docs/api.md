@@ -161,3 +161,57 @@ ohne Wiederholung ausgewählte Stichprobe von höchstens 200 altersgerechten Fra
 je Katalog. Zulässiger Bereich 1–200. Ohne diese Parameter bleibt die bisherige
 vollständige Antwort erhalten. Versionierte Paketdateien bleiben vollständig;
 die Begrenzung betrifft ausschließlich den Legacy-Content-Endpunkt.
+
+## Quiz-Antworten und Antwortzeiten
+
+`POST /api/v1/devices/{device_id}/quiz-attempts` speichert die endgültige
+Antwort als unveränderlichen Snapshot. Beispiel (Indizes sind nullbasiert):
+
+```json
+{
+  "eventId": "5da91f77d02e442b984fc10781aaa546",
+  "kind": "math",
+  "quizSetId": "math",
+  "quizSetName": "Mathe-Quiz",
+  "quizSetVersion": 3,
+  "questionId": null,
+  "questionIndex": 0,
+  "question": "7 + 5 = ?",
+  "answers": ["10", "12", "11", "13"],
+  "selectedIndex": 2,
+  "correctIndex": 1,
+  "elapsedMs": 1234,
+  "answeredAt": "2026-10-06T12:00:00Z",
+  "firmwareVersion": "1.0.0-beta.20",
+  "mathOperation": "add",
+  "mathLimit": 20
+}
+```
+
+`answers` enthält genau die angezeigte Reihenfolge; der Server berechnet
+`correct` aus den beiden Indizes. `kind` ist `math` oder `catalog`. Bei
+versionierten Katalogen ist `quizSetId` die Paket-ID und `quizSetVersion` die
+installierte Paketversion. Neue Quiz-Publikationen enthalten Frage-IDs; ältere
+Pakete funktionieren mit `questionId: null`, Aufgabentext und Paketversion.
+`questionIndex` bezeichnet die Position im auf dem Gerät geladenen Fragenpool.
+Beim Mathequiz bezeichnet die Version die Gerätekonfiguration; Rechenart,
+Grenze und die konkrete zufällige Aufgabe werden ebenfalls gespeichert.
+Aktuelle Zuweisungen oder spätere Katalogänderungen überschreiben keine Antworten.
+
+Die Antwort enthält `{"ok": true, "eventId": "…"}`. Erneute Übertragung derselben
+Ereignis-ID und desselben Inhalts ist pro Gerät idempotent. Abweichender Inhalt
+unter derselben ID liefert 409. Unbekannte/deaktivierte Geräte erhalten 404,
+ungültige Snapshots 422. Auch Antworten aus inzwischen entfernten Quizsets werden
+angenommen, damit offline gespeicherte Antworten später übertragen werden können.
+
+`GET /api/v1/devices/{device_id}/quiz-attempts?limit=50&offset=0` liefert
+`attempts` (neueste zuerst, maximal 100), einschließlich `correct` und
+`receivedAt`, sowie `hasMore`. `answeredAt` ist ohne synchronisierte Geräteuhr
+null; Empfangszeit und Gerätezeit werden getrennt angezeigt. `elapsedMs` darf
+bei anderen Clients fehlen/null sein. Migration `0009` ergänzt die Ergebnistabelle.
+
+Im Geräteeditor führt **Quiz-Ergebnisse und Antwortzeiten** zur paginierten
+Ansicht `/devices/{id}/quiz-results` mit Aufgabe, Antworten, Markierungen,
+Antwortzeit und Gesamtzahl richtiger Antworten. Zeitstempel werden in UTC gezeigt.
+Firmware ab beta.20 überträgt neue Antworten automatisch; frühere Antworten
+wurden auf den Geräten nicht aufgezeichnet und lassen sich nicht nachträglich abrufen.

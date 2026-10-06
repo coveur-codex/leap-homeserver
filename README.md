@@ -102,3 +102,10 @@ bereitgestellt. Pro Gerät unter „Firmware & Inhalte“ eine Szene auswählen;
 Download beim nächsten regulären Sync (Firmware ab 1.0.0-beta.18). Die
 Display-Vorschau zeigt die ausgewählte Szene. Details in
 [Asset-Verteilung](docs/distribution.md#chill-v1).
+
+Quiz-Tracking: Im Geräteeditor öffnet **Quiz-Ergebnisse und Antwortzeiten** die
+Historie mit konkreter Aufgabe, angezeigter Antwortreihenfolge, gewählter/richtiger
+Antwort und Antwortzeit. Homeserver zuerst mit `alembic upgrade head` aktualisieren,
+danach Firmware ab **1.0.0-beta.20** installieren. Antworten werden bei WLAN-Ausfall
+lokal gepuffert und später übertragen; alte Quizantworten sind nicht rückwirkend
+verfügbar. Siehe [API-Vertrag](docs/api.md#quiz-antworten-und-antwortzeiten).

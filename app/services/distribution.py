@@ -411,11 +411,13 @@ def parse_questions(raw):
 
 
 def quiz_data(catalog):
-    return [{"q": q.question, "a": q.answers, "explanation": q.explanation, "minAge": q.min_age,
+    return [{"id": q.id, "catalogId": q.catalog_id, "q": q.question, "a": q.answers, "explanation": q.explanation, "minAge": q.min_age,
              "difficulty": q.difficulty, "tags": q.tags} for q in catalog.questions]
 
 
 def publish_quiz(db, package, catalog, expected):
+    # Newly added questions need their persistent IDs before JSON serialization.
+    db.flush()
     files = {"questions.json": store_bytes(json.dumps({"questions": quiz_data(catalog)}, ensure_ascii=False).encode())}
     return publish(db, package, files, {"questionsFile": "questions.json", "questionCount": len(catalog.questions)}, expected)
 

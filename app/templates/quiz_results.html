@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Quiz-Ergebnisse · {{device.name}}</h1>
+<p><a href="/devices/{{device.id}}">Zurück zum Gerät</a></p>
+<p>{{total}} beantwortete Aufgaben · {{correct}} richtig{% if total %} · {{'%.0f'|format(correct * 100 / total)}} %{% endif %}</p>
+<p>Die Antworten stehen in der Reihenfolge, die am Gerät angezeigt wurde. Die Antwortzeit beginnt beim ersten Einblenden und endet beim endgültigen OK-Klick; Lesen und Auswahlwechsel zählen mit. Zeitstempel in UTC.</p>
+{% for row in attempts %}
+{% set a = row.snapshot %}
+<article>
+  <h2>{{a.quizSetName}} · {% if row.correct %}Richtig{% else %}Falsch{% endif %}</h2>
+  <p>{{a.question}}</p>
+  <ol>
+    {% for answer in a.answers %}
+    <li>{{answer}}{% if loop.index0 == a.selectedIndex %} <strong>← Gewählt</strong>{% endif %}{% if loop.index0 == a.correctIndex %} <strong>✓ Richtige Antwort</strong>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  <p>Antwortzeit: {% if a.elapsedMs is not none %}{{('%.3f'|format(a.elapsedMs / 1000))|replace('.', ',')}} s{% else %}Nicht erfasst{% endif %}
+    {% if a.kind == 'math' %} · Rechenart: {{ {'add': 'Addition', 'subtract': 'Subtraktion', 'multiply': 'Multiplikation'}[a.mathOperation] }} · Grenze: {{a.mathLimit}}{% endif %}</p>
+  <details><summary>Aufgabe und Zeit zuordnen</summary>
+    <p>Quizset: {{a.quizSetId}}{% if a.quizSetVersion is not none %} · Version {{a.quizSetVersion}}{% endif %}
+    {% if a.questionId is not none %} · Frage-ID: {{a.questionId}}{% endif %} · Frageposition im geladenen Satz: {{a.questionIndex + 1}}</p>
+    <p>Beantwortet: {{a.answeredAt or 'Geräteuhr noch nicht synchronisiert'}} · Empfang: {{row.received_at}} UTC · Firmware: {{a.firmwareVersion}}</p>
+  </details>
+</article>
+{% else %}<p>Noch keine Quiz-Antworten übertragen.</p>{% endfor %}
+<nav aria-label="Ergebnisseiten">
+  {% if offset %}<a href="?offset={{[0, offset - 50]|max}}">Neuere Antworten</a>{% endif %}
+  {% if has_more %}<a href="?offset={{offset + 50}}">Ältere Antworten</a>{% endif %}
+</nav>
+{% endblock %}

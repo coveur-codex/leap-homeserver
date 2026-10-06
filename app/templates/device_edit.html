@@ -2,6 +2,7 @@
 {% from 'device_memory.html' import memory_status %}
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
+<p><a href="/devices/{{device.id}}/quiz-results">Quiz-Ergebnisse und Antwortzeiten</a></p>
 {{memory_status(device)}}
 <form method="post">
   <div class="tabs">
