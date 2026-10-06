@@ -71,7 +71,27 @@ def edit_package(package_id: str, request: Request, version: int | None = None, 
     return templates.TemplateResponse(request, "asset_edit.html", {"package": package, "versions": versions, "selected": selected,
         "definition": json.dumps(service.editable_definition(selected), ensure_ascii=False, indent=2),
         "quiz_json": json.dumps({"questions": service.quiz_data(catalog)}, ensure_ascii=False, indent=2) if catalog else None,
-        "catalog": catalog, "kinds": service.KINDS})
+        "catalog": catalog, "kinds": service.KINDS, "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.get("/assets/{package_id}/delete")
+def confirm_delete_package(package_id: str, request: Request, db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    versions = db.scalars(select(AssetVersion).where(AssetVersion.package_id == package.id)).all()
+    return templates.TemplateResponse(request, "asset_delete.html", {"package": package,
+        "version_count": len(versions), "devices": service.package_devices(db, package),
+        "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.post("/assets/{package_id}/delete")
+def delete_package(package_id: str, expected: int = Form(), confirmed: bool = Form(False), db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    if not confirmed:
+        raise HTTPException(422, "Bitte das endgültige Löschen des Assetpakets bestätigen.")
+    kind = package.kind
+    service.delete_package(db, package, expected)
+    db.commit()
+    return redir(f"/assets?kind={kind}")
 
 @router.post("/assets/{package_id}/files")
 async def upload_files(package_id: str, files: list[UploadFile] = File(), folder: str = Form(""), expected: int = Form(), db: Session = Depends(get_db)):
@@ -85,11 +105,12 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if package.current_version != expected:
         raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
     incoming = {}
+    imported_definition = {}
     for upload in files:
         name = service.safe_name((folder.rstrip("/") + "/" if folder else "") + (upload.filename or ""))
         is_zip = (upload.filename or "").lower().endswith(".zip")
         info = await service.store_upload(upload, service.ASSET_FILE_LIMIT)
-        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder) if is_zip else {name: info}
+        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder, imported_definition if package.kind == "chill" else None) if is_zip else {name: info}
         if incoming.keys() & imported.keys():
             raise HTTPException(422, "Upload enthält doppelte Dateipfade")
         incoming.update(imported)
@@ -99,10 +120,16 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if any(str(parent) in mapping for name in mapping for parent in PurePosixPath(name).parents):
         raise HTTPException(422, "Ein Dateipfad wird zugleich als Ordner verwendet")
     definition = service.editable_definition(previous)
+    definition.update(imported_definition)
     # Auto-discovered animation folders must include newly uploaded frames.
     for name, animation in definition.get("animations", {}).items():
         prefix = f"animations/{name}/"
         animation["frames"] = sorted(set(animation["frames"]) | {p for p in mapping if p.startswith(prefix)})
+    pet = definition.get("tamagotchi", {})
+    discovered = service.discover_pet(mapping)
+    for name, animation in pet.get("animations", {}).items():
+        if name in discovered["animations"]:
+            animation["frames"] = sorted(set(animation["frames"]) | set(discovered["animations"][name]["frames"]))
     service.publish(db, package, mapping, definition, expected)
     db.commit()
     return redir(f"/assets/{package.id}")
@@ -121,6 +148,10 @@ def delete_file(package_id: str, path: str = Form(), expected: int = Form(), db:
     animations = definition.get("animations", {})
     definition["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
         for name, animation in animations.items() if any(f != path for f in animation["frames"])}
+    pet = definition.get("tamagotchi", {})
+    pet["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
+                         for name, animation in pet.get("animations", {}).items() if any(f != path for f in animation["frames"])}
+    pet["backgrounds"] = {period: p for period, p in pet.get("backgrounds", {}).items() if p != path}
     if definition.get("preview") == path:
         definition.pop("preview")
     service.publish(db, package, mapping, definition, expected)

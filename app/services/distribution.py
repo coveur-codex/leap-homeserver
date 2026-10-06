@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from app.core.config import settings
 from app.models import AssetPackage, AssetVersion, Device, FirmwareRelease, QuizCatalog, QuizQuestion
 
@@ -88,7 +88,7 @@ ASSET_UPLOAD_LIMIT = 64 * 1024 * 1024
 ASSET_UPLOAD_FILES = 1000
 
 
-def unpack_asset_zip(path, folder=""):
+def unpack_asset_zip(path, folder="", metadata=None):
     """Import individual blobs; never extract archive-controlled paths onto disk."""
     prefix = folder.rstrip("/") + "/" if folder else ""
     try:
@@ -101,7 +101,12 @@ def unpack_asset_zip(path, folder=""):
                 raw = entry.filename
                 if entry.orig_filename != raw:
                     raise HTTPException(422, "Ungültiger ZIP-Dateipfad")
-                name = safe_name(prefix + (raw[:-1] if entry.is_dir() else raw))
+                # A Chill manifest describes sprites; it is not the immutable sync manifest.
+                is_manifest = metadata is not None and not folder and raw == "manifest.json"
+                # Bundles may contain an old generated definition. Never import it
+                # over the definition published from the current package metadata.
+                is_definition = not folder and raw == "definition.json"
+                name = raw if is_manifest or is_definition else safe_name(prefix + (raw[:-1] if entry.is_dir() else raw))
                 mode = stat.S_IFMT(entry.external_attr >> 16)
                 allowed = {0, stat.S_IFDIR} if entry.is_dir() else {0, stat.S_IFREG}
                 if mode not in allowed or entry.flag_bits & 1:
@@ -128,7 +133,20 @@ def unpack_asset_zip(path, folder=""):
                     raise HTTPException(413, "Entpackte Datei ist zu groß")
                 if len(data) != entry.file_size:
                     raise HTTPException(422, "Unvollständige ZIP-Datei")
-                result[name] = store_bytes(data)
+                if name == "definition.json":
+                    continue
+                if name == "manifest.json" and metadata is not None:
+                    try:
+                        source = json.loads(data)
+                        if not isinstance(source, dict) or source.get("type") != "chill":
+                            raise ValueError()
+                        metadata.update(normalize_chill(source))
+                    except (ValueError, TypeError, KeyError, IndexError):
+                        raise HTTPException(422, "Ungültiges Chill-Manifest")
+                elif name != "README.txt" or metadata is None:
+                    result[name] = store_bytes(data)
+            if not result and not metadata:
+                raise HTTPException(422, "ZIP enthält keine importierbaren Dateien")
             return result
     except (zipfile.BadZipFile, zipfile.LargeZipFile, NotImplementedError, RuntimeError, EOFError, zlib.error):
         raise HTTPException(422, "ZIP ist beschädigt oder verwendet eine nicht unterstützte Komprimierung")
@@ -138,19 +156,111 @@ def current(db, package):
     return db.scalar(select(AssetVersion).where(AssetVersion.package_id == package.id, AssetVersion.version == package.current_version))
 
 
-def publish(db, package, files, metadata, expected):
-    if package.current_version != expected:
+def deletion_block_reason(package):
+    if package.kind == "communication":
+        return "Das gemeinsame Kommunikationspaket wird vom Server verwaltet."
+    defaults = {"avatar-" + key for key in BUILTINS}
+    defaults.update(path.name.removesuffix("-v1.zip") for path in
+                    (Path(__file__).resolve().parents[1] / "defaults" / "chill").glob("*.zip"))
+    if package.id in defaults:
+        return "Dieses Standardpaket wird automatisch vom Server bereitgestellt."
+    return None
+
+
+def package_devices(db, package):
+    return [device for device in db.scalars(select(Device).order_by(Device.name)).all()
+            if package.kind == "common" or package.id in (device.content_selection or [])
+            or package.id in (device.installed_assets or {})
+            or package.id == (device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar)
+            or any(catalog.id == package.catalog_id for catalog in device.quiz_catalogs)]
+
+
+def delete_package(db, package, expected):
+    reason = deletion_block_reason(package)
+    if reason:
+        raise HTTPException(422, reason)
+    # Claim the version before changing related rows, as publication does.
+    result = db.execute(update(AssetPackage).where(AssetPackage.id == package.id,
+        AssetPackage.current_version == expected).values(current_version=expected)
+        .execution_options(synchronize_session=False))
+    if result.rowcount != 1:
         raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
-    if not isinstance(metadata, dict):
-        raise HTTPException(422, "Definition muss ein JSON-Objekt sein")
-    metadata = dict(metadata)
-    minimum = metadata.get("minFirmware")
-    if minimum is not None:
-        version_key(minimum)
-    animations = metadata.get("animations", {})
+    catalog = db.get(QuizCatalog, package.catalog_id) if package.catalog_id else None
+    for device in package_devices(db, package):
+        device.content_selection = [key for key in (device.content_selection or []) if key != package.id]
+        avatar = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
+        if avatar == package.id:
+            device.avatar = "dragon"
+        if catalog in device.quiz_catalogs:
+            device.quiz_catalogs.remove(catalog)
+            device.quiz_version += 1
+        device.config_version += 1
+        # Keep reported installed assets until the regular sync confirms cleanup.
+    db.execute(delete(AssetVersion).where(AssetVersion.package_id == package.id))
+    db.delete(package)
+    db.flush()
+    if catalog:
+        # Otherwise ensure_packages would recreate the deleted quiz package.
+        db.delete(catalog)
+        db.flush()
+    # Content-addressed blobs can be shared by other packages and are retained.
+
+
+PET_STATES = {"idle", "happy", "sad", "hungry", "tired", "dirty", "eating", "playing", "sleeping"}
+
+
+def discover_pet(files):
+    """Keep archive paths intact, including optional outer folders."""
+    animations, backgrounds = {}, {}
+    for path in sorted(files):
+        parts = PurePosixPath(path).parts
+        if not path.lower().endswith(".png"):
+            continue
+        if len(parts) >= 2 and parts[-2].lower() in PET_STATES:
+            animations.setdefault(parts[-2].lower(), {"frames": [], "frameDurationMs": 400})["frames"].append(path)
+        for period in ("day", "night"):
+            if PurePosixPath(path).stem.lower() == f"background_{period}" or (len(parts) >= 2 and parts[-2].lower() == f"background_{period}"):
+                backgrounds.setdefault(period, path)
+    return {"animations": animations, "backgrounds": backgrounds}
+
+
+def with_pet_metadata(files, metadata):
+    """Enrich legacy uploads, retaining explicit pet and sidebar definitions."""
+    metadata = copy.deepcopy(metadata)
+    discovered = discover_pet(files)
+    root_animations = metadata.get("animations", {})
+    root_pet = {name: animation for name, animation in root_animations.items()
+                if name in PET_STATES and isinstance(animation, dict)
+                and (name != "idle" or len(animation.get("frames", [])) > 1)
+                and any(isinstance(p, str) and p.lower().endswith(".png") and p in files
+                        for p in animation.get("frames", []))}
+    if not (discovered["animations"] or discovered["backgrounds"] or root_pet or "tamagotchi" in metadata):
+        return metadata
+    pet = metadata.setdefault("tamagotchi", {})
+    if not isinstance(pet, dict):
+        raise HTTPException(422, "tamagotchi muss ein Objekt sein")
+    animations = pet.setdefault("animations", {})
+    backgrounds = pet.setdefault("backgrounds", {})
+    if not isinstance(animations, dict) or not isinstance(backgrounds, dict):
+        raise HTTPException(422, "Tamagotchi animations/backgrounds müssen Objekte sein")
+    for name, animation in discovered["animations"].items():
+        animations.setdefault(name, animation)
+    for name, animation in root_pet.items():
+        # Generic animation paths are also supported, even without state folders.
+        frames = [p for p in animation.get("frames", []) if isinstance(p, str) and p.lower().endswith(".png") and p in files]
+        if frames:
+            animations.setdefault(name, {**animation, "frames": frames})
+    for period, path in discovered["backgrounds"].items():
+        backgrounds.setdefault(period, path)
+    if "idle" not in root_animations and "idle" in animations and not any(p.startswith("animations/idle/") for p in files):
+        metadata["animations"] = {**root_animations, "idle": copy.deepcopy(animations["idle"])}
+    return metadata
+
+
+def validate_animations(animations, files):
     if not isinstance(animations, dict):
         raise HTTPException(422, "animations muss ein Objekt sein")
-    for name, animation in animations.items():
+    for animation in animations.values():
         if not isinstance(animation, dict) or not isinstance(animation.get("frames"), list) or not animation["frames"]:
             raise HTTPException(422, "Animationen benötigen eine nicht leere frames-Liste")
         if any(not isinstance(frame, str) or frame not in files for frame in animation["frames"]):
@@ -158,6 +268,92 @@ def publish(db, package, files, metadata, expected):
         timing = animation.get("frameDurationMs", 100)
         if isinstance(timing, bool) or not isinstance(timing, int) or timing < 1:
             raise HTTPException(422, "frameDurationMs muss positiv sein")
+
+
+def normalize_chill(source):
+    metadata = copy.deepcopy(source)
+    if not isinstance(source.get("slider"), dict) or not isinstance(source.get("sprites"), list):
+        raise ValueError()
+    for key in ("id", "type", "title", "name", "version"):
+        metadata.pop(key, None)
+    metadata.setdefault("scene", {"flight_speed": "space", "fire_intensity": "fire", "snowfall_intensity": "snow"}.get(source.get("slider", {}).get("meaning")))
+    layout = {"snow": [(40, 40), (270, 66), (190, 58), (0, 94), (362, 12)], "fire": [(174, 100), (178, 100), (178, 12)]}.get(metadata["scene"], [])
+    for index, sprite in enumerate(metadata.get("sprites", [])):
+        if not isinstance(sprite, dict):
+            raise ValueError()
+        if index < len(layout):
+            sprite.setdefault("x", layout[index][0])
+            sprite.setdefault("y", layout[index][1])
+        if "pattern" in sprite:
+            count = sprite.get("frames")
+            if type(count) is not int or not 1 <= count <= 8:
+                raise ValueError()
+            sprite["frames"] = [sprite["pattern"] % i for i in range(count)]
+            sprite.pop("pattern", None)
+            sprite.setdefault("frameDurationMs", 200)
+    metadata.setdefault("preview", next((s.get("file") or s.get("frames", [None])[0] for s in metadata.get("sprites", [])), None))
+    metadata.setdefault("minFirmware", "1.0.0-beta.18")
+    return metadata
+
+
+def validate_chill(metadata, files):
+    # Empty legacy packages can still be populated through the existing asset editor.
+    if "scene" not in metadata:
+        return
+    if not isinstance(metadata["scene"], str) or metadata["scene"] not in {"space", "fire", "snow"}:
+        raise HTTPException(422, "Unbekannte Chill-Szene")
+    slider = metadata.get("slider", {})
+    if not isinstance(slider, dict) or slider.get("min") != 0 or slider.get("max") != 100 or type(slider.get("default")) is not int or not 0 <= slider["default"] <= 100:
+        raise HTTPException(422, "Chill-Slider benötigt 0–100 und einen gültigen Standardwert")
+    sprites = metadata.get("sprites")
+    if not isinstance(sprites, list) or not 1 <= len(sprites) <= 16:
+        raise HTTPException(422, "Chill benötigt 1–16 Sprites")
+    total_frames = 0
+    for sprite in sprites:
+        if not isinstance(sprite, dict):
+            raise HTTPException(422, "Ungültiger Chill-Sprite")
+        if ("file" in sprite) == ("frames" in sprite):
+            raise HTTPException(422, "Chill-Sprite benötigt entweder file oder frames")
+        for coordinate, limit in (("x", 428), ("y", 142)):
+            if coordinate in sprite and (type(sprite[coordinate]) is not int or not -142 <= sprite[coordinate] <= limit):
+                raise HTTPException(422, "Ungültige Chill-Sprite-Position")
+        size = sprite.get("size", [])
+        paths = sprite.get("frames", [sprite.get("file")])
+        if (not isinstance(size, list) or len(size) != 2 or any(type(n) is not int or not 1 <= n <= 142 for n in size)
+                or not isinstance(paths, list) or not 1 <= len(paths) <= 8
+                or any(not isinstance(p, str) or not p.endswith(".png") or p not in files for p in paths)):
+            raise HTTPException(422, "Chill-Sprite oder Animationsframe fehlt / überschreitet das Limit")
+        total_frames += len(paths)
+    if total_frames > 32:
+        raise HTTPException(422, "Chill erlaubt höchstens 32 Sprite-Frames insgesamt")
+    if metadata["scene"] == "fire" and not any(s.get("role") == "animation" and s.get("frames") for s in sprites):
+        raise HTTPException(422, "Lagerfeuer benötigt Flammenframes")
+
+
+def publish(db, package, files, metadata, expected):
+    if package.current_version != expected:
+        raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
+    if not isinstance(metadata, dict):
+        raise HTTPException(422, "Definition muss ein JSON-Objekt sein")
+    metadata = dict(metadata)
+    if package.kind == "chill":
+        validate_chill(metadata, files)
+    minimum = metadata.get("minFirmware")
+    if minimum is not None:
+        version_key(minimum)
+    animations = metadata.get("animations", {})
+    validate_animations(animations, files)
+    if package.kind == "avatar":
+        metadata = with_pet_metadata(files, metadata)
+        animations = metadata.get("animations", {})
+        pet = metadata.get("tamagotchi", {})
+        pet_animations = pet.get("animations", {})
+        validate_animations(pet_animations, files)
+        if any(not frame.lower().endswith(".png") for a in pet_animations.values() for frame in a["frames"]):
+            raise HTTPException(422, "Tamagotchi-Frames müssen PNG sein")
+        for period, path in pet.get("backgrounds", {}).items():
+            if period not in {"day", "night"} or not isinstance(path, str) or not path.lower().endswith(".png") or path not in files:
+                raise HTTPException(422, "Ungültiger Tamagotchi-Hintergrund")
     # A folder animations/<name>/ automatically becomes an animation.
     if package.kind == "avatar":
         animations = dict(animations)
@@ -238,6 +434,17 @@ def ensure_packages(db):
     """Idempotent adoption: original catalogs, question IDs and device links survive."""
     from app.services.communication import ensure_package
     changed = ensure_package(db)
+    for path in sorted((Path(__file__).resolve().parents[1] / "defaults" / "chill").glob("*.zip")):
+        key = path.name.removesuffix("-v1.zip")
+        if not db.get(AssetPackage, key):
+            with zipfile.ZipFile(path) as archive:
+                name = json.loads(archive.read("manifest.json"))["name"]
+            metadata = {}
+            files = unpack_asset_zip(path, metadata=metadata)
+            package = AssetPackage(id=key, kind="chill", name=name, current_version=0)
+            db.add(package); db.flush()
+            publish(db, package, files, metadata, 0)
+            changed = True
     for catalog in db.scalars(select(QuizCatalog)).all():
         if not db.scalar(select(AssetPackage).where(AssetPackage.catalog_id == catalog.id)):
             package = AssetPackage(id=catalog_package_id(db, catalog), kind="quiz", name=catalog.name, catalog_id=catalog.id, current_version=0)
@@ -245,11 +452,35 @@ def ensure_packages(db):
             publish_quiz(db, package, catalog, 0)
             changed = True
     for key, label in BUILTINS.items():
-        if not db.get(AssetPackage, "avatar-" + key):
+        package = db.get(AssetPackage, "avatar-" + key)
+        svg = (Path("app/static/avatars") / f"{key}.svg").read_bytes()
+        original_files = {"preview.svg": {"sha256": hashlib.sha256(svg).hexdigest(), "size": len(svg)}}
+        original_definition = {"preview": "preview.svg", "format": "svg", "animations": {}}
+        if not package:
             package = AssetPackage(id="avatar-" + key, kind="avatar", name=label, current_version=0)
             db.add(package); db.flush()
-            publish(db, package, {"preview.svg": store_bytes((Path("app/static/avatars") / f"{key}.svg").read_bytes())},
-                    {"preview": "preview.svg", "format": "svg", "animations": {}}, 0)
+        version = current(db, package)
+        # Upgrade only the exact original built-in. Never replace uploaded/custom avatars.
+        original = (package.kind == "avatar" and package.current_version == 1
+                    and file_map(version) == original_files
+                    and editable_definition(version) == original_definition)
+        if package.current_version == 0 or original:
+            png = (Path("app/static/avatars") / f"{key}.png").read_bytes()
+            publish(db, package, {"preview.svg": store_bytes(svg), "preview.png": store_bytes(png)},
+                    {"preview": "preview.png", "format": "png", "animations": {
+                        "idle": {"frames": ["preview.png"], "frameDurationMs": 1000}}}, package.current_version)
+            changed = True
+    # Existing uploads predate pet metadata. Publish a new immutable version once;
+    # unchanged files keep their hashes and are reused by the regular device sync.
+    for package in db.scalars(select(AssetPackage).where(AssetPackage.kind == "avatar")).all():
+        version = current(db, package)
+        if not version:
+            continue
+        files = file_map(version)
+        metadata = editable_definition(version)
+        enriched = with_pet_metadata(files, metadata)
+        if enriched != metadata:
+            publish(db, package, files, enriched, package.current_version)
             changed = True
     if changed:
         db.commit()
@@ -264,7 +495,10 @@ def desired_packages(db, device):
         ids.add(PACKAGE_ID)
     catalogs = {c.id for c in device.quiz_catalogs if c.enabled}
     packages = db.scalars(select(AssetPackage).order_by(AssetPackage.id)).all()
-    return [p for p in packages if p.id in ids or p.kind == "common" or p.catalog_id in catalogs]
+    desired = [p for p in packages if p.id in ids or p.kind == "common" or p.catalog_id in catalogs]
+    # Deterministic adoption of legacy multi-scene selections without a new DB field.
+    chill = next((p.id for p in desired if p.kind == "chill"), None)
+    return [p for p in desired if p.kind != "chill" or p.id == chill]
 
 
 def version_key(version):
@@ -305,7 +539,22 @@ def device_context(db, device):
     avatar_id = device.avatar if device.avatar.startswith("avatar-") else "avatar-" + device.avatar
     avatar = db.get(AssetPackage, avatar_id)
     preview = None
+    pet_preview = {"animations": {}, "backgrounds": {}}
     if avatar and (v := current(db, avatar)):
+        definition = v.manifest["definition"]
+        pet = definition.get("tamagotchi", {})
+        animations = dict(pet.get("animations", {}))
+        if "idle" not in animations:
+            idle = definition.get("animations", {}).get("idle", {})
+            frames = [p for p in idle.get("frames", []) if p.lower().endswith(".png")]
+            if not frames and str(definition.get("preview", "")).lower().endswith(".png"):
+                frames = [definition["preview"]]
+            if frames:
+                animations["idle"] = {**idle, "frames": frames}
+        urls = {f["path"]: f["url"] for f in v.manifest["files"]}
+        pet_preview = {"backgrounds": {k: urls.get(p) for k, p in pet.get("backgrounds", {}).items()},
+                       "animations": {k: {**a, "frames": [urls[p] for p in a["frames"] if p in urls]}
+                                      for k, a in animations.items()}}
         path = v.manifest["definition"].get("preview")
         preview = next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)
         if not preview:
@@ -314,8 +563,14 @@ def device_context(db, device):
     for package in desired:
         if package.kind == "chill":
             v = current(db, package)
-            path = v.manifest["definition"].get("preview")
-            chill.append({"name": package.name, "preview": next((f["url"] for f in v.manifest["files"] if f["path"] == path), None)})
+            if not v:
+                continue
+            definition = v.manifest["definition"]
+            path = definition.get("preview")
+            urls = {f["path"]: f["url"] for f in v.manifest["files"]}
+            chill.append({"name": package.name, "scene": definition.get("scene"), "slider": definition.get("slider", {}).get("default", 45),
+                          "sprites": [{**s, "url": urls.get(s.get("file") or s.get("frames", [None])[0])} for s in definition.get("sprites", [])],
+                          "preview": urls.get(path)})
     return {"sync_labels": EVENT_LABELS, "firmware_pending": firmware_offer(db, device, device.firmware_version), "preview_chill": chill, "asset_packages": packages, "desired_packages": desired, "firmware_target": firmware_target(db, device),
-            "sync_runs": runs, "sync_events": events, "asset_avatar_preview": preview,
+            "sync_runs": runs, "sync_events": events, "asset_avatar_preview": preview, "pet_preview": pet_preview,
             "pending_assets": [p for p in desired if device.installed_assets.get(p.id) != p.current_version], "asset_kinds": KINDS}

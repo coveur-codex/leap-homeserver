@@ -29,12 +29,13 @@ def cache_for_device(device: Device, db: Session) -> LocationCache | None:
     return db.scalar(select(LocationCache).where(LocationCache.location_key == location_key(device.latitude, device.longitude)))
 
 
-def _fresh(fetched_at: datetime | None, now: datetime) -> bool:
+def _fresh(fetched_at: datetime | None, now: datetime, kind: str = "weather") -> bool:
     if not fetched_at:
         return False
     if fetched_at.tzinfo is None:
         fetched_at = fetched_at.replace(tzinfo=timezone.utc)
-    return fetched_at > now - timedelta(minutes=settings.weather_cache_minutes)
+    lifetime = timedelta(seconds=settings.aircraft_cache_seconds) if kind == "aircraft" else timedelta(minutes=settings.weather_cache_minutes)
+    return fetched_at > now - lifetime
 
 
 async def refresh_location(
@@ -58,7 +59,7 @@ async def refresh_location(
 
     now = datetime.now(timezone.utc)
     fetch_weather = force or not _fresh(cache.weather_fetched_at, now)
-    fetch_aircraft = force or not _fresh(cache.aircraft_fetched_at, now)
+    fetch_aircraft = force or not _fresh(cache.aircraft_fetched_at, now, "aircraft")
     tasks = []
     if fetch_weather:
         tasks.append(("weather", (weather_provider or OpenMeteoProvider()).current(latitude, longitude, "C")))
@@ -95,10 +96,17 @@ async def data_for_device(device: Device, db: Session, kind: str) -> dict:
     cache = cache_for_device(device, db)
     fetched_at = getattr(cache, f"{kind}_fetched_at", None) if cache else None
     data = getattr(cache, f"{kind}_data", None) if cache else None
-    if not data or not _fresh(fetched_at, datetime.now(timezone.utc)):
+    if not data or not _fresh(fetched_at, datetime.now(timezone.utc), kind):
         cache = await refresh_location(db, device.weather_location, device.latitude, device.longitude)
         data = getattr(cache, f"{kind}_data")
         fetched_at = getattr(cache, f"{kind}_fetched_at")
     if not data:
         raise RuntimeError(getattr(cache, f"{kind}_error") or f"{kind} nicht verfügbar")
-    return {**data, "stale": not _fresh(fetched_at, datetime.now(timezone.utc))}
+    observed_at = fetched_at
+    if kind == "aircraft":
+        try:
+            observed_at = datetime.fromisoformat(data.get("updated", "")).replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            pass
+    age = max(0, (datetime.now(timezone.utc) - observed_at.replace(tzinfo=timezone.utc)).total_seconds()) if observed_at else 121
+    return {**data, "ageSeconds": age, "stale": not _fresh(fetched_at, datetime.now(timezone.utc), kind)}

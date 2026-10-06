@@ -23,8 +23,9 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 3. Unter **Assets** Pakete verwalten, Dateien hochladen und Quiz-Fragen bearbeiten oder importieren. Avatar, Chill, Quiz und weitere Inhalte in den Geräteeinstellungen auswählen.
 4. Unter **Firmware** eine ESP32-S3 App-Binary hochladen und zunächst als Beta testen; anschließend als Stable freigeben. Den Kanal je Gerät einstellen.
 5. Unter **Kommunikation** gemeinsame Nachrichtenvorlagen bearbeiten, aktivieren und über die Position sortieren. **Kommunikation aktiv** steuert pro Gerät Teilnahme und Kommunikationsseite; neue Geräte und bestehende Geräte nach der Migration sind standardmäßig aktiviert. Vorlagen werden als gemeinsames Asset-Paket synchronisiert.
-6. Im Geräteeditor die 428×142-Vorschau prüfen.
-7. Speicherbelegung für Flash (Firmware), LittleFS und PSRAM in der Geräteübersicht oder im Geräteeditor ablesen. Die Werte stammen vom letzten Check-in einer passenden Firmware und sind mit Zeitstempel versehen.
+6. Unter **Geräte → Quiz → Mathe-Quiz** Rechenart und Grenze einstellen (z. B. Addition bis 20, Subtraktion bis 100 oder Multiplikation bis 10 für das kleine Einmaleins). Leap erzeugt Aufgaben zufällig und offline mit vier Antworten, Rechenweg und Stellenwerttafel. Auf dem Gerät beginnt die Quizseite mit der Katalogauswahl einschließlich Mathe-Quiz.
+7. Im Geräteeditor die 428×142-Vorschau prüfen.
+8. Speicherbelegung für Flash (Firmware), LittleFS und PSRAM in der Geräteübersicht oder im Geräteeditor ablesen. Die Werte stammen vom letzten Check-in einer passenden Firmware und sind mit Zeitstempel versehen.
 
 Über **Design** in der Kopfzeile lässt sich zwischen **Hell**, **Dunkel** und
 **System** wechseln. Die Auswahl wird pro Browser gespeichert; **System** folgt
@@ -57,6 +58,47 @@ uvicorn app.main:app --reload --port 8080
 pytest
 ```
 
-Wetter und Flugradar werden alle 15 Minuten einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
+Wetter wird alle 15 Minuten, Flugradar standardmäßig alle 30 Sekunden (`LEAP_AIRCRAFT_CACHE_SECONDS`) einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
 
 Assets, Datenübernahme, Firmware-Kanäle und das vollständige ESP32-Installationsprotokoll: [`docs/distribution.md`](docs/distribution.md). Die Server-APIs sind implementiert; der Geräteclient muss das dort beschriebene Verfahren in seiner Firmware umsetzen.
+
+## Haustier und Snake (Firmware beta.10)
+
+Die Geräte-Konfiguration bietet im bestehenden Spielebereich `tamagotchi` und
+`snake` zusätzlich zu den bisherigen Spielen an. Beide laufen lokal. Bedürfnisse
+und Snake-Rekord werden auf dem Gerät gespeichert.
+
+Für das Haustier das gewählte Avatarpaket unter Assets bearbeiten und ein ZIP mit
+80×80-PNG-Frames in `idle`, `happy`, `sad`, `hungry`, `tired`, `dirty`, `eating`,
+`playing`, `sleeping` hochladen. Je vier Frames, alphabetische Reihenfolge und
+400 ms Standarddauer. `data/pet/` und ein äußerer ZIP-Ordner bleiben erhalten.
+256×142-PNG-Hintergründe heißen `background_day.png`/`background_night.png` oder
+liegen in gleichnamigen Ordnern. Der Import ergänzt die Paketdefinition unter
+`tamagotchi.animations` und `tamagotchi.backgrounds.day/night`; Metadaten lassen
+sich im vorhandenen Definitionseditor bearbeiten. Die normalen versionierten
+Manifeste, Zuweisungen und Sync-Downloads gelten auch für diese Dateien.
+
+Die Geräte-Vorschau zeigt die neuen Spiele und kann die Haustieraktionen mit den
+gewählten Paketframes darstellen; Snake ist eine statische Layoutvorschau. Sie
+zeigt keinen tatsächlichen Spielstand des Gerätes. Fehlende Assets blockieren
+weder Vorschau noch Spiel. Hintergrundwechsel in der Vorschau nutzt Europe/Berlin;
+die Firmware nutzt ihre bestehende konfigurierbare Geräte-Zeitzone.
+
+
+Ab Firmware beta.11 werden beim Quiz alle zugeordneten Kataloge gemeinsam
+zufällig gemischt. Die Auswahl und Reihenfolge entstehen auf dem Gerät.
+Ältere Avatar-Uploads mit Tier-/Hintergrunddateien, aber ohne Tamagotchi-Metadaten,
+werden beim Serverstart bzw. regulären Sync automatisch erkannt und erhalten
+einmalig eine ergänzte Paketversion. Kein erneuter Upload nötig; Originaldateien,
+ältere Versionen und explizite Definitionen bleiben erhalten. Danach das Gerät
+synchronisieren lassen. Die Firmware kann die beschriebenen Ordner auch ohne
+neue Metadaten direkt aus bestehenden Manifesten auflösen.
+
+Vorschau-Regressionsprüfung (Node.js): `node tests/test_aircraft_preview.cjs`.
+
+
+Chill V1: Weltraum, Lagerfeuer und Schnee werden beim Start als Asset-Pakete
+bereitgestellt. Pro Gerät unter „Firmware & Inhalte“ eine Szene auswählen;
+Download beim nächsten regulären Sync (Firmware ab 1.0.0-beta.18). Die
+Display-Vorschau zeigt die ausgewählte Szene. Details in
+[Asset-Verteilung](docs/distribution.md#chill-v1).

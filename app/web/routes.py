@@ -14,10 +14,12 @@ from app.services import communication
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
 from app.services.location_data import cache_for_device
+from app.services.weather_icons import weather_icon, weather_label
 from app.services.knowledge import demo_article
 from app.services import distribution as distribution_service
 from app.models import AssetPackage
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
+templates.env.globals.update(weather_icon=weather_icon, weather_label=weather_label)
 def redir(p): return RedirectResponse(p,303)
 @router.get("/",response_class=HTMLResponse)
 def dashboard(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"dashboard.html",{"devices":db.scalars(select(Device)).all(),"device_count":db.scalar(select(func.count(Device.id))),"feed_count":db.scalar(select(func.count(Feed.id)).where(Feed.enabled==True)),"article_count":db.scalar(select(func.count(Article.id))),"feed_errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None)))})
@@ -34,14 +36,15 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     distribution_service.ensure_packages(db)
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication"}]
-    catalog_ids=[catalog.id for catalog in d.quiz_catalogs if catalog.enabled]
-    preview_question=db.scalar(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age).order_by(QuizQuestion.id)) if catalog_ids else None
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_question":preview_question,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games"}]
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
+    if math_settings:
+        if math_operation not in {"add", "subtract", "multiply"} or not 3 <= math_limit <= (20 if math_operation == "multiply" else 1000):
+            raise HTTPException(422,"Mathe: +/− mit Zahlenbereich 3–1000 oder Malreihen 1 bis 3–20 wählen")
     new_device_id=(device_id or d.device_id).strip()
     if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
@@ -49,6 +52,11 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     if distribution_settings:
         distribution_service.ensure_packages(db)
         if firmware_channel not in {"stable", "beta"}: raise HTTPException(422,"Ungültiger Firmware-Kanal")
+        if chill_id:
+            chill_package=db.get(AssetPackage,chill_id)
+            if not chill_package or chill_package.kind!="chill": raise HTTPException(422,"Unbekannte Chill-Szene")
+            content_ids=[*content_ids,chill_id]
+        if sum(1 for key in set(content_ids) if (p:=db.get(AssetPackage,key)) and p.kind=="chill")>1: raise HTTPException(422,"Bitte genau eine Chill-Szene auswählen")
         if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
         if any(not db.get(QuizCatalog,key) for key in quiz_catalog_ids): raise HTTPException(422,"Unbekannter Quiz-Katalog")
         avatar_id=avatar if avatar.startswith("avatar-") else "avatar-"+avatar
@@ -60,6 +68,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         d.content_selection=sorted(set(content_ids))
         d.quiz_catalogs=[db.get(QuizCatalog,key) for key in set(quiz_catalog_ids)]
         d.quiz_version+=1
+    if math_settings: d.math_quiz={"operation":math_operation,"limit":math_limit}
     old_knowledge_source=d.knowledge_source
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.communication_enabled=communication_enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
@@ -77,7 +86,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,communication_enabled=old.communication_enabled,weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,content_selection=list(old.content_selection),quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,content_selection=list(old.content_selection),quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")
@@ -118,6 +127,6 @@ def system(request:Request,db:Session=Depends(get_db)):
     location_status=[]
     for location in locations:
         weather_at=aware(location.weather_fetched_at); aircraft_at=aware(location.aircraft_fetched_at)
-        location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None,"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aircraft_at+timedelta(minutes=settings.weather_cache_minutes) if aircraft_at else None,"aircraft_error":location.aircraft_error})
+        location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None,"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aircraft_at+timedelta(seconds=settings.aircraft_cache_seconds) if aircraft_at else None,"aircraft_error":location.aircraft_error})
     latest_feed=db.scalar(select(func.max(Feed.last_success)))
-    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_radius":settings.aircraft_radius_nm,"started_at":started_at,"uptime":now-started_at,"now":now})
+    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_interval":settings.aircraft_cache_seconds,"aircraft_radius":round(settings.aircraft_radius_nm*1.852,1),"started_at":started_at,"uptime":now-started_at,"now":now})

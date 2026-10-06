@@ -60,7 +60,7 @@ def test_invalid_memory_rejected(client, db, usage):
 
 def test_memory_migration_preserves_existing_device(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
-    migration = import_module("migrations.versions.0007_memory_usage")
+    migration = import_module("migrations.versions.0008_memory_usage")
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE devices (id INTEGER PRIMARY KEY, name TEXT)"))
         connection.execute(text("INSERT INTO devices VALUES (1, 'Existing')"))

@@ -19,6 +19,7 @@ def test_device_creation_and_config(client,db):
  config=client.get("/api/v1/devices/leap-erik/config").json()
  assert config["pages"][0]["id"]=="home"
  assert (config["age"],config["avatar"],config["avatarName"])==(42,"redpanda","Rudi")
+ assert {g["id"] for g in config["games"] if g["enabled"]} == {"tamagotchi","snake","hot_potato","simon_motion","tilt_maze","connect_four"}
  page=client.get("/devices").text
  assert 'max="18"' not in page and "frog" in page and "redpanda" in page
 def test_config_version(client,db):
@@ -75,7 +76,7 @@ def test_device_preview_layout_and_avatar(client,db):
  assert page.status_code==200
  assert 'class="leap-sidebar"' in page.text
  assert 'class="leap-card news-card"' in page.text
- assert '/api/v1/packages/avatar-dragon/versions/1/files/preview.svg' in page.text
+ assert '/api/v1/packages/avatar-dragon/versions/1/files/preview.png' in page.text
  assert 'data-preview-card="HOME"' in page.text
  assert client.get('/static/avatars/dragon.svg').status_code==200
 
@@ -91,8 +92,9 @@ def test_device_preview_follows_enabled_page_configuration(client,db):
  assert preview.index('data-preview-card="QUIZ"') < preview.index('data-preview-card="HOME"')
  assert 'data-preview-card="WETTER"' not in preview
  assert 'data-preview-card="NEWS"' not in preview
- assert "Wie viele Kontinente gibt es?" in preview
- assert all(answer in preview for answer in ("Fünf","Sechs","Sieben","Acht"))
+ assert "Katalog auswählen" in preview and "Wissen" in preview and "Mathe-Quiz" in preview
+ assert "Wie viele Kontinente gibt es?" not in preview
+ assert all(answer not in preview for answer in ("Fünf","Sechs","Sieben","Acht"))
 
 def test_device_preview_carousel_uses_device_news_selection(client,db):
  d=make_device(db)
@@ -152,6 +154,7 @@ def test_weather_aircraft_api_and_preview_use_shared_cache(client,db,monkeypatch
  aircraft=client.get("/api/v1/devices/leap-erik/aircraft")
  assert weather.status_code==200 and weather.json()["current"]["temperature"]==18
  assert aircraft.status_code==200 and aircraft.json()["aircraft"][0]["callsign"]=="LEAP1"
+ assert aircraft.json()["center"] == {"latitude":52.52,"longitude":13.405}
  assert "aircraftVersion" in client.get("/api/v1/devices/leap-erik/sync").json()
  preview=client.get(f"/devices/{device.id}").text
  assert 'data-preview-card="WETTER"' in preview and "Berlin" in preview

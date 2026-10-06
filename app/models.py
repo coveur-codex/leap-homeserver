@@ -20,6 +20,7 @@ class Device(Base):
     age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(100), default="dragon")
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
     communication_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    math_quiz: Mapped[dict] = mapped_column(JSON, default=lambda:{"operation":"add", "limit":20}, server_default='{"operation":"add","limit":20}')
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)

@@ -10,6 +10,16 @@
     <div class="device-settings-stack">
     <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
     <section><h2>Quiz</h2>
+  <fieldset><legend>Mathe-Quiz</legend>
+    <input type="hidden" name="math_settings" value="true">
+    <label>Rechenart<select name="math_operation">
+      <option value="add" {% if device.math_quiz.operation == 'add' %}selected{% endif %}>Addition (+)</option>
+      <option value="subtract" {% if device.math_quiz.operation == 'subtract' %}selected{% endif %}>Subtraktion (−)</option>
+      <option value="multiply" {% if device.math_quiz.operation == 'multiply' %}selected{% endif %}>Multiplikation (×)</option>
+    </select></label>
+    <label>Zahlenbereich / größte Malreihe<input type="number" name="math_limit" value="{{device.math_quiz.limit}}" min="3" max="1000" required></label>
+    <p>Zum Beispiel: + bis 20, − bis 100 oder Multiplikation bis 10 für das kleine Einmaleins. Bei + und − bleiben Zahlen und Ergebnis im gewählten Bereich; bei × sind beide Faktoren 1 bis zur Grenze (maximal 20). Aufgaben entstehen zufällig auf dem Gerät, auch offline.</p>
+  </fieldset>
   <fieldset><legend>Quiz-Themen</legend>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}</fieldset>
     </section>
     </div>
@@ -60,20 +70,42 @@
     </article>
     {% elif page_id == 'weather' %}
     <article class="leap-card weather-card" data-preview-card="WETTER"{% if not loop.first %} hidden{% endif %}>
-      <div class="weather-copy">{% if preview_weather %}<div class="weather-main"><div class="weather-icon" aria-hidden="true">{% if preview_weather.current.weatherCode < 3 %}☀{% elif preview_weather.current.weatherCode < 60 %}☁{% else %}☂{% endif %}</div><div><strong>{{preview_weather.current.temperature|round|int}}°</strong><span>{{preview_weather.location}}</span></div></div><div class="weather-details"><div><b>{{preview_weather.today.min|round|int}}°</b><span>MIN</span></div><div><b>{{preview_weather.today.max|round|int}}°</b><span>MAX</span></div><div><b>{{preview_weather.today.precipitationProbability|round|int}}%</b><span>REGEN</span></div><div><b>{{preview_weather.current.windSpeed|round|int}}</b><span>WIND</span></div></div>{% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}</div>
+      <div class="weather-copy">{% if preview_weather and preview_weather.current %}
+        {% set current = preview_weather.current %}{% set tomorrow = preview_weather.tomorrow %}{% set day = current.isDay is not sameas false %}
+        <div class="weather-heading">JETZT · {{preview_weather.location}}</div>
+        <div class="weather-main"><div class="weather-icon">{{weather_icon(current.weatherCode, day)}}</div><div><strong>{% if current.temperature is number %}{{current.temperature|round|int}}° {{preview_weather.unit or 'C'}}{% else %}–{% endif %}</strong><span>{{weather_label(current.weatherCode, day)}}</span></div></div>
+        <div class="weather-current-details"><span>Wind {% if current.windSpeed is number %}{{current.windSpeed|round|int}} km/h{% else %}unbekannt{% endif %}</span><span>Regen {% if preview_weather.today and preview_weather.today.precipitationProbability is number %}{{preview_weather.today.precipitationProbability|round|int}}%{% else %}unbekannt{% endif %}</span></div>
+        <div class="weather-tomorrow"><div class="weather-icon">{{weather_icon(tomorrow.weatherCode if tomorrow else -1)}}</div><div><small>MORGEN{% if tomorrow and tomorrow.date %} · {{tomorrow.date[8:10]}}.{{tomorrow.date[5:7]}}.{% endif %}</small>{% if tomorrow %}<b>{{weather_label(tomorrow.weatherCode)}}</b><span>{% if tomorrow.min is number %}{{tomorrow.min|round|int}}{% else %}–{% endif %} bis {% if tomorrow.max is number %}{{tomorrow.max|round|int}}{% else %}–{% endif %}° {{preview_weather.unit or 'C'}}</span><span>Regen {% if tomorrow.precipitationProbability is number %}{{tomorrow.precipitationProbability|round|int}}%{% else %}unbekannt{% endif %}</span>{% else %}<span>Vorhersage fehlt</span>{% endif %}</div></div>
+      {% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}</div>
       <div class="weather-radar" data-latitude="{{device.latitude if device.latitude is not none else ''}}" data-longitude="{{device.longitude if device.longitude is not none else ''}}" aria-label="Radarbild; gewählter Standort im Zentrum"><div class="radar-rings"></div><i class="radar-center" aria-hidden="true"></i><span>{{'%.3f'|format(device.latitude) if device.latitude is not none else '–'}}<br>{{'%.3f'|format(device.longitude) if device.longitude is not none else '–'}}</span></div>
     </article>
     {% elif page_id == 'quiz' %}
     <article class="leap-card quiz-card" data-preview-card="QUIZ"{% if not loop.first %} hidden{% endif %}>
-      <div class="quiz-question"><small>FRAGE DES TAGES</small><strong>{% if preview_question %}{{preview_question.question}}{% else %}Noch keine Quizfrage ausgewählt.{% endif %}</strong><span>{% if preview_question %}Wähle die richtige Antwort!{% else %}Ordne dem Gerät einen Quiz-Katalog zu.{% endif %}</span></div>
-      <ol class="quiz-answers">{% if preview_question %}{% for answer in preview_question.answers %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% else %}{% for answer in ['Antwort A','Antwort B','Antwort C','Antwort D'] %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% endif %}</ol>
+      <div class="quiz-question"><small>QUIZ</small><strong>Katalog auswählen</strong><span>Wähle ein Thema und beantworte seine Fragen.</span></div>
+      <ol class="quiz-answers">{% for catalog in device.quiz_catalogs if catalog.enabled %}<li><span>{{catalog.name}}</span></li>{% endfor %}<li><span>Mathe-Quiz</span></li></ol>
     </article>
     {% elif page_id == 'aircraft' %}
     <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR"{% if not loop.first %} hidden{% endif %}>
-      <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
-      <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
+      <script type="application/json" data-aircraft-snapshot>{{ (preview_aircraft or {})|tojson }}</script>
+      <div class="aircraft-list" data-aircraft-list><div class="news-meta"><strong>IN DER NÄHE</strong></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% set plane = preview_aircraft.aircraft[0] %}<b>{{plane.callsign or plane.registration or plane.hex}}</b><p>{{plane.typeName or 'Unbekannter Flugzeugtyp'}}</p><p>{{(plane.distanceNm * 1.852)|round(1)}} km · {% if plane.altitudeFeet is not none %}{{(plane.altitudeFeet * 0.3048)|round|int}} m{% else %}Höhe unbekannt{% endif %}</p>{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong></div>{% endif %}</div>
+      <div class="radar-panel"><div class="radar-scope" data-aircraft-scope aria-label="Flugzeuge im Umkreis"></div><small data-aircraft-status></small></div>
     </article>
-    {% elif page_id == 'communication' %}
+    {% elif page_id == 'games' %}
+    <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>
+      <div class="games-preview-menu" data-games-menu>
+        <strong>Spiele</strong>
+        <button type="button" data-game-open="pet">Mein Haustier</button>
+        <button type="button" data-game-open="snake">Snake</button>
+        <span>Auch weiterhin: Heiße Kartoffel, Simon, Kipp-Labyrinth</span>
+      </div>
+      <div class="pet-preview" data-pet-preview hidden>
+        <div class="pet-scene" data-pet-scene><img data-pet-image alt="Haustier" hidden><span data-pet-fallback>♥</span></div>
+        <div class="pet-actions">{% for action in ['Füttern', 'Spielen', 'Waschen', 'Schlafen'] %}<button type="button" data-pet-action="{{loop.index0}}">{{action}}</button>{% endfor %}<button type="button" data-game-back>Zurück</button></div>
+      </div>
+      <div class="snake-preview" data-snake-preview hidden><strong>Snake · Punkte 0 · Rekord 0</strong><div class="snake-example"><i></i><b></b></div><span>Rechter Schalter: Richtungen · Linke Mitte: zurück</span><button type="button" data-game-back>Zurück</button></div>
+      <script type="application/json" data-pet-assets>{{pet_preview|tojson}}</script>
+    </article>
+  {% elif page_id == 'communication' %}
     <article class="leap-card communication-card" data-preview-card="KOMMUNIKATION"{% if not loop.first %} hidden{% endif %}>
       <div class="communication-received"><small>GRUPPENCHAT · BEISPIEL</small>
         <strong>{{device.child_name or device.name}}</strong>
@@ -91,15 +123,22 @@
   {% else %}
     <article class="leap-card"><div class="empty-preview"><strong>Keine Vorschau-Seite aktiv</strong><span>Aktiviere Home, News, Wetter, Wissen, Quiz, Flugzeuge oder Kommunikation.</span></div></article>
   {% endfor %}
-  {% if preview_page_ids|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
+  {% for c in preview_chill %}<article class="leap-card chill-card" data-preview-card="RUHEZEIT" data-scene="{{c.scene}}" hidden>
+    <canvas data-chill-preview data-scene="{{c.scene}}" width="428" height="142" aria-label="{{c.name}}"></canvas>
+    {% for s in c.sprites %}<img hidden data-chill-sprite data-role="{{s.role}}" data-x="{{s.x|default(0)}}" data-y="{{s.y|default(0)}}" data-width="{{s.size[0]}}" data-height="{{s.size[1]}}" src="{{s.url}}" alt="">{% endfor %}
+    <input type="range" min="0" max="100" value="{{c.slider}}" data-chill-slider aria-label="Chill-Intensität">
+  </article>{% endfor %}
+  {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
   <input type="hidden" name="distribution_settings" value="true">
   <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
-  {% for kind in ['chill','sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
+  <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+  {% for kind in ['sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
   <button>Speichern & Version erhöhen</button>
 </form>
 
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-preview.js?v=4" defer></script>
+<script src="/static/device-preview.js?v=5" defer></script>
+<script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
 {% endblock %}

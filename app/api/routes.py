@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
@@ -40,7 +41,7 @@ class Checkin(BaseModel):
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
-    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"knowledgeSource":d.knowledge_source,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":True} for x in ("hot_potato","simon_motion","tilt_maze")],"homeSlots":d.home_slots}
+    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"knowledgeSource":d.knowledge_source,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":True} for x in ("tamagotchi","snake","hot_potato","simon_motion","tilt_maze","connect_four")],"homeSlots":d.home_slots}
 @router.get("/devices/{device_id}/version")
 def version(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"contentVersion":max(d.news_version,d.weather_version,d.aircraft_version,d.quiz_version,d.knowledge_version)}
@@ -68,19 +69,44 @@ async def weather(device_id:str,db:Session=Depends(get_db)):
     try:return await data_for_device(d,db,"weather")
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception as e: raise HTTPException(503,"Wetterdienst derzeit nicht verfügbar")
+@router.get("/devices/{device_id}/weather/radar")
+async def weather_radar(device_id:str,db:Session=Depends(get_db)):
+    from app.services.radar import radar_for_location
+    d=device_or_404(device_id,db)
+    if d.latitude is None or d.longitude is None:
+        raise HTTPException(422,"Standort ist nicht konfiguriert")
+    try: return await radar_for_location(d.latitude,d.longitude)
+    except ValueError as e: raise HTTPException(422,str(e))
+
+@router.get("/assets/weather-radar/{image_id}.png")
+def weather_radar_image(image_id:str):
+    if not re.fullmatch(r"[a-f0-9]{64}",image_id): raise HTTPException(404)
+    from app.core.config import settings
+    path=settings.data_dir/"images"/"weather-radar"/f"{image_id}.png"
+    if not path.is_file(): raise HTTPException(404)
+    return FileResponse(path,media_type="image/png",headers={"Cache-Control":"public, max-age=86400, immutable"})
+
 @router.get("/devices/{device_id}/aircraft")
 async def aircraft(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
     try:
         data=await data_for_device(d,db,"aircraft")
-        return {"version":d.aircraft_version,**data}
+        return {"version":d.aircraft_version,**data,
+                "center":{"latitude":d.latitude,"longitude":d.longitude}}
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception: raise HTTPException(503,"Flugradar derzeit nicht verfügbar")
 @router.get("/devices/{device_id}/quiz")
-def quiz(device_id:str,db:Session=Depends(get_db)):
+def quiz(device_id:str,db:Session=Depends(get_db),limitPerCatalog:int|None=Query(None,ge=1,le=200),metadataOnly:bool=False):
     d=device_or_404(device_id,db); catalog_ids=[c.id for c in d.quiz_catalogs if c.enabled]
-    rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all() if catalog_ids else []
-    return {"version":d.quiz_version,"questions":[{"id":q.id,"q":q.question,"a":q.answers,"explanation":q.explanation,"minAge":q.min_age,"difficulty":q.difficulty,"tags":q.tags} for q in rows]}
+    rows=[]
+    if not metadataOnly and catalog_ids:
+        rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all()
+        if limitPerCatalog is not None:
+            # Preserve every assigned catalog; only the legacy device fallback is sampled.
+            rows=[q for catalog_id in catalog_ids for q in random.sample(
+                [q for q in rows if q.catalog_id==catalog_id],
+                min(limitPerCatalog,sum(q.catalog_id==catalog_id for q in rows)))]
+    return {"version":d.quiz_version,"catalogs":[{"id":c.id,"name":c.name} for c in d.quiz_catalogs if c.enabled],"questions":[{"id":q.id,"catalogId":q.catalog_id,"q":q.question,"a":q.answers,"explanation":q.explanation,"minAge":q.min_age,"difficulty":q.difficulty,"tags":q.tags} for q in rows]}
 @router.get("/assets/news/{article_id}/{variant}.jpg")
 def asset(article_id:int,variant:str):
     if variant not in {"thumb","hero"}: raise HTTPException(404)

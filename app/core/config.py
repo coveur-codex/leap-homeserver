@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     news_retention_days: int = 14
     log_level: str = "INFO"
     weather_cache_minutes: int = 15
+    aircraft_cache_seconds: int = Field(default=30, ge=5, le=900)
     aircraft_radius_nm: int = 25
     aircraft_limit: int = 20
     aircraft_provider_url: str = "https://api.adsb.lol/v2/lat/{latitude}/lon/{longitude}/dist/{radius}"

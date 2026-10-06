@@ -21,9 +21,26 @@ inklusive Ordner). Pfad-Traversal, absolute Pfade, Links, verschlüsselte Eintr�
 doppelte Pfade und beschädigte Archive werden abgelehnt. Bei einem Fehler bleibt
 die aktuelle Paketversion unverändert. Wie andere Upload-Blobs bleibt auch das
 hochgeladene Archiv intern gespeichert, wird aber nicht an Geräte verteilt.
+Ohne Zielordner wird eine `definition.json` im Archivstamm übersprungen: Der
+Server erzeugt sie für die neue Version aus den Paketmetadaten. Bei Chill-Paketen
+werden diese weiterhin aus dem unterstützten `manifest.json` im Archivstamm
+übernommen. Die übersprungene Definition unterliegt weiterhin den ZIP-Prüfungen
+und Größenlimits. Ein ZIP, das nur diese Definition enthält, wird abgelehnt;
+ein direkter Einzeldatei-Upload unter diesem reservierten Namen bleibt gesperrt.
 
 Ältere Versionen und Dateien bleiben erreichbar. Parallele Bearbeitungen verwenden
 `expected` als Versionsprüfung; veraltete Formulare liefern HTTP 409.
+
+Selbst angelegte Pakete lassen sich im Paketeditor unter **Assetpaket löschen**
+entfernen. Eine Bestätigungsseite zeigt Paket-ID, Anzahl der Versionen und
+betroffene Geräte. Erst nach ausdrücklicher Bestätigung werden das Paket und
+alle Versionen gelöscht; eine zwischenzeitliche Paketänderung erfordert eine
+neue Bestätigung. Quizpakete werden samt Katalog, Fragen und Gerätezuordnungen
+gelöscht. Geräte mit einem gelöschten Avatar wechseln auf Drachi. Andere
+Inhaltszuordnungen werden entfernt, bereits installierte Versionen erst über den
+normalen bestätigten Sync zur Bereinigung freigegeben. Gemeinsam genutzte Blobs
+bleiben im Speicher. Automatisch bereitgestellte Standardavatare, Chill-Szenen
+und das gemeinsame Kommunikationspaket sind vor dem Löschen geschützt.
 
 Die Migration `0005` ergänzt die Tabellen ohne vorhandene Quiz-Daten zu ersetzen.
 Beim Start werden bestehende Quiz-Kataloge einmalig als `quiz-<Katalog-ID>` übernommen.
@@ -238,3 +255,27 @@ Alle aktivierten Geräte nutzen einen gemeinsamen ESP-NOW-Gruppenchat. Transport
 Mesh/Relay und der Umgang mit vorübergehend unterschiedlichen Vorlagenversionen
 liegen in der Firmware. Die Vorschau zeigt nur ein lokales Beispiel mit einem
 normalen vorhandenen Avatar; das Auswählen einer Vorlage versendet nichts.
+
+## Chill V1
+
+Die mitgelieferten ZIPs unter `app/defaults/chill/` stammen aus den drei
+bereitgestellten Paketen; alle PNG-Sprites bleiben unverändert. Beim Start werden
+`chill-space`, `chill-fire` und `chill-snow` einmalig über dieselbe Blob-/Manifest-
+Veröffentlichung wie andere Pakete angelegt. Bestehende Pakete und bearbeitete
+Versionen werden nicht überschrieben. Die normalisierten ZIP-Manifeste enthalten
+`scene`, Sprite-Platzierungen, explizite Flammenframes und
+`minFirmware=1.0.0-beta.18`. Original-Manifeste mit `pattern` und Framezahl sind
+beim ZIP-Upload im vorhandenen Chill-Paketeditor ebenfalls unterstützt; das
+Quellmanifest wird in `definition.json` übersetzt, nicht als Syncmanifest geladen.
+README bleibt im ZIP, wird nicht an das Gerät übertragen.
+
+Pro Gerät unter „Firmware & Inhalte → Chill-Szene“ eine Szene oder „Aus“ wählen.
+Die bestehende `content_selection` speichert die Auswahl, ohne neue DB-Spalte oder
+Migration. Alte Mehrfachauswahlen verwenden deterministisch die erste Paket-ID;
+neue Mehrfachauswahlen werden abgewiesen. Der nächste reguläre Sync bietet genau
+das gewählte Paket an. Erst nach erfolgreicher Inventaraktivierung und
+`boot_success` werden ersetzte Pakete über die bestehenden `removeVersions`
+freigegeben. Die Display-Vorschau enthält eine Vollbild-Chill-Karte mit den
+Paket-Sprites, prozeduralen Effekten und Slider; Auswahländerungen sind nach dem
+Speichern sichtbar. Der Sliderwert in der Vorschau ist ein Beispiel, während die
+Firmware ihn pro Szene lokal speichert.
