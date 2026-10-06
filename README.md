@@ -25,6 +25,7 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 5. Unter **Kommunikation** gemeinsame Nachrichtenvorlagen bearbeiten, aktivieren und über die Position sortieren. **Kommunikation aktiv** steuert pro Gerät Teilnahme und Kommunikationsseite; neue Geräte und bestehende Geräte nach der Migration sind standardmäßig aktiviert. Vorlagen werden als gemeinsames Asset-Paket synchronisiert.
 6. Unter **Geräte → Quiz → Mathe-Quiz** Rechenart und Grenze einstellen (z. B. Addition bis 20, Subtraktion bis 100 oder Multiplikation bis 10 für das kleine Einmaleins). Leap erzeugt Aufgaben zufällig und offline mit vier Antworten, Rechenweg und Stellenwerttafel. Auf dem Gerät beginnt die Quizseite mit der Katalogauswahl einschließlich Mathe-Quiz.
 7. Im Geräteeditor die 428×142-Vorschau prüfen.
+8. Speicherbelegung für Flash (Firmware), LittleFS und PSRAM in der Geräteübersicht oder im Geräteeditor ablesen. Die Werte stammen vom letzten Check-in einer passenden Firmware und sind mit Zeitstempel versehen.
 
 Über **Design** in der Kopfzeile lässt sich zwischen **Hell**, **Dunkel** und
 **System** wechseln. Die Auswahl wird pro Browser gespeichert; **System** folgt

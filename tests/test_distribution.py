@@ -183,7 +183,7 @@ def test_migrations_fresh_and_existing_preserve_quiz(tmp_path):
     migrate("upgrade", "head")
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT question,min_age FROM quiz_questions").fetchall() == [("Bleibt erhalten?",7)]
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
     code = '''from app.core.database import SessionLocal
 from app.services.distribution import ensure_packages
 from app.models import AssetPackage,QuizQuestion

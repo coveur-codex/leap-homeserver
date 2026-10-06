@@ -4,7 +4,7 @@ import re
 import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -20,8 +20,24 @@ def device_or_404(device_id:str,db:Session)->Device:
     d=db.scalar(select(Device).where(Device.device_id==device_id,Device.enabled==True))
     if not d: raise HTTPException(404,"Gerät nicht gefunden")
     return d
+class MemoryUsage(BaseModel):
+    used: int = Field(ge=0, le=4294967295)
+    total: int = Field(ge=0, le=4294967295)
+
+    @model_validator(mode="after")
+    def check_capacity(self):
+        if self.used > self.total:
+            raise ValueError("Used memory exceeds capacity")
+        return self
+
+class MemorySnapshot(BaseModel):
+    flash: MemoryUsage
+    littlefs: MemoryUsage
+    psram: MemoryUsage
+
 class Checkin(BaseModel):
     firmwareVersion:str|None=None; battery:int|None=Field(None,ge=0,le=100); wifiRssi:int|None=None; freeFlash:int|None=None
+    memory: MemorySnapshot|None = None
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
@@ -34,7 +50,15 @@ def sync(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"newsVersion":d.news_version,"weatherVersion":d.weather_version,"aircraftVersion":d.aircraft_version,"quizVersion":d.quiz_version,"knowledgeVersion":d.knowledge_version}
 @router.post("/devices/{device_id}/checkin")
 def checkin(device_id:str,data:Checkin,db:Session=Depends(get_db)):
-    d=device_or_404(device_id,db); d.last_seen=datetime.now(timezone.utc); d.firmware_version=data.firmwareVersion; d.battery=data.battery; d.wifi_rssi=data.wifiRssi; d.free_flash=data.freeFlash; db.commit(); return {"ok":True,"serverTime":d.last_seen}
+    d = device_or_404(device_id, db)
+    d.last_seen = datetime.now(timezone.utc)
+    d.firmware_version = data.firmwareVersion
+    d.battery = data.battery
+    d.wifi_rssi = data.wifiRssi
+    d.free_flash = data.freeFlash
+    d.memory_usage = data.memory.model_dump() if data.memory else None
+    db.commit()
+    return {"ok": True, "serverTime": d.last_seen}
 @router.get("/devices/{device_id}/news")
 def news(device_id:str,limit:int|None=Query(None,ge=1,le=100),since:datetime|None=None,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); rows=articles_for_device(d,db,limit=limit,since=since)

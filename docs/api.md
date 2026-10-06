@@ -2,7 +2,7 @@
 
 Die vollständige, ausführbare Spezifikation liegt unter `/docs` und `/openapi.json`. Alle Geräteendpunkte beginnen mit `/api/v1/devices/{device_id}`. Deaktivierte oder unbekannte Geräte erhalten HTTP 404.
 
-`config` enthält Identität, Alter, Avatar-Typ (`avatar`), den frei konfigurierbaren Avatar-Namen (`avatarName`), geordnete Seiten, Spiele und Home-Slots. `news` akzeptiert `limit` (1–100) und einen ISO-8601-Parameter `since`. `weather` und `aircraft` liefern providerunabhängige, standortbezogene Modelle und kennzeichnen einen bei Providerfehler weiter verwendeten Cache mit `stale: true`. `quiz` filtert mit `minAge <= device.age`. `checkin` akzeptiert `firmwareVersion`, `battery`, `wifiRssi` und `freeFlash`.
+`config` enthält Identität, Alter, Avatar-Typ (`avatar`), den frei konfigurierbaren Avatar-Namen (`avatarName`), geordnete Seiten, Spiele und Home-Slots. `news` akzeptiert `limit` (1–100) und einen ISO-8601-Parameter `since`. `weather` und `aircraft` liefern providerunabhängige, standortbezogene Modelle und kennzeichnen einen bei Providerfehler weiter verwendeten Cache mit `stale: true`. `quiz` filtert mit `minAge <= device.age`. `checkin` akzeptiert `firmwareVersion`, `battery`, `wifiRssi` und `freeFlash` sowie optional `memory`.
 
 Bildassets sind stabile URLs und senden `Cache-Control: public, max-age=86400, immutable`.
 
@@ -20,6 +20,29 @@ Dieselben drei Geräteendpunkte stehen passend zur bisherigen API auch unter `/a
 ## Versionierte Assets und OTA
 
 Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.
+
+## Gerätespeicher
+
+Ein Check-in kann die Belegung in Bytes melden:
+
+```json
+{
+  "memory": {
+    "flash": {"used": 2097152, "total": 4194304},
+    "littlefs": {"used": 838861, "total": 2097152},
+    "psram": {"used": 2097152, "total": 8388608}
+  }
+}
+```
+
+`used` und `total` müssen nichtnegative Werte sein; `used <= total`.
+`total: 0` kennzeichnet nicht verfügbaren Speicher. Flash ist die Belegung des
+Firmware-Images im aktiven OTA-Slot; LittleFS ist die Inhalts-/Dateisystempartition.
+`freeFlash` bleibt der freie LittleFS-Platz für bestehende Clients und Downloads.
+Die Geräteübersicht und der Geräteeditor zeigen den Stand des letzten Check-ins
+mit Zeitstempel als belegt / gesamt, mit Dezimalkomma und einer Nachkommastelle
+(MB = 1.048.576 Bytes). Ältere Geräte ohne `memory` zeigen keine Speicherwerte.
+Migration `0008` ergänzt ein optionales JSON-Feld, ohne bestehende Daten zu ändern.
 
 
 ## Regenradar für Geräte
@@ -77,7 +100,7 @@ jede Zeile in `quiz.questions` enthält zusätzlich `catalogId`. Das bisherige
 `questions`-Array bleibt für ältere Firmware erhalten. Neue Firmware zeigt zuerst
 die Katalogauswahl und lädt Fragen ausschließlich aus dem gewählten Katalog.
 Versionierte Quiz-Pakete verwenden weiterhin `definition.name` und `questionsFile`.
-Migration `0007` setzt bestehende Geräte auf Addition bis 20 und erhöht ihre
+Migration `0008` setzt bestehende Geräte auf Addition bis 20 und erhöht ihre
 Konfigurationsversion, damit die Einstellung beim nächsten Sync übertragen wird.
 
 ## Flugradar
