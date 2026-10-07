@@ -194,7 +194,7 @@ def edit_quiz(package_id: str, content: str = Form(), expected: int = Form(), db
 
 @router.get("/firmware")
 def firmware(request: Request, db: Session = Depends(get_db)):
-    releases = db.scalars(select(FirmwareRelease)).all()
+    releases = db.scalars(select(FirmwareRelease).where(FirmwareRelease.deleted.is_(False))).all()
     releases.sort(key=lambda r: service.version_key(r.version), reverse=True)
     return templates.TemplateResponse(request, "firmware.html", {"releases": releases})
 
@@ -204,7 +204,7 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
     if channel not in {"stable", "beta"} or len(notes) > 20000:
         raise HTTPException(422)
     if db.scalar(select(FirmwareRelease).where(FirmwareRelease.version == version)):
-        raise HTTPException(409, "Firmware-Version existiert bereits; Binary bleibt unverändert")
+        raise HTTPException(409, "Firmware-Version wurde bereits verwendet; bitte eine neue Version vergeben")
     if not file.filename or not file.filename.lower().endswith(".bin"):
         raise HTTPException(422, "Eine ESP32-S3 App-Binary (.bin) hochladen")
     info = await service.store_upload(file, 16 * 1024 * 1024)
@@ -219,10 +219,45 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
 @router.post("/firmware/{release_id}/promote")
 def promote(release_id: int, db: Session = Depends(get_db)):
     release = db.get(FirmwareRelease, release_id)
-    if not release:
+    if not release or release.deleted:
         raise HTTPException(404)
+    if release.withdrawn:
+        raise HTTPException(409, "Zurückgezogene Firmware zuerst wieder freigeben")
     release.channel = "stable"
     db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/withdraw")
+def withdraw_firmware(release_id: int, db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    release.withdrawn = True
+    db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/restore")
+def restore_firmware(release_id: int, db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    if not service.blob_path(release.sha256).is_file():
+        raise HTTPException(409, "Binary fehlt; Firmware kann nicht wieder freigegeben werden")
+    release.withdrawn = False
+    db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/delete")
+def delete_firmware(release_id: int, confirm: bool = Form(False), db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    if not confirm:
+        raise HTTPException(422, "Endgültiges Löschen bitte bestätigen")
+    service.delete_firmware(db, release)
     return redir("/firmware")
 
 

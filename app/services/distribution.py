@@ -513,9 +513,25 @@ def version_key(version):
 
 
 def firmware_target(db, device):
-    releases = db.scalars(select(FirmwareRelease)).all()
+    releases = db.scalars(select(FirmwareRelease).where(
+        FirmwareRelease.withdrawn.is_(False), FirmwareRelease.deleted.is_(False))).all()
     releases = [r for r in releases if device.firmware_channel == "beta" or r.channel == "stable"]
     return max(releases, key=lambda r: version_key(r.version), default=None)
+
+
+def delete_firmware(db, release):
+    # Keep a tombstone: old plans must never resolve to a replacement binary.
+    release.withdrawn = release.deleted = True
+    db.commit()
+    digest = release.sha256
+    if db.scalar(select(FirmwareRelease.id).where(
+            FirmwareRelease.sha256 == digest, FirmwareRelease.deleted.is_(False))):
+        return
+    # Blobs are shared with assets, including their historical versions.
+    for manifest in db.scalars(select(AssetVersion.manifest)):
+        if any(item["sha256"] == digest for item in manifest["files"]):
+            return
+    blob_path(digest).unlink(missing_ok=True)
 
 
 def firmware_offer(db, device, installed):

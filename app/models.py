@@ -101,6 +101,8 @@ class FirmwareRelease(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     version: Mapped[str] = mapped_column(String(40), unique=True)
     channel: Mapped[str] = mapped_column(String(10))
+    withdrawn: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     notes: Mapped[str] = mapped_column(Text, default="")
     sha256: Mapped[str] = mapped_column(String(64))
     size: Mapped[int] = mapped_column(Integer)
