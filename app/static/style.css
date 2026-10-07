@@ -91,3 +91,13 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 .chill-card canvas { display: block; width: 100%; height: 100%; object-fit: fill; }
 .chill-card [data-chill-slider] { position: absolute; bottom: 8%; left: 29%; width: 42%; opacity: 0; transition: opacity .6s; }
 .chill-card:hover [data-chill-slider], .chill-card:focus-within [data-chill-slider] { opacity: .6; }
+
+/* Keep device configuration compact above the display preview. */
+.device-settings{align-items:start}
+.device-settings section{min-width:0}
+.device-settings h2{margin-top:0}
+.device-settings h3{margin:1rem 0 .5rem;font-size:1rem}
+.device-settings small{color:var(--muted)}
+.device-settings details{margin:.5rem 0}
+.device-settings details p{font-size:.9rem;color:var(--muted)}
+.device-settings-save{margin-top:1rem}
