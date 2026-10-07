@@ -14,7 +14,9 @@ Die Weboberfläche ist unter **http://localhost:8080/** (im Heimnetz beispielswe
 
 ## Daten und Backup
 
-Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unter `database/`, Downloads unter `cache/`, verarbeitete Bilder unter `images/` Logs unter `logs/` und versionierte Assets/Firmware unter `distribution/`. Für ein konsistentes Backup den Container kurz stoppen und das gesamte `data/`-Verzeichnis sichern. Es müssen keine Containerdateien editiert werden.
+Unter **System → Datenhaltung → SQLite-Datenbank herunterladen** lässt sich die komplette SQLite-Datenbank als datierte `.db`-Datei sichern. Der Download erstellt mit der SQLite-Backup-Funktion eine konsistente Kopie im laufenden Betrieb, einschließlich bereits bestätigter Änderungen im WAL-Journal. Die Datei kann direkt mit SQLite geöffnet werden; zusätzliche Journaldateien sind nicht erforderlich. Bilder, Cache, Assets und Firmware-Dateien sind darin nicht enthalten.
+
+Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unter `database/`, Downloads unter `cache/`, verarbeitete Bilder unter `images/` Logs unter `logs/` und versionierte Assets/Firmware unter `distribution/`. Für ein vollständiges Backup inklusive dieser Dateien den Container kurz stoppen und das gesamte `data/`-Verzeichnis sichern. Es müssen keine Containerdateien editiert werden.
 
 ## Bedienung
 
