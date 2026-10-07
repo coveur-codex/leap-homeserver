@@ -215,3 +215,15 @@ Ansicht `/devices/{id}/quiz-results` mit Aufgabe, Antworten, Markierungen,
 Antwortzeit und Gesamtzahl richtiger Antworten. Zeitstempel werden in UTC gezeigt.
 Firmware ab beta.20 überträgt neue Antworten automatisch; frühere Antworten
 wurden auf den Geräten nicht aufgezeichnet und lassen sich nicht nachträglich abrufen.
+
+## Spieleauswahl
+
+Im Geräteeditor unter **Spiele auf dem Gerät** wird die Auswahl pro Gerät gespeichert.
+`config.games` enthält `tamagotchi`, `snake`, `hot_potato`, `simon_motion`,
+`tilt_maze`, `connect_four`, `kitchen` und `crab_journey`, jeweils mit einem booleschen `enabled`.
+Die Firmware zeigt und startet ausschließlich freigegebene Spiele auf der aktivierten
+Spieleseite. Alle können abgewählt werden. Die Auswahl erhöht `configVersion` und
+wird beim nächsten Sync übernommen; sie gilt danach auch offline. Neue und
+migrierte Geräte behalten zunächst alle acht Spiele. Die Spielprogramme bleiben
+in der Firmware. Für die vollständige Durchsetzung muss auch die Firmware
+aktualisiert werden; ältere Firmware blendet Küche und Krabbenreise immer ein.

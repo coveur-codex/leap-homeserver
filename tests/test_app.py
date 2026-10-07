@@ -19,7 +19,7 @@ def test_device_creation_and_config(client,db):
  config=client.get("/api/v1/devices/leap-erik/config").json()
  assert config["pages"][0]["id"]=="home"
  assert (config["age"],config["avatar"],config["avatarName"])==(42,"redpanda","Rudi")
- assert {g["id"] for g in config["games"] if g["enabled"]} == {"tamagotchi","snake","hot_potato","simon_motion","tilt_maze","connect_four"}
+ assert {g["id"] for g in config["games"] if g["enabled"]} == {"tamagotchi","snake","hot_potato","simon_motion","tilt_maze","connect_four","kitchen","crab_journey"}
  page=client.get("/devices").text
  assert 'max="18"' not in page and "frog" in page and "redpanda" in page
 def test_config_version(client,db):
