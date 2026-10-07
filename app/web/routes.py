@@ -1,7 +1,11 @@
+import logging
 import re
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter,Depends,File,Form,HTTPException,Query,Request,UploadFile
-from fastapi.responses import HTMLResponse,RedirectResponse
+from fastapi.responses import FileResponse,HTMLResponse,RedirectResponse
+from starlette.background import BackgroundTask
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func,select
 from sqlalchemy.engine import make_url
@@ -12,6 +16,7 @@ from app.core.games import GAME_REGISTRY
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages, page_enabled
 from app.services import communication
+from app.services.backup import backup_database
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
 from app.services.location_data import cache_for_device
@@ -149,4 +154,29 @@ def system(request:Request,db:Session=Depends(get_db)):
         weather_at=aware(location.weather_fetched_at); aircraft_at=aware(location.aircraft_fetched_at)
         location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None,"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aircraft_at+timedelta(seconds=settings.aircraft_cache_seconds) if aircraft_at else None,"aircraft_error":location.aircraft_error})
     latest_feed=db.scalar(select(func.max(Feed.last_success)))
-    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_interval":settings.aircraft_cache_seconds,"aircraft_radius":round(settings.aircraft_radius_nm*1.852,1),"started_at":started_at,"uptime":now-started_at,"now":now})
+    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"sqlite_backup_available":db.get_bind().dialect.name=="sqlite","cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_interval":settings.aircraft_cache_seconds,"aircraft_radius":round(settings.aircraft_radius_nm*1.852,1),"started_at":started_at,"uptime":now-started_at,"now":now})
+
+
+@router.get("/system/database/backup", response_class=FileResponse)
+def download_database_backup(db: Session = Depends(get_db)):
+    engine = db.get_bind()
+    if engine.dialect.name != "sqlite":
+        raise HTTPException(503, "Der Datenbank-Download ist nur für SQLite verfügbar.")
+    temporary = None
+    try:
+        temporary = TemporaryDirectory(prefix="leap-backup-")
+        snapshot = Path(temporary.name) / "leap.db"
+        backup_database(engine, snapshot)
+        filename = datetime.now(timezone.utc).strftime("leap-backup-%Y-%m-%d_%H-%M-%S-UTC.db")
+        return FileResponse(
+            snapshot,
+            media_type="application/vnd.sqlite3",
+            filename=filename,
+            headers={"Cache-Control": "no-store"},
+            background=BackgroundTask(temporary.cleanup),
+        )
+    except Exception:
+        if temporary is not None:
+            temporary.cleanup()
+        logging.getLogger("leap").exception("database_backup_failed")
+        raise HTTPException(500, "Das Datenbank-Backup konnte nicht erstellt werden.") from None

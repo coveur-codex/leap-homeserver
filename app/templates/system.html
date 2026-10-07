@@ -28,7 +28,12 @@
 </section>
 <div class="grid system-grid">
   <section><h2>Server</h2><dl><dt>Version</dt><dd>{{ version }}</dd><dt>Letzter Start</dt><dd>{{ timestamp(started_at) }}</dd><dt>Laufzeit</dt><dd>{{ uptime.days }} Tage, {{ uptime.seconds // 3600 }} Std., {{ (uptime.seconds % 3600) // 60 }} Min.</dd><dt>Scheduler</dt><dd><span class="system-state ok">Aktiv</span> Feeds und Standortdaten minütlich geprüft; Bereinigung um 03:00 Uhr</dd></dl></section>
-  <section><h2>Datenhaltung</h2><dl><dt>Datenbank</dt><dd><code>{{ database }}</code></dd><dt>Cache</dt><dd>{{ '%.1f'|format(cache_size / 1048576) }} MiB <small>({{ cache_size }} Bytes)</small></dd><dt>Bildspeicher</dt><dd>{{ '%.1f'|format(image_size / 1048576) }} MiB <small>({{ image_size }} Bytes)</small></dd></dl></section>
+  <section><h2>Datenhaltung</h2><dl><dt>Datenbank</dt><dd><code>{{ database }}</code></dd><dt>Cache</dt><dd>{{ '%.1f'|format(cache_size / 1048576) }} MiB <small>({{ cache_size }} Bytes)</small></dd><dt>Bildspeicher</dt><dd>{{ '%.1f'|format(image_size / 1048576) }} MiB <small>({{ image_size }} Bytes)</small></dd></dl>
+    {% if sqlite_backup_available %}
+    <form action="/system/database/backup" method="get" class="inline"><button type="submit">SQLite-Datenbank herunterladen</button></form>
+    <p class="muted">Vollständige, konsistente Datenbankkopie als Backup – auch im laufenden Betrieb. Bilder, Cache, Assets und Firmware-Dateien sind nicht enthalten.</p>
+    {% else %}<p class="muted">Der Datenbank-Download ist nur für SQLite verfügbar.</p>{% endif %}
+  </section>
   <section><h2>News</h2><dl><dt>Feeds</dt><dd>{{ feeds }}</dd><dt>Letzte erfolgreiche Aktualisierung</dt><dd>{{ timestamp(latest_feed) }}</dd><dt>Fehler</dt><dd>{{ errors }}</dd></dl></section>
 </div>
 {% endblock %}
