@@ -63,7 +63,8 @@ Temporäre Uploads liegen unter `distribution/staging/`. Erst nach vollständige
 Schreiben und fsync wird eine Datei atomar an ihre Hash-Adresse verschoben. Erst
 anschließend werden Manifest und aktuelle Versionsnummer gemeinsam in der DB
 veröffentlicht. Ein abgebrochener Vorgang kann unreferenzierte Blobs hinterlassen,
-aber keine gültige Altversion überschreiben. V1 löscht keine alten Blobs.
+aber keine gültige Altversion überschreiben. Alte Asset-Blobs bleiben erhalten;
+Firmware-Blobs können über das endgültige Löschen eines Releases entfernt werden.
 
 Ein Manifest enthält `schemaVersion`, `packageId`, `type`, `version`, `definition`
 und `files`. Jeder Dateieintrag enthält relativen `path`, `size`, `sha256` und eine
@@ -122,6 +123,19 @@ Versionsformate erhalten kein automatisches OTA-Angebot, bis der Client eine
 vergleichbare Version meldet. Der serverseitige Gerätekanal ist maßgeblich, nicht
 der optional vom Gerät gemeldete Kanal.
 
+**Zurückziehen** sperrt ein Release für beide Gerätekanäle und seinen Binary-Download
+(HTTP 404), auch für bereits ausgestellte Sync-Pläne. **Wieder freigeben** macht
+es im bisherigen Kanal erneut verfügbar; eine Stable-Freigabe ist während des
+Rückzugs gesperrt. **Endgültig löschen** erfordert eine Bestätigung und entfernt
+das Release aus der Verwaltung. Die Binary wird gelöscht, sofern sie nicht von
+anderen Releases (auch zurückgezogenen) oder historischen Asset-Versionen verwendet
+wird. Ein interner Datensatz reserviert Version und Release-ID dauerhaft, damit
+alte URLs und Sync-Pläne niemals auf eine Ersatz-Binary verweisen. Bereits
+installierte Firmware, Geräteberichte und Sync-Historie bleiben erhalten.
+Laufende Downloads und bereits auf Geräte geladene Binaries lassen sich damit
+nicht rückgängig machen; es wird kein automatisches Downgrade ausgelöst.
+Migration `0011` lässt bestehende Releases zunächst weiterhin verfügbar.
+
 ## API-Ablauf
 
 Die bisherigen GET-Endpunkte `/config`, `/sync`, `/version`, `/quiz` sowie `/checkin`
@@ -149,6 +163,8 @@ Downloads (HTTP GET):
 
 Dateien und Binaries werden über FileResponse gestreamt, mit Content-Length,
 Hash-ETag und unveränderlichen URLs. Der Client lädt Einzeldateien, keine ZIPs.
+Firmware-Antworten verwenden `Cache-Control: no-store`, damit neue Downloads
+nach einem Rückzug am Server geprüft werden.
 Firmware wird blockweise direkt in die inaktive OTA-Partition geschrieben und
 benötigt keine Zwischenkopie in LittleFS.
 

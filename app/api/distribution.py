@@ -54,11 +54,11 @@ def asset_file(package_id: str, version: int, path: str, db: Session = Depends(g
 @router.get("/firmware/{release_id}/binary")
 def firmware_binary(release_id: int, db: Session = Depends(get_db)):
     release = db.get(FirmwareRelease, release_id)
-    if not release or not service.blob_path(release.sha256).is_file():
+    if not release or release.withdrawn or release.deleted or not service.blob_path(release.sha256).is_file():
         raise HTTPException(404)
     return FileResponse(service.blob_path(release.sha256), media_type="application/octet-stream",
                         filename=f"leap-{release.version}.bin", headers={"ETag": '"' + release.sha256 + '"',
-                        "Cache-Control": "public, max-age=31536000, immutable"})
+                        "Cache-Control": "no-store"})
 
 @router.post("/devices/{device_id}/sync")
 def boot_sync(device_id: str, report: BootReport, db: Session = Depends(get_db)):
