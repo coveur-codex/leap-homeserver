@@ -207,11 +207,15 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
         raise HTTPException(409, "Firmware-Version wurde bereits verwendet; bitte eine neue Version vergeben")
     if not file.filename or not file.filename.lower().endswith(".bin"):
         raise HTTPException(422, "Eine ESP32-S3 App-Binary (.bin) hochladen")
-    info = await service.store_upload(file, 16 * 1024 * 1024)
+    info = await service.store_upload(file, service.FIRMWARE_SLOT_SIZE)
     with service.blob_path(info["sha256"]).open("rb") as stream:
         header = stream.read(24)
     if len(header) < 24 or header[0] != 0xE9 or int.from_bytes(header[12:14], "little") != 9:
         raise HTTPException(422, "Keine ESP32-S3 App-Binary (kein vollständiges Flash-Image hochladen)")
+    if not service.universal_firmware(service.blob_path(info["sha256"])):
+        raise HTTPException(422, "Nur universelle OTA-Firmware mit NVS-Gerätekonfiguration hochladen. "
+                            "Ohne LocalConfig.h oder mit LEAP_PROVISION_DEVICE=0 bauen; "
+                            "Installations-Binaries mit Gerätewerten sind nicht für OTA geeignet.")
     db.add(FirmwareRelease(version=version, channel=channel, notes=notes, **info))
     db.commit()
     return redir("/firmware")

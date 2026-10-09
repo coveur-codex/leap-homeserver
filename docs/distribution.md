@@ -111,7 +111,12 @@ Es gibt keine separate manuelle Paketzuordnung und keinen Hintergrund-Push.
 `Firmware` akzeptiert ESP32-S3 App-Binaries aus der Arduino IDE, keine Bootloader
 oder zusammengeführten Flash-Images. Dateiendung, ESP-Image-Magic und S3-Chip-ID
 werden geprüft. Die Firmware prüft zusätzlich das vollständige Image und seine
-Partitionstauglichkeit vor der OTA-Aktivierung. Maximalgröße: 16 MiB pro Upload.
+Partitionstauglichkeit vor der OTA-Aktivierung. Maximalgröße: 4 MiB pro Upload.
+Nur universelle Builds mit `LEAP_UNIVERSAL_NVS_V1` und ohne
+`LEAP_DEVICE_PROVISIONING_V1` werden akzeptiert und für OTA ausgewählt.
+Die gerätespezifische Kabelinstallation speichert zuvor Geräte-ID, Netzwerk,
+Taster-Pins und MPU-Ausrichtung in NVS; OTA liest diese Werte ausschließlich.
+Alte Releases bleiben archiviert, werden aber nicht automatisch angeboten.
 
 Versionen haben das Format `X.Y.Z` oder `X.Y.Z-beta.N`. Versionen sind einmalig;
 Binaries werden nie ersetzt. Releases speichern Kanal, Notes, UTC-Uploadzeit,
@@ -145,7 +150,7 @@ bleiben erhalten. Der neue Start-Sync ist ein POST:
 POST /api/v1/devices/leap-lars/sync
 Content-Type: application/json
 
-{"firmwareVersion":"0.8.0","firmwareChannel":"stable",
+{"firmwareVersion":"1.0.0-beta.24","firmwareChannel":"stable","deviceConfigSchema":1,
  "installedAssets":{"avatar-dragon":1},"freeFlash":4000000}
 ```
 
@@ -154,6 +159,9 @@ Antwort: `syncId`, `configVersion`, `configUrl`, `firmwareChannel`, `firmware`
 `cleanupAllowed: false`, `cleanupAfter: "boot_success"` und Installationsstrategie.
 `assetUpdates` enthält Paketversionen, Manifest-URLs und `downloadBytes`.
 `firmware` enthält Version, Release-ID, Kanal, Größe, Hash und Binary-URL.
+`deviceConfigSchema` meldet das tatsächlich erfolgreich geladene lokale NVS-Format
+(aktuell 1). Fehlt das Feld oder ist es 0, bleibt `firmware` null: erst das Gerät
+per USB provisionieren. Asset- und Server-Konfiguration-Sync bleiben verfügbar.
 
 Downloads (HTTP GET):
 
