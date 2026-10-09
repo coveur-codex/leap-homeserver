@@ -512,10 +512,25 @@ def version_key(version):
     return (int(major), int(minor), int(patch), beta is None, int(beta or 0))
 
 
+UNIVERSAL_CONFIG_MARKER = b"LEAP_UNIVERSAL_NVS_V1"
+PROVISIONING_CONFIG_MARKER = b"LEAP_DEVICE_PROVISIONING_V1"
+FIRMWARE_SLOT_SIZE = 4 * 1024 * 1024
+
+
+def universal_firmware(path):
+    """Build-mode guard, not cryptographic authentication of the firmware."""
+    if not path.is_file() or not 24 < path.stat().st_size <= FIRMWARE_SLOT_SIZE:
+        return False
+    data = path.read_bytes()
+    return (data[0] == 0xE9 and int.from_bytes(data[12:14], "little") == 9
+            and UNIVERSAL_CONFIG_MARKER in data and PROVISIONING_CONFIG_MARKER not in data)
+
+
 def firmware_target(db, device):
     releases = db.scalars(select(FirmwareRelease).where(
         FirmwareRelease.withdrawn.is_(False), FirmwareRelease.deleted.is_(False))).all()
-    releases = [r for r in releases if device.firmware_channel == "beta" or r.channel == "stable"]
+    releases = [r for r in releases if (device.firmware_channel == "beta" or r.channel == "stable")
+                and universal_firmware(blob_path(r.sha256))]
     return max(releases, key=lambda r: version_key(r.version), default=None)
 
 

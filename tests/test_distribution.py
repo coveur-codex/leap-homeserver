@@ -22,7 +22,7 @@ def create(client, key, kind="chill"):
 
 
 def sync(client, assets=None, firmware="0.8.0"):
-    response = client.post("/api/v1/devices/leap-test/sync", json={"firmwareVersion": firmware, "installedAssets": assets or {}})
+    response = client.post("/api/v1/devices/leap-test/sync", json={"firmwareVersion": firmware, "deviceConfigSchema": 1, "installedAssets": assets or {}})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -34,7 +34,7 @@ def event(client, plan, **data):
 def binary():
     data = bytearray(256)
     data[0], data[1], data[12] = 0xE9, 1, 9
-    return bytes(data)
+    return bytes(data) + service.UNIVERSAL_CONFIG_MARKER
 
 
 def upload_firmware(client, version, channel):
@@ -378,3 +378,41 @@ def test_zip_ignored_definition_still_validates_archive(client, db):
             files={'files': ('bad.zip', archive)}, follow_redirects=False)
         assert response.status_code == 422, response.text
         assert db.get(AssetPackage, 'chill-generated-invalid').current_version == 1
+
+
+def test_ota_rejects_provisioning_and_legacy_images(client, db):
+    device(db)
+    def upload(data, version):
+        return client.post("/firmware", data={"version": version, "channel": "stable"},
+                           files={"file": ("leap.bin", data)}, follow_redirects=False)
+    assert upload(binary() + service.PROVISIONING_CONFIG_MARKER, "1.0.1").status_code == 422
+    legacy = binary().replace(service.UNIVERSAL_CONFIG_MARKER, b"")
+    assert upload(legacy, "1.0.2").status_code == 422
+    assert upload(binary() + b"x" * service.FIRMWARE_SLOT_SIZE, "1.0.3").status_code == 413
+    # Pre-existing legacy releases remain downloadable, but must never be offered.
+    digest = hashlib.sha256(legacy).hexdigest()
+    path = service.blob_path(digest)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(legacy)
+    db.add(FirmwareRelease(version="9.0.0", channel="stable", notes="Legacy",
+                           sha256=digest, size=len(legacy)))
+    db.commit()
+    assert sync(client)["firmware"] is None
+    assert upload_firmware(client, "1.0.0", "stable").status_code == 303
+    # The exact same binary is offered to two independently provisioned devices.
+    other = Device(device_id="leap-other", name="Other", firmware_channel="stable")
+    initialize_pages(other); db.add(other); db.commit()
+    a = sync(client)["firmware"]
+    b = client.post("/api/v1/devices/leap-other/sync",
+                    json={"firmwareVersion": "0.8.0", "deviceConfigSchema": 1, "installedAssets": {}}).json()["firmware"]
+    assert a == b and a["version"] == "1.0.0"
+
+
+def test_legacy_devices_need_usb_provisioning_before_ota(client, db):
+    device(db)
+    assert upload_firmware(client, "1.0.0", "stable").status_code == 303
+    for report in ({"firmwareVersion": "0.8.0"},
+                   {"firmwareVersion": "0.8.0", "deviceConfigSchema": 0}):
+        response = client.post("/api/v1/devices/leap-test/sync", json=report)
+        assert response.status_code == 200 and response.json()["firmware"] is None
+    assert sync(client)["firmware"]["version"] == "1.0.0"

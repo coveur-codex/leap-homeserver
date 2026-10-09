@@ -23,7 +23,7 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 1. Unter **Geräte** ein Gerät anlegen und Seiten, Interessen sowie Wetterkoordinaten konfigurieren.
 2. Unter **News** Kategorien und RSS-/Atom-Feeds anlegen. Ein Feed wird sofort geprüft und importiert.
 3. Unter **Assets** Pakete verwalten, Dateien hochladen und Quiz-Fragen bearbeiten oder importieren. Avatar, Chill, Quiz und weitere Inhalte in den Geräteeinstellungen auswählen.
-4. Unter **Firmware** eine ESP32-S3 App-Binary hochladen und zunächst als Beta testen; anschließend als Stable freigeben. Den Kanal je Gerät einstellen. Releases können zurückgezogen, wieder freigegeben oder nach Bestätigung endgültig gelöscht werden. Bereits installierte Firmware bleibt auf den Geräten.
+4. Jedes Gerät einmal per USB mit der neuen Firmware und seiner LocalConfig starten, damit die Gerätewerte in NVS gespeichert werden. Unter **Firmware** eine universelle ESP32-S3 App-Binary (maximal 4 MiB, ohne LocalConfig.h oder mit `LEAP_PROVISION_DEVICE=0` gebaut) hochladen und zunächst als Beta testen; anschließend als Stable freigeben. Den Kanal je Gerät einstellen. Releases können zurückgezogen, wieder freigegeben oder nach Bestätigung endgültig gelöscht werden. Bereits installierte Firmware bleibt auf den Geräten.
 5. Unter **Kommunikation** gemeinsame Nachrichtenvorlagen bearbeiten, aktivieren und über die Position sortieren. **Kommunikation aktiv** steuert pro Gerät Teilnahme und Kommunikationsseite; neue Geräte und bestehende Geräte nach der Migration sind standardmäßig aktiviert. Vorlagen werden als gemeinsames Asset-Paket synchronisiert.
 6. Unter **Geräte → Quiz → Mathe-Quiz** Rechenart und Grenze einstellen (z. B. Addition bis 20, Subtraktion bis 100 oder Multiplikation bis 10 für das kleine Einmaleins). Leap erzeugt Aufgaben zufällig und offline mit vier Antworten, Rechenweg und Stellenwerttafel. Auf dem Gerät beginnt die Quizseite mit der Katalogauswahl einschließlich Mathe-Quiz.
 7. Im Geräteeditor die 428×142-Vorschau prüfen.
@@ -111,3 +111,14 @@ Antwort und Antwortzeit. Homeserver zuerst mit `alembic upgrade head` aktualisie
 danach Firmware ab **1.0.0-beta.20** installieren. Antworten werden bei WLAN-Ausfall
 lokal gepuffert und später übertragen; alte Quizantworten sind nicht rückwirkend
 verfügbar. Siehe [API-Vertrag](docs/api.md#quiz-antworten-und-antwortzeiten).
+
+
+Universelle OTA-Firmware lädt Geräte-ID, WLAN, Tasterbelegung und MPU-Ausrichtung
+von jedem Gerät aus NVS. Der Server akzeptiert nur Binaries mit dem Build-Marker
+`LEAP_UNIVERSAL_NVS_V1` und ohne `LEAP_DEVICE_PROVISIONING_V1`. Der Marker schützt
+vor versehentlich verteilten Installations-Builds; er ist keine Signatur.
+Vorhandene alte Releases bleiben zum Download erhalten, werden aber nicht mehr
+für OTA ausgewählt. Clients ohne `deviceConfigSchema=1` im Start-Sync erhalten
+kein Firmware-Angebot, bis sie per USB provisioniert sind. Assets und die
+Homeserver-Konfiguration werden weiterhin synchronisiert. Installation und
+Hardware-Mapping sind im Firmware-README beschrieben.
