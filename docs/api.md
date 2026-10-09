@@ -227,3 +227,11 @@ wird beim nächsten Sync übernommen; sie gilt danach auch offline. Neue und
 migrierte Geräte behalten zunächst alle acht Spiele. Die Spielprogramme bleiben
 in der Firmware. Für die vollständige Durchsetzung muss auch die Firmware
 aktualisiert werden; ältere Firmware blendet Küche und Krabbenreise immer ein.
+
+Ab Firmware 1.0.1 ergänzt `/api/v1/devices/{id}/weather/radar` die Metadaten um
+`mapWidthKm: 50`. Das 112×112-PNG zeigt einen standortzentrierten quadratischen
+Mercator-Ausschnitt mit 50 km Seitenlänge am Mittelpunkt. Firmware und Server
+verwenden `R = 6378.137 km` und den Maßstabsfaktor `cos(latitude)`; Flugpositionen
+werden in denselben Ausschnitt projiziert. Der serverseitige Flugzeug-Abrufradius
+ist unabhängig davon. Radar-Bilder werden für den neuen Zuschnitt getrennt von
+alten Zoom-7-Cachebildern gespeichert.
