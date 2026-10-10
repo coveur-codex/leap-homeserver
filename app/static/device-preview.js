@@ -152,8 +152,8 @@ document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
   const rect = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
   const circle = (x,y,r,c) => { ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); };
   const triangle = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-w,y+h);ctx.lineTo(x+w,y+h);ctx.fill(); };
-  jump.addEventListener('click', () => { if (!lift) velocity=-240; });
-  fire.addEventListener('click', () => { if (!cooldown) { flame=.24; cooldown=.95; } });
+  jump.addEventListener('click', () => { if (!lift) velocity=-180; });
+  fire.addEventListener('click', () => { if (!cooldown) { flame=.42; cooldown=.95; } });
   duck.addEventListener('pointerdown', event => { down=true; duck.setPointerCapture(event.pointerId); });
   ['pointerup','pointercancel','lostpointercapture','blur'].forEach(type => duck.addEventListener(type, () => { down=false; }));
   duck.addEventListener('keydown', event => { if (event.key===' ' || event.key==='Enter') { event.preventDefault(); down=true; } });
@@ -161,9 +161,9 @@ document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
   const draw = now => {
     requestAnimationFrame(draw);
     if (panel.hidden || card.hidden || document.hidden) { previous=now; down=false; return; }
-    const dt = previous ? Math.min((now-previous)/1000,.1) : 0; previous=now; time+=dt; distance+=78*dt;
+    const dt = previous ? Math.min((now-previous)/1000,.1) : 0; previous=now; time+=dt; distance+=60*dt;
     flame=Math.max(0,flame-dt); cooldown=Math.max(0,cooldown-dt);
-    if (lift>0 || velocity<0) { lift-=velocity*dt+200*dt*dt; velocity+=400*dt; if (lift<=0) {lift=0;velocity=0;} }
+    if (lift>0 || velocity<0) { lift-=velocity*dt+112.5*dt*dt; velocity+=225*dt; if (lift<=0) {lift=0;velocity=0;} }
     const crouch=down && !lift && velocity>=0;
     rect(0,0,342,142,'#a5dfff'); circle(284,37,12,'#fff36b');
     for (let x=-(distance*.12%140);x<380;x+=140) { circle(x,39,7,'#eff3ef');circle(x+10,35,10,'#eff3ef');circle(x+22,39,7,'#eff3ef'); }
@@ -187,8 +187,8 @@ document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
     if(!crouch) {triangle(x+9,feet-25-Math.floor(time*8)%3,6,15,edge);triangle(x+9,feet-23-Math.floor(time*8)%3,4,12,'#adffff');}
     const stride=lift?0:Math.floor(time*12)%2?3:-2;
     rect(x+5+stride,feet-4,6,4,edge);rect(x+19-stride,feet-4,6,4,edge);
-    if(flame) { circle(91,y+16,8,'#ff7700');circle(107,y+16,9,'#ffaa00');rect(74,y+13,38,6,'#ffdd44'); }
-    rect(0,0,342,19,'#18304a');ctx.fillStyle='#bfffa5';ctx.font='10px monospace';ctx.fillText('Dragon Run · Vorschau',6,13);
+    if(flame) { circle(91,y+16,8,'#ff7700');circle(119,y+16,9,'#ffaa00');circle(127+Math.floor(time*30)%5,y+14,5,'#ffdd44');rect(74,y+13,52,6,'#ffdd44'); }
+    rect(0,0,342,19,'#18304a');ctx.fillStyle='#bfffa5';ctx.font='10px monospace';ctx.fillText('Drachenrennen · Vorschau',6,13);
     ctx.fillStyle='white';ctx.fillText(cooldown?'Feuer...':'Feuer OK',277,13);
     rect(0,132,342,10,'#18304a');ctx.font='8px monospace';ctx.fillText('HOCH Sprung  RUNTER Ducken  MITTE Feuer',6,140);
   };
