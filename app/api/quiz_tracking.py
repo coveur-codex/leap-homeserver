@@ -23,9 +23,12 @@ class Attempt(BaseModel):
     questionId: str | int | None = None
     questionIndex: int = Field(ge=0)
     question: str = Field(min_length=1, max_length=10000)
-    answers: list[Annotated[str, Field(max_length=524288)]] = Field(min_length=4, max_length=4)
-    selectedIndex: int = Field(ge=0, le=3)
-    correctIndex: int = Field(ge=0, le=3)
+    answerMode: Literal["choice", "numeric"] = "choice"
+    enteredAnswer: str | None = Field(None, min_length=1, max_length=4, pattern=r"^[0-9]+$")
+    correctAnswer: int | None = Field(None, ge=0, le=1000, strict=True)
+    answers: list[Annotated[str, Field(max_length=524288)]] | None = Field(None, min_length=4, max_length=4)
+    selectedIndex: int | None = Field(None, ge=0, le=3)
+    correctIndex: int | None = Field(None, ge=0, le=3)
     elapsedMs: int | None = Field(None, ge=0, le=4294967295)
     answeredAt: datetime | None = None
     firmwareVersion: str = Field(max_length=40)
@@ -42,7 +45,34 @@ class Attempt(BaseModel):
             raise ValueError("Math settings are required")
         if self.mathOperation == "multiply" and self.mathLimit is not None and self.mathLimit > 20:
             raise ValueError("Multiplication limit exceeds 20")
+        if self.answerMode == "numeric":
+            if self.kind != "math" or self.enteredAnswer is None or self.correctAnswer is None:
+                raise ValueError("Numeric math answers require enteredAnswer and correctAnswer")
+            if any(value is not None for value in (self.answers, self.selectedIndex, self.correctIndex)):
+                raise ValueError("Numeric answers cannot contain choices")
+            maximum = self.mathLimit ** 2 if self.mathOperation == "multiply" else self.mathLimit
+            if self.correctAnswer > maximum:
+                raise ValueError("Correct answer exceeds configured range")
+        else:
+            if self.answers is None or self.selectedIndex is None or self.correctIndex is None:
+                raise ValueError("Choice answers require answers and both indices")
+            if self.enteredAnswer is not None or self.correctAnswer is not None:
+                raise ValueError("Choice answers cannot contain numeric input")
         return self
+
+    def snapshot(self):
+        data = self.model_dump(mode="json")
+        # Keep old immutable snapshots byte-for-byte compatible on retries.
+        omitted = ("answers", "selectedIndex", "correctIndex") if self.answerMode == "numeric" else (
+            "answerMode", "enteredAnswer", "correctAnswer")
+        for key in omitted:
+            data.pop(key)
+        return data
+
+    def is_correct(self):
+        if self.answerMode == "numeric":
+            return int(self.enteredAnswer) == self.correctAnswer
+        return self.selectedIndex == self.correctIndex
 
 
 def serialize_attempt(row):
@@ -52,7 +82,7 @@ def serialize_attempt(row):
 @router.post("")
 def record(device_id: str, data: Attempt, db: Session = Depends(get_db)):
     device = device_or_404(device_id, db)
-    snapshot = data.model_dump(mode="json")
+    snapshot = data.snapshot()
     existing = db.scalar(select(QuizAttempt).where(
         QuizAttempt.device_id == device.id, QuizAttempt.event_id == data.eventId))
     if existing:
@@ -60,7 +90,7 @@ def record(device_id: str, data: Attempt, db: Session = Depends(get_db)):
             raise HTTPException(409, "Ereignis-ID bereits mit anderer Antwort gespeichert")
         return {"ok": True, "eventId": data.eventId}
     db.add(QuizAttempt(device_id=device.id, event_id=data.eventId, snapshot=snapshot,
-                       correct=data.selectedIndex == data.correctIndex))
+                       correct=data.is_correct()))
     try:
         db.commit()
     except IntegrityError:
