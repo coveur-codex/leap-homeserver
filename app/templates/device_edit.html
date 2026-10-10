@@ -5,7 +5,7 @@
 <form method="post">
   <div class="tabs device-settings">
     <div class="device-settings-stack">
-    <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
+    <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Akzentfarbe<input type="color" name="accent_color" value="{{device.accent_color}}" data-accent-color></label><small>Farbe für Überschriften und Markierungen auf diesem Gerät. Standard: Türkis.</small><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
     <section><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
     </div>
     <div class="device-settings-stack">
@@ -42,7 +42,7 @@
   <button class="device-settings-save">Speichern & Version erhöhen</button>
 
 <h2 class="preview-heading">Display-Vorschau</h2>
-<div class="leap-preview" aria-label="Vorschau des LEAP-Displays">
+<div class="leap-preview" style="--device-accent: {{device.accent_color}}" aria-label="Vorschau des LEAP-Displays">
   <aside class="leap-sidebar">
     <div class="device-signals" aria-label="WLAN, Bluetooth und Akku">
       <svg viewBox="0 0 24 24"><path d="M3 9c5-4 13-4 18 0M6 13c3.5-3 8.5-3 12 0M9.5 17c1.5-1.3 3.5-1.3 5 0"/></svg>

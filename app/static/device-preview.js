@@ -194,3 +194,5 @@ document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
   };
   requestAnimationFrame(draw);
 });
+
+document.querySelector("[data-accent-color]")?.addEventListener("input", event => { document.querySelector(".leap-preview")?.style.setProperty("--device-accent", event.target.value); });

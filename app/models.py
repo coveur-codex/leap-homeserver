@@ -20,6 +20,7 @@ class Device(Base):
     name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
     age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(100), default="dragon")
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
+    accent_color: Mapped[str] = mapped_column(String(7), default="#00d7c5", server_default="#00d7c5")
     communication_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     math_quiz: Mapped[dict] = mapped_column(JSON, default=lambda:{"operation":"add", "limit":20}, server_default='{"operation":"add","limit":20}')
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
