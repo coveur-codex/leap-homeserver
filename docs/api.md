@@ -188,6 +188,26 @@ Antwort als unveränderlichen Snapshot. Beispiel (Indizes sind nullbasiert):
 }
 ```
 
+Firmware 1.0.3 sendet bei Mathe-Aufgaben freie Zahlenantworten. Statt
+`answers`, `selectedIndex` und `correctIndex` stehen folgende Felder im Snapshot:
+
+```json
+{"answerMode": "numeric", "enteredAnswer": "0012", "correctAnswer": 12}
+```
+
+`enteredAnswer` enthält 1–4 ASCII-Ziffern (0–9), `correctAnswer` eine nicht
+negative Ganzzahl im konfigurierten Ergebnisbereich. `correct` wird durch
+numerischen Vergleich ermittelt, führende Nullen bleiben für die Anzeige erhalten.
+Diese Form ist nur für `kind: "math"` zulässig und darf keine Auswahlfelder
+enthalten. Leere Eingaben sind ungültig. Aufgabe, Rechenart, Grenze, Antwortzeit
+und Versionszuordnung werden weiterhin gespeichert. Die Ergebnisansicht zeigt
+Eingabe und richtiges Ergebnis. Es ist keine Datenbankmigration notwendig.
+Den Homeserver vor Firmware 1.0.3 aktualisieren.
+
+Ohne `answerMode` (oder mit `"choice"`) gilt das bisherige Auswahlformat für
+Kataloge und ältere Mathe-Firmware; alte Snapshots und Offline-Wiederholungen
+bleiben kompatibel.
+
 `answers` enthält genau die angezeigte Reihenfolge; der Server berechnet
 `correct` aus den beiden Indizes. `kind` ist `math` oder `catalog`. Bei
 versionierten Katalogen ist `quizSetId` die Paket-ID und `quizSetVersion` die

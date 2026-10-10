@@ -146,3 +146,65 @@ def test_tracking_migration_preserves_data(tmp_path):
             migration.downgrade()
         assert "quiz_attempts" not in inspect(connection).get_table_names()
         assert connection.execute(text("SELECT name FROM devices")).scalar() == "Existing"
+
+
+def numeric_attempt(event="numeric", entered="0012", correct=12):
+    data = attempt(event)
+    for key in ("answers", "selectedIndex", "correctIndex"):
+        data.pop(key)
+    return {**data, "answerMode": "numeric", "enteredAnswer": entered,
+            "correctAnswer": correct, "firmwareVersion": "1.0.3"}
+
+
+@pytest.mark.parametrize("entered,correct,expected", [
+    ("0012", 12, True), ("13", 12, False), ("0", 0, True), ("9999", 12, False),
+    ("1000", 1000, True),
+])
+def test_numeric_input_history_and_retry(client, db, entered, correct, expected):
+    d = device(db)
+    data = numeric_attempt(entered=entered, correct=correct)
+    data["mathLimit"] = 1000
+    for _ in range(2):
+        assert client.post("/api/v1/devices/child/quiz-attempts", json=data).status_code == 200
+    rows = db.scalars(select(QuizAttempt)).all()
+    assert len(rows) == 1 and rows[0].correct == expected
+    result = client.get("/api/v1/devices/child/quiz-attempts").json()["attempts"][0]
+    assert result["enteredAnswer"] == entered and result["correctAnswer"] == correct
+    assert result["correct"] == expected and result["elapsedMs"] == 1234
+    assert "answers" not in result and "selectedIndex" not in result
+    page = client.get(f"/devices/{d.id}/quiz-results").text
+    assert f'Eingegeben: <strong>{entered}</strong>' in page
+    assert f'Richtiges Ergebnis: <strong>{correct}</strong>' in page
+    assert "1,234 s" in page and "← Gewählt" not in page
+    changed = {**data, "enteredAnswer": "1234"}
+    assert client.post("/api/v1/devices/child/quiz-attempts", json=changed).status_code == 409
+
+
+@pytest.mark.parametrize("changes", [
+    {"enteredAnswer": ""}, {"enteredAnswer": "-1"}, {"enteredAnswer": "1.2"},
+    {"enteredAnswer": " 12"}, {"enteredAnswer": "１２"}, {"enteredAnswer": "12345"},
+    {"enteredAnswer": None}, {"correctAnswer": None}, {"correctAnswer": -1},
+    {"correctAnswer": True}, {"correctAnswer": 21}, {"correctAnswer": 1001},
+    {"kind": "catalog"}, {"answers": ["1", "2", "3", "4"]},
+    {"selectedIndex": 0}, {"correctIndex": 0}, {"answerMode": "choice"},
+    {"mathOperation": "multiply", "mathLimit": 3, "correctAnswer": 10},
+])
+def test_invalid_numeric_input(client, db, changes):
+    device(db)
+    data = {**numeric_attempt(), **changes}
+    assert client.post("/api/v1/devices/child/quiz-attempts", json=data).status_code == 422
+    assert db.scalar(select(QuizAttempt)) is None
+
+
+def test_pre_upgrade_choice_snapshot_retries(client, db):
+    d = device(db)
+    data = attempt()
+    # Rows written before answerMode existed retain their exact JSON representation.
+    from app.api.quiz_tracking import Attempt
+    snapshot = Attempt(**data).model_dump(mode="json")
+    for key in ("answerMode", "enteredAnswer", "correctAnswer"):
+        snapshot.pop(key)
+    db.add(QuizAttempt(device_id=d.id, event_id=data["eventId"], snapshot=snapshot, correct=False))
+    db.commit()
+    assert client.post("/api/v1/devices/child/quiz-attempts", json=data).status_code == 200
+    assert len(db.scalars(select(QuizAttempt)).all()) == 1
