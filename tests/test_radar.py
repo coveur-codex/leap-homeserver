@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import time
 
 import httpx
@@ -15,7 +16,7 @@ def tile():
     output = io.BytesIO()
     image = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
     # An actual precipitation pixel fixture away from the centre marker.
-    image.paste((0, 200, 40, 255), (40, 40, 100, 100))
+    image.paste((0, 200, 40, 255), (105, 105, 120, 120))
     image.save(output, format="PNG")
     return output.getvalue()
 
@@ -34,6 +35,7 @@ async def test_observation_cache_and_stale_fallback(db, monkeypatch):
     result = await radar.radar_for_location(52.52, 13.405)
     assert result["available"] and not result["stale"]
     assert result["source"] == "RainViewer"
+    assert result["mapWidthKm"] == 50
     path = settings.data_dir / "images/weather-radar" / result["image"].rsplit("/", 1)[-1]
     with Image.open(path) as image:
         assert image.size == (112, 112) and image.mode == "RGB"
@@ -92,3 +94,18 @@ def test_radar_api_and_png(client, db, monkeypatch):
     device.latitude = None
     db.commit()
     assert client.get("/api/v1/devices/radar-device/weather/radar").status_code == 422
+
+
+@pytest.mark.parametrize("latitude", [0, 52.52, -52.52, 80, 85])
+def test_coverage_matches_firmware_projection(latitude):
+    zoom, pixels = radar.radar_crop(latitude)
+    assert 0 <= zoom <= 7 and 0 < pixels <= 256
+    km_per_pixel = radar.EARTH_CIRCUMFERENCE_KM * math.cos(math.radians(latitude)) / (256 * 2**zoom)
+    assert pixels * km_per_pixel == pytest.approx(50)
+    # Right edge longitude and top edge Mercator latitude for the same square.
+    half_projected = 25 / math.cos(math.radians(latitude))
+    edge_lon = math.degrees(half_projected / 6378.137)
+    edge_lat = math.degrees(2 * math.atan(math.exp(
+        math.asinh(math.tan(math.radians(latitude))) + half_projected / 6378.137)) - math.pi/2)
+    assert math.radians(edge_lon) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(25)
+    assert (math.asinh(math.tan(math.radians(edge_lat))) - math.asinh(math.tan(math.radians(latitude)))) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(25)

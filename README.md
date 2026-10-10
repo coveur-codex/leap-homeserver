@@ -122,3 +122,13 @@ für OTA ausgewählt. Clients ohne `deviceConfigSchema=1` im Start-Sync erhalten
 kein Firmware-Angebot, bis sie per USB provisioniert sind. Assets und die
 Homeserver-Konfiguration werden weiterhin synchronisiert. Installation und
 Hardware-Mapping sind im Firmware-README beschrieben.
+
+### Gemeinsamer Radarausschnitt mit Firmware 1.0.1
+
+Das Regenradar wird vor der Skalierung auf 112×112 Pixel auf einen zentrierten
+50×50-km-Mercator-Ausschnitt zugeschnitten (Seitenlänge am Gerätestandort).
+Zoom und Zuschnitt berücksichtigen den Breitengrad; Nord bleibt oben. Die API
+liefert dafür `mapWidthKm: 50`. Firmware 1.0.1 verwendet dieselbe Projektion für
+die Flugzeugpositionen. Der konfigurierbare Flugzeug-Abrufradius bleibt erhalten.
+Die neuen Bilder haben einen eigenen Cache-Key; alte Zoom-7-Bilder werden nicht
+als Aufnahmen mit dem neuen Maßstab ausgegeben. Beide Repositories aktualisieren.
