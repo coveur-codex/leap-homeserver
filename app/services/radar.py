@@ -61,7 +61,7 @@ async def radar_for_location(latitude: float, longitude: float) -> dict:
     if not (math.isfinite(latitude) and math.isfinite(longitude)
             and -85 <= latitude <= 85 and -180 <= longitude <= 180):
         raise ValueError("Standort außerhalb der Radar-Karte")
-    key = hashlib.sha256(f"50km-v1:{latitude:.5f},{longitude:.5f}".encode()).hexdigest()
+    key = hashlib.sha256(f"50km-10km-rings-v2:{latitude:.5f},{longitude:.5f}".encode()).hexdigest()
     root = settings.data_dir / "images" / "weather-radar"
     root.mkdir(parents=True, exist_ok=True)
     meta = root / f"{key}.json"
@@ -96,13 +96,13 @@ async def radar_for_location(latitude: float, longitude: float) -> dict:
                         (128-half, 128-half, 128+half, 128+half),
                         Image.Resampling.BICUBIC)
                 image = Image.new("RGBA", (112, 112), "#152c3b")
+                image = Image.alpha_composite(image, tile)
                 draw = ImageDraw.Draw(image)
-                for radius in (18, 36, 54):
+                # Same 55-pixel half-width and 10-km spacing as the firmware.
+                for radius in (22, 44):
                     draw.ellipse((56-radius, 56-radius, 56+radius, 56+radius), outline="#385363")
                 draw.line((56, 0, 56, 111), fill="#385363")
                 draw.line((0, 56, 111, 56), fill="#385363")
-                image = Image.alpha_composite(image, tile)
-                draw = ImageDraw.Draw(image)
                 draw.ellipse((53, 53, 59, 59), fill="white", outline="#182d3c")
                 draw.text((3, 1), "N", fill="white")
                 output = io.BytesIO()
