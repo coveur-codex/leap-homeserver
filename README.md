@@ -132,3 +132,17 @@ liefert dafür `mapWidthKm: 50`. Firmware 1.0.1 verwendet dieselbe Projektion f�
 die Flugzeugpositionen. Der konfigurierbare Flugzeug-Abrufradius bleibt erhalten.
 Die neuen Bilder haben einen eigenen Cache-Key; alte Zoom-7-Bilder werden nicht
 als Aufnahmen mit dem neuen Maßstab ausgegeben. Beide Repositories aktualisieren.
+
+### Kommunikation über den Homeserver (1.0.2)
+
+Firmware 1.0.2 sendet alle Gruppennachrichten an den Homeserver; Geräte müssen
+nicht mehr denselben Funkkanal verwenden. Alle aktivierten Geräte mit freigegebener
+Kommunikation rufen die gemeinsame Nachrichtenfolge unabhängig von ihrer aktuellen
+Seite etwa alle zwei Sekunden ab. Eingehende Nachrichten werden mit Pling und
+Briefsymbol angezeigt; der Besuch der Kommunikationsseite setzt das Symbol zurück.
+
+Der Server prüft aktive Vorlagen und setzt Namen, Text und Symbol selbst ein.
+Wiederholungen derselben Sende-ID erzeugen keine doppelten Nachrichten. Die Folge
+bleibt bei Serverneustarts erhalten, Nachrichten werden nach sieben Tagen beim
+regulären Cleanup entfernt. Migration `0012` wird beim Containerstart automatisch
+angewendet. Firmware und Server gemeinsam aktualisieren.

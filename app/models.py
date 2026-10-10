@@ -144,3 +144,17 @@ class QuizAttempt(Base):
     snapshot: Mapped[dict] = mapped_column(JSON)
     correct: Mapped[bool] = mapped_column(Boolean)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CommunicationRelayEvent(Base):
+    """Server-owned snapshots, shared by all enabled communication participants."""
+    __tablename__ = "communication_relay_events"
+    __table_args__ = (UniqueConstraint("sender_id", "event_id"), {"sqlite_autoincrement": True})
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sender_id: Mapped[str] = mapped_column(String(80))
+    event_id: Mapped[str] = mapped_column(String(64))
+    template_id: Mapped[str] = mapped_column(String(36))
+    name: Mapped[str] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(String(120))
+    symbol: Mapped[str] = mapped_column(String(16))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
