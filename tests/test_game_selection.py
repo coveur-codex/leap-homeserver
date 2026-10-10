@@ -64,8 +64,24 @@ def test_migration_preserves_games_and_fresh_schema(tmp_path):
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
         games, version = connection.execute(text("SELECT enabled_games, config_version FROM devices")).one()
-        assert json.loads(games) == DEFAULT_GAMES and version == 8
+        assert json.loads(games) == [gid for gid in DEFAULT_GAMES if gid != "dragon_run"] and version == 8
         # Fresh installs already have the new column through metadata in 0001.
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
-        assert json.loads(connection.execute(text("SELECT enabled_games FROM devices")).scalar()) == DEFAULT_GAMES
+        assert json.loads(connection.execute(text("SELECT enabled_games FROM devices")).scalar()) == [gid for gid in DEFAULT_GAMES if gid != "dragon_run"]
+
+
+def test_dragon_run_selection_and_preview(client, db):
+    d = make_device(db)
+    form = {"name": "Erik", "age": 9, "avatar": "dragon", "enabled": "on",
+            "page_ids": ["games"], "game_settings": "true", "game_ids": ["dragon_run"]}
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    config = client.get("/api/v1/devices/leap-erik/config").json()
+    assert [g["id"] for g in config["games"] if g["enabled"]] == ["dragon_run"]
+    html = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
+    assert html.select('[data-game-open="dragon"]')
+    assert html.select('canvas[data-dragon-canvas]')[0]["width"] == "342"
+    assert not html.select('[data-game-open="snake"]')
+    d.enabled_games = ["snake"]
+    db.commit()
+    assert not BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser").select('[data-game-open="dragon"]')

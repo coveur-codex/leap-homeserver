@@ -67,6 +67,7 @@ document.querySelectorAll('.games-card').forEach(card => {
   const menu = card.querySelector('[data-games-menu]');
   const pet = card.querySelector('[data-pet-preview]');
   const snake = card.querySelector('[data-snake-preview]');
+  const dragon = card.querySelector('[data-dragon-preview]');
   const image = card.querySelector('[data-pet-image]');
   const fallback = card.querySelector('[data-pet-fallback]');
   let animation = 'idle', frame = 0, lastFrame = 0, actionUntil = 0;
@@ -74,10 +75,11 @@ document.querySelectorAll('.games-card').forEach(card => {
     menu.hidden = true;
     pet.hidden = button.dataset.gameOpen !== 'pet';
     snake.hidden = button.dataset.gameOpen !== 'snake';
+    dragon.hidden = button.dataset.gameOpen !== 'dragon';
     animation = 'idle'; actionUntil = 0; frame = 0;
   }));
   card.querySelectorAll('[data-game-back]').forEach(button => button.addEventListener('click', () => {
-    menu.hidden = false; pet.hidden = snake.hidden = true;
+    menu.hidden = false; pet.hidden = snake.hidden = dragon.hidden = true;
   }));
   card.querySelectorAll('[data-pet-action]').forEach(button => button.addEventListener('click', () => {
     animation = ['eating', 'playing', 'happy', 'sleeping'][Number(button.dataset.petAction)];
@@ -134,6 +136,61 @@ document.querySelectorAll('[data-chill-preview]').forEach(canvas => {
       ctx.beginPath();ctx.arc(p.x,p.y,p.d>.8 && scene!=='fire' ? 1.2 : .6,0,Math.PI*2);ctx.fill();
     });
     ctx.strokeStyle='#8c8c88';ctx.beginPath();ctx.moveTo(12,8);ctx.lineTo(6,14);ctx.lineTo(12,20);ctx.stroke();
+  };
+  requestAnimationFrame(draw);
+});
+
+// Procedural control/graphics demo; it does not read or overwrite device scores.
+document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
+  const panel = canvas.closest('[data-dragon-preview]');
+  const card = canvas.closest('.games-card');
+  const ctx = canvas.getContext('2d');
+  const jump = card.querySelector('[data-dragon-jump]');
+  const duck = card.querySelector('[data-dragon-duck]');
+  const fire = card.querySelector('[data-dragon-fire]');
+  let previous = 0, time = 0, distance = 0, lift = 0, velocity = 0, down = false, flame = 0, cooldown = 0;
+  const rect = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
+  const circle = (x,y,r,c) => { ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); };
+  const triangle = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-w,y+h);ctx.lineTo(x+w,y+h);ctx.fill(); };
+  jump.addEventListener('click', () => { if (!lift) velocity=-240; });
+  fire.addEventListener('click', () => { if (!cooldown) { flame=.24; cooldown=.95; } });
+  duck.addEventListener('pointerdown', event => { down=true; duck.setPointerCapture(event.pointerId); });
+  ['pointerup','pointercancel','lostpointercapture','blur'].forEach(type => duck.addEventListener(type, () => { down=false; }));
+  duck.addEventListener('keydown', event => { if (event.key===' ' || event.key==='Enter') { event.preventDefault(); down=true; } });
+  duck.addEventListener('keyup', () => { down=false; });
+  const draw = now => {
+    requestAnimationFrame(draw);
+    if (panel.hidden || card.hidden || document.hidden) { previous=now; down=false; return; }
+    const dt = previous ? Math.min((now-previous)/1000,.1) : 0; previous=now; time+=dt; distance+=78*dt;
+    flame=Math.max(0,flame-dt); cooldown=Math.max(0,cooldown-dt);
+    if (lift>0 || velocity<0) { lift-=velocity*dt+200*dt*dt; velocity+=400*dt; if (lift<=0) {lift=0;velocity=0;} }
+    const crouch=down && !lift && velocity>=0;
+    rect(0,0,342,142,'#a5dfff'); circle(284,37,12,'#fff36b');
+    for (let x=-(distance*.12%140);x<380;x+=140) { circle(x,39,7,'#eff3ef');circle(x+10,35,10,'#eff3ef');circle(x+22,39,7,'#eff3ef'); }
+    for (let x=-(distance*.23%130);x<440;x+=130) {triangle(x+44,45,71,65,'#7bb3bd');triangle(x+44,45,11,12,'#def3e7');}
+    const castle=250-distance*.32%390;
+    rect(castle,73,39,35,'#528e84');rect(castle-6,68,12,40,'#528e84');rect(castle+33,65,12,43,'#528e84');
+    for(let i=0;i<4;i++) rect(castle-6+i*13,62,6,12,'#528e84');
+    for(let x=18-distance*.48%95;x<365;x+=95) {rect(x-2,82,5,34,'#634129');triangle(x,63,15,24,'#528e84');triangle(x,75,22,28,'#528e84');}
+    rect(0,116,342,26,'#8c6d31');rect(0,116,342,4,'#8cc64a');
+    for(let x=-(distance%37);x<350;x+=37) rect(x,124,7,2,'#735129');
+    const ox=342-distance%510;
+    rect(ox,101,22,15,'#8c8e8c');rect(ox+4,98,14,4,'#bdbabd');
+    for(let i=0;i<3;i++) {rect(ox+230+i*9,95,7,21,'#a56531');triangle(ox+233+i*9,92,3,5,'#de964a');}
+    rect(ox+230,103,26,4,'#734521');circle(ox+95,68,5,'#fffb00');
+    const x=44, feet=116-lift, y=feet-(crouch?15:28), green='#63ba5a', edge='#215931';
+    triangle(x-9,feet-13-(Math.floor(time*9)%2),7,10,edge);rect(x-10,feet-9,19,5,green);
+    circle(x+13,feet-(crouch?7:12),crouch?7:11,edge);circle(x+13,feet-(crouch?7:12),crouch?6:10,green);
+    rect(x+7,feet-8,15,6,'#c6ebad');circle(x+24,y+(crouch?7:9),crouch?7:9,edge);circle(x+24,y+(crouch?7:9),crouch?6:8,green);
+    rect(x+24,y+10,10,6,edge);rect(x+24,y+10,9,4,'#8cce73');triangle(x+19,y-3,2,7,'#ffefde');triangle(x+27,y-2,2,6,'#ffefde');
+    circle(x+27,y+6,3,'white');rect(x+28,y+5,2,3,'#102010');rect(x+27,y+14,5,1,edge);rect(x+23,y+11,2,2,'#ffb6de');
+    if(!crouch) {triangle(x+9,feet-25-Math.floor(time*8)%3,6,15,edge);triangle(x+9,feet-23-Math.floor(time*8)%3,4,12,'#adffff');}
+    const stride=lift?0:Math.floor(time*12)%2?3:-2;
+    rect(x+5+stride,feet-4,6,4,edge);rect(x+19-stride,feet-4,6,4,edge);
+    if(flame) { circle(91,y+16,8,'#ff7700');circle(107,y+16,9,'#ffaa00');rect(74,y+13,38,6,'#ffdd44'); }
+    rect(0,0,342,19,'#18304a');ctx.fillStyle='#bfffa5';ctx.font='10px monospace';ctx.fillText('Dragon Run · Vorschau',6,13);
+    ctx.fillStyle='white';ctx.fillText(cooldown?'Feuer...':'Feuer OK',277,13);
+    rect(0,132,342,10,'#18304a');ctx.font='8px monospace';ctx.fillText('HOCH Sprung  RUNTER Ducken  MITTE Feuer',6,140);
   };
   requestAnimationFrame(draw);
 });

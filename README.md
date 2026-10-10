@@ -146,3 +146,14 @@ Wiederholungen derselben Sende-ID erzeugen keine doppelten Nachrichten. Die Folg
 bleibt bei Serverneustarts erhalten, Nachrichten werden nach sieben Tagen beim
 regulären Cleanup entfernt. Migration `0012` wird beim Containerstart automatisch
 angewendet. Firmware und Server gemeinsam aktualisieren.
+
+## Dragon Run (Firmware 1.0.4)
+
+Der eingebaute Spielekatalog enthält `dragon_run` / **Dragon Run**. Im Geräteeditor
+unter Spiele aktivieren und speichern, anschließend das Gerät synchronisieren.
+Bestehende Freigaben werden beim Serverupdate beibehalten; neue Geräte erhalten
+Dragon Run in der Standardauswahl. Ältere Firmware ignoriert die unbekannte ID.
+Die Gerätevorschau zeigt eine animierte, programmatisch gezeichnete Grafik- und
+Steuerungsdemo (Sprung, gehaltenes Ducken, Feuer mit Abklingzeit). Punkte und
+Rekorde bleiben lokal auf dem LEAP, die Vorschau verändert keine Spielstände.
+Keine neuen Asset-Pakete oder Datenbankmigrationen sind nötig.
