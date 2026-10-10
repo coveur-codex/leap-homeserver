@@ -79,7 +79,7 @@ def test_dragon_run_selection_and_preview(client, db):
     config = client.get("/api/v1/devices/leap-erik/config").json()
     assert [g["id"] for g in config["games"] if g["enabled"]] == ["dragon_run"]
     html = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
-    assert html.select('[data-game-open="dragon"]')
+    assert html.select('[data-game-open="dragon"]')[0].get_text() == "Drachenrennen"
     assert html.select('canvas[data-dragon-canvas]')[0]["width"] == "342"
     assert not html.select('[data-game-open="snake"]')
     d.enabled_games = ["snake"]
