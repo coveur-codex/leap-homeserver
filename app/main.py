@@ -15,6 +15,7 @@ from app.services.feeds import fetch_feed
 from app.services.location_data import refresh_configured_locations
 from app.web.routes import router as web_router
 from app.api.distribution import router as distribution_api
+from app.api.communication import router as communication_api
 from app.web.distribution import router as distribution_web
 logging.basicConfig(level=settings.log_level,format='%(asctime)s %(levelname)s %(name)s %(message)s')
 log=logging.getLogger("leap"); START=time.monotonic()
@@ -28,6 +29,8 @@ def cleanup():
     with SessionLocal() as db:
         old=db.scalars(select(Article).where(Article.fetched_at<datetime.now(timezone.utc)-timedelta(days=settings.news_retention_days))).all()
         for a in old: db.delete(a)
+        from app.services.communication import prune_relay
+        prune_relay(db)
         db.commit()
 async def scheduled_location_data():
     with SessionLocal() as db:
@@ -60,3 +63,5 @@ from app.web.communication import router as communication_web
 app.include_router(communication_web)
 from app.api.quiz_tracking import router as quiz_tracking_api
 app.include_router(quiz_tracking_api)
+
+app.include_router(communication_api)

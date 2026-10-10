@@ -235,3 +235,28 @@ verwenden `R = 6378.137 km` und den Maßstabsfaktor `cos(latitude)`; Flugpositio
 werden in denselben Ausschnitt projiziert. Der serverseitige Flugzeug-Abrufradius
 ist unabhängig davon. Radar-Bilder werden für den neuen Zuschnitt getrennt von
 alten Zoom-7-Cachebildern gespeichert.
+
+## Kommunikation als Gruppenchat-Relay (1.0.2)
+
+- `POST /api/v1/devices/{id}/communication/messages`: `{eventId, templateId}`.
+  `eventId` ist eine zufällige, höchstens 64 Zeichen lange Kennung aus Buchstaben,
+  Ziffern, `_` und `-`, die auf Wiederholversuchen erhalten bleibt. Der Server
+  ermittelt Namen/Text/Symbol selbst aus Gerät und aktiver Vorlage. Antwort:
+  `{ok:true, eventId, message}`. Dieselbe ID je Gerät liefert dieselbe Nachricht;
+  eine andere Vorlage mit derselben ID ergibt 409. Freitext/Zusatzfelder werden
+  abgelehnt, inaktive oder unbekannte Vorlagen ergeben 422.
+- `GET /api/v1/devices/{id}/communication/messages?since={cursor}`: gemeinsame
+  Folge für alle aktivierten Kommunikationsgeräte. Antwort: `schemaVersion:1`,
+  bis zu acht `messages` in aufsteigender Reihenfolge, `cursor`, `more`, `reset`.
+  Nachrichtenfelder: `id`, `eventId`, `senderId`, `name`, `text`, `symbol`, `sentAt`
+  (UTC). Ohne `since` werden die letzten acht Nachrichten als stille Starthistorie
+  geliefert. Mit `more:true` sofort weiterblättern; sonst etwa alle zwei Sekunden.
+  Ein Cursor über dem Serverstand führt zu `reset:true` und einer neuen Historie.
+  Cursor erst nach vollständiger Verarbeitung speichern; eigene Nachrichten
+  nicht erneut akustisch signalisieren.
+
+Beide Endpunkte beachten die Geräteaktivierung (404) und Kommunikationsfreigabe
+(403). Nachrichtensnapshots bleiben trotz späterer Vorlagen-/Namensänderungen
+unverändert. Sie werden sieben Tage aufbewahrt; die SQLite-Folge verwendet
+AUTOINCREMENT, damit gelöschte IDs nicht erneut verwendet werden. Die
+Sendebestätigung bestätigt die Speicherung im Relay, nicht das Lesen aller Geräte.

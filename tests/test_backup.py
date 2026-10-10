@@ -44,7 +44,8 @@ def test_database_download_is_complete_and_cleans_up(client, db, tmp_path, monke
     with closing(sqlite3.connect(downloaded)) as backup:
         assert backup.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         tables = {row[0] for row in backup.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert tables == set(Base.metadata.tables)
+        assert tables - {"sqlite_sequence"} == set(Base.metadata.tables)
+        assert backup.execute("SELECT name FROM sqlite_sequence").fetchall() == []
         assert backup.execute("SELECT name FROM devices WHERE device_id='backup-device'").fetchone() == ("Backup-Gerät",)
     assert len(snapshots) == 1
     assert not snapshots[0].parent.exists()

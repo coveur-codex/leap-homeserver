@@ -39,3 +39,12 @@ def ensure_package(db):
     db.flush()
     publish(db, package, 0)
     return True
+
+
+def prune_relay(db):
+    """Bound the shared history; SQLite AUTOINCREMENT never reuses cursors."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete
+    from app.models import CommunicationRelayEvent
+    db.execute(delete(CommunicationRelayEvent).where(
+        CommunicationRelayEvent.sent_at < datetime.now(timezone.utc) - timedelta(days=7)))
