@@ -40,6 +40,13 @@ async def test_observation_cache_and_stale_fallback(db, monkeypatch):
     with Image.open(path) as image:
         assert image.size == (112, 112) and image.mode == "RGB"
         assert image.getpixel((30, 30))[1] > 150
+        # R=22 and R=44 are 10 km and 20 km in the shared 50-km square.
+        for radius in (22, 44):
+            assert image.getpixel((56 + radius, 56)) == (56, 83, 99)
+            assert image.getpixel((56 + radius, 55)) == (56, 83, 99)
+        # Former 18/36/54-pixel rings are absent off the central crosshair.
+        for radius in (18, 36, 54):
+            assert image.getpixel((56 + radius, 55)) == (21, 44, 59)
     assert await radar.radar_for_location(52.52, 13.405) == result
     assert len(calls) == 2
     async def fail(*args):

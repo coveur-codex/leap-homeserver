@@ -280,3 +280,10 @@ Beide Endpunkte beachten die Geräteaktivierung (404) und Kommunikationsfreigabe
 unverändert. Sie werden sieben Tage aufbewahrt; die SQLite-Folge verwendet
 AUTOINCREMENT, damit gelöschte IDs nicht erneut verwendet werden. Die
 Sendebestätigung bestätigt die Speicherung im Relay, nicht das Lesen aller Geräte.
+
+Ab Homeserver 1.0.3 darf `templateId` im Kommunikations-POST auch eine feste
+Icon-ID aus `app/defaults/communication-icons.json` sein (z. B. `icon:question`,
+`icon:yes`, `icon:help`). Die bestätigte Nachricht enthält dann `text: ""` und
+das serverseitige Unicode-Symbol. Unbekannte IDs erhalten 422; Wiederverwendung
+einer `eventId` für ein anderes Icon erhält 409. Kommunikationsrechte gelten
+auch für Icons. Text-/Symbol-/Namensinjektion im Request bleibt ausgeschlossen.

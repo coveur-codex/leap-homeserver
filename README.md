@@ -160,3 +160,17 @@ Keine neuen Asset-Pakete oder Datenbankmigrationen sind nötig.
 
 Die Vorschau übernimmt das ruhigere Starttempo, die längeren Sprünge und den
 längeren Feuerstrahl aus Firmware 1.0.5. Die Spiel-ID `dragon_run` bleibt erhalten.
+
+### Einzel-Icons und Radarringe (1.0.3 / Firmware 1.0.6)
+
+Der Gerätechat unterstützt zusätzlich 48 feste Kinder-Icons. Firmware 1.0.6 zeigt
+sie in einem 3×16-Raster und sendet deren stabile `icon:…`-ID im vorhandenen
+`templateId`-Feld. Der Server akzeptiert ausschließlich IDs aus
+`app/defaults/communication-icons.json` und speichert ein einzelnes Symbol mit
+leerem Text. Berechtigungen, Gruppenverteilung, Historie und idempotente Retries
+bleiben identisch zu Textvorlagen. Keine Datenbankmigration oder Änderung des
+Vorlagenpakets nötig. Zuerst Homeserver 1.0.3, danach Firmware 1.0.6 installieren.
+
+Regenradarbilder zeigen Ringe bei 10 und 20 km (22/44 Pixel Radius), passend zur
+50-km-Karte des Flugradars. Die Ringe liegen über dem Regenbild. Ein neuer
+Cache-Schlüssel verhindert die Wiederverwendung der bisherigen Ringbilder.

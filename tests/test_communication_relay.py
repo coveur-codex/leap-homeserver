@@ -105,3 +105,23 @@ def test_retention_never_reuses_a_cursor(client, db):
     assert receive(client, since=first).json()["reset"]
     next_id = send(client, template, event="next").json()["message"]["id"]
     assert next_id > first
+
+
+def test_single_icons_allowlist_broadcast_retry_conflict_and_permissions(client, db):
+    from app.services.communication_icons import ICONS
+    devices(db)
+    assert len(ICONS) == 48
+    for index, (identifier, icon) in enumerate(ICONS.items()):
+        response = send(client, identifier, event=f"icon-{index}")
+        assert response.status_code == 200
+        event = response.json()["message"]
+        assert event["text"] == "" and event["symbol"] == icon["symbol"]
+        assert event["name"] == "Pet a" and event["senderId"] == "a"
+        assert send(client, identifier, event=f"icon-{index}").json() == response.json()
+        assert receive(client, since=event["id"] - 1).json()["messages"] == [event]
+    assert send(client, "icon:unknown", event="unknown").status_code == 422
+    assert send(client, "icon:yes", event="icon-0").status_code == 409
+    d = db.scalar(select(Device).where(Device.device_id == "a"))
+    d.communication_enabled = False
+    db.commit()
+    assert send(client, "icon:help", event="disabled").status_code == 403

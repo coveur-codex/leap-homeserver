@@ -1,0 +1,242 @@
+[
+  {
+    "id": "icon:wave",
+    "symbol": "👋",
+    "label": "Hallo"
+  },
+  {
+    "id": "icon:game",
+    "symbol": "🎮",
+    "label": "Spielen"
+  },
+  {
+    "id": "icon:yes",
+    "symbol": "👍",
+    "label": "Ja"
+  },
+  {
+    "id": "icon:no",
+    "symbol": "👎",
+    "label": "Nein"
+  },
+  {
+    "id": "icon:laugh",
+    "symbol": "😂",
+    "label": "Lustig"
+  },
+  {
+    "id": "icon:heart",
+    "symbol": "❤️",
+    "label": "Lieb haben"
+  },
+  {
+    "id": "icon:run",
+    "symbol": "🏃",
+    "label": "Kommen / Laufen"
+  },
+  {
+    "id": "icon:wait",
+    "symbol": "⏳",
+    "label": "Warten"
+  },
+  {
+    "id": "icon:question",
+    "symbol": "❓",
+    "label": "Frage"
+  },
+  {
+    "id": "icon:home",
+    "symbol": "🏠",
+    "label": "Zuhause"
+  },
+  {
+    "id": "icon:happy",
+    "symbol": "🙂",
+    "label": "Froh"
+  },
+  {
+    "id": "icon:sad",
+    "symbol": "😢",
+    "label": "Traurig"
+  },
+  {
+    "id": "icon:angry",
+    "symbol": "😠",
+    "label": "Wuetend"
+  },
+  {
+    "id": "icon:scared",
+    "symbol": "😨",
+    "label": "Angst"
+  },
+  {
+    "id": "icon:tired",
+    "symbol": "😴",
+    "label": "Muede"
+  },
+  {
+    "id": "icon:sick",
+    "symbol": "🤒",
+    "label": "Krank"
+  },
+  {
+    "id": "icon:wow",
+    "symbol": "😮",
+    "label": "Staunen"
+  },
+  {
+    "id": "icon:quiet",
+    "symbol": "🤫",
+    "label": "Leise"
+  },
+  {
+    "id": "icon:check",
+    "symbol": "✅",
+    "label": "OK"
+  },
+  {
+    "id": "icon:stop",
+    "symbol": "🛑",
+    "label": "Stopp"
+  },
+  {
+    "id": "icon:help",
+    "symbol": "🆘",
+    "label": "Hilfe"
+  },
+  {
+    "id": "icon:place",
+    "symbol": "📍",
+    "label": "Wo / Treffpunkt"
+  },
+  {
+    "id": "icon:clock",
+    "symbol": "🕒",
+    "label": "Wann / Uhrzeit"
+  },
+  {
+    "id": "icon:school",
+    "symbol": "🏫",
+    "label": "Schule"
+  },
+  {
+    "id": "icon:book",
+    "symbol": "📖",
+    "label": "Lesen"
+  },
+  {
+    "id": "icon:pencil",
+    "symbol": "✏️",
+    "label": "Malen / Schreiben"
+  },
+  {
+    "id": "icon:food",
+    "symbol": "🍽️",
+    "label": "Essen / Hunger"
+  },
+  {
+    "id": "icon:drink",
+    "symbol": "🥤",
+    "label": "Trinken / Durst"
+  },
+  {
+    "id": "icon:icecream",
+    "symbol": "🍦",
+    "label": "Eis"
+  },
+  {
+    "id": "icon:cake",
+    "symbol": "🍰",
+    "label": "Kuchen"
+  },
+  {
+    "id": "icon:ball",
+    "symbol": "⚽",
+    "label": "Ball spielen"
+  },
+  {
+    "id": "icon:bike",
+    "symbol": "🚲",
+    "label": "Fahrrad"
+  },
+  {
+    "id": "icon:scooter",
+    "symbol": "🛴",
+    "label": "Roller"
+  },
+  {
+    "id": "icon:swim",
+    "symbol": "🏊",
+    "label": "Schwimmen"
+  },
+  {
+    "id": "icon:music",
+    "symbol": "🎵",
+    "label": "Musik"
+  },
+  {
+    "id": "icon:headphones",
+    "symbol": "🎧",
+    "label": "Zuhoeren"
+  },
+  {
+    "id": "icon:gift",
+    "symbol": "🎁",
+    "label": "Geschenk"
+  },
+  {
+    "id": "icon:birthday",
+    "symbol": "🎂",
+    "label": "Geburtstag"
+  },
+  {
+    "id": "icon:sun",
+    "symbol": "☀️",
+    "label": "Sonne"
+  },
+  {
+    "id": "icon:rain",
+    "symbol": "🌧️",
+    "label": "Regen"
+  },
+  {
+    "id": "icon:snow",
+    "symbol": "❄️",
+    "label": "Schnee"
+  },
+  {
+    "id": "icon:tree",
+    "symbol": "🌳",
+    "label": "Draussen / Baum"
+  },
+  {
+    "id": "icon:flower",
+    "symbol": "🌸",
+    "label": "Blume"
+  },
+  {
+    "id": "icon:cat",
+    "symbol": "🐱",
+    "label": "Katze"
+  },
+  {
+    "id": "icon:dog",
+    "symbol": "🐶",
+    "label": "Hund"
+  },
+  {
+    "id": "icon:star",
+    "symbol": "⭐",
+    "label": "Super / Stern"
+  },
+  {
+    "id": "icon:sleep",
+    "symbol": "🛏️",
+    "label": "Schlafen"
+  },
+  {
+    "id": "icon:friend",
+    "symbol": "🧑‍🤝‍🧑",
+    "label": "Freunde / Zusammen"
+  }
+]

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.routes import device_or_404
 from app.core.database import get_db
 from app.models import CommunicationMessage, CommunicationRelayEvent
+from app.services.communication_icons import ICONS
 
 router = APIRouter(prefix="/api/v1/devices")
 
@@ -44,12 +45,16 @@ def send_message(device_id: str, body: RelaySend, db: Session = Depends(get_db))
         if existing.template_id != body.templateId:
             raise HTTPException(409, "Nachrichtenkennung wird bereits verwendet")
         return {"ok": True, "eventId": body.eventId, "message": snapshot(existing)}
-    template = db.get(CommunicationMessage, body.templateId)
-    if template is None or not template.active:
-        raise HTTPException(422, "Nachrichtenvorlage ist nicht aktiv")
+    if body.templateId in ICONS:
+        text, symbol = "", ICONS[body.templateId]["symbol"]
+    else:
+        template = db.get(CommunicationMessage, body.templateId)
+        if template is None or not template.active:
+            raise HTTPException(422, "Nachrichtenvorlage oder Icon ist nicht aktiv")
+        text, symbol = template.text, template.symbol
     event = CommunicationRelayEvent(sender_id=device_id, event_id=body.eventId,
-        template_id=template.id, name=device.avatar_name or device.name,
-        text=template.text, symbol=template.symbol)
+        template_id=body.templateId, name=device.avatar_name or device.name,
+        text=text, symbol=symbol)
     db.add(event)
     try:
         db.commit()
