@@ -123,12 +123,12 @@ kein Firmware-Angebot, bis sie per USB provisioniert sind. Assets und die
 Homeserver-Konfiguration werden weiterhin synchronisiert. Installation und
 Hardware-Mapping sind im Firmware-README beschrieben.
 
-### Gemeinsamer Radarausschnitt mit Firmware 1.0.1
+### Gemeinsamer Radarausschnitt mit Firmware 1.0.8
 
 Das Regenradar wird vor der Skalierung auf 112×112 Pixel auf einen zentrierten
-50×50-km-Mercator-Ausschnitt zugeschnitten (Seitenlänge am Gerätestandort).
+60×60-km-Mercator-Ausschnitt zugeschnitten (Seitenlänge am Gerätestandort).
 Zoom und Zuschnitt berücksichtigen den Breitengrad; Nord bleibt oben. Die API
-liefert dafür `mapWidthKm: 50`. Firmware 1.0.1 verwendet dieselbe Projektion für
+liefert dafür `mapWidthKm: 60`. Firmware 1.0.8 verwendet dieselbe Projektion für
 die Flugzeugpositionen. Der konfigurierbare Flugzeug-Abrufradius bleibt erhalten.
 Die neuen Bilder haben einen eigenen Cache-Key; alte Zoom-7-Bilder werden nicht
 als Aufnahmen mit dem neuen Maßstab ausgegeben. Beide Repositories aktualisieren.
@@ -161,7 +161,7 @@ Keine neuen Asset-Pakete oder Datenbankmigrationen sind nötig.
 Die Vorschau übernimmt das ruhigere Starttempo, die längeren Sprünge und den
 längeren Feuerstrahl aus Firmware 1.0.5. Die Spiel-ID `dragon_run` bleibt erhalten.
 
-### Einzel-Icons und Radarringe (1.0.3 / Firmware 1.0.6)
+### Einzel-Icons (ab 1.0.3 / Firmware 1.0.6) und aktuelle Radarringe
 
 Der Gerätechat unterstützt zusätzlich 48 feste Kinder-Icons. Firmware 1.0.6 zeigt
 sie in einem 3×16-Raster und sendet deren stabile `icon:…`-ID im vorhandenen
@@ -171,6 +171,16 @@ leerem Text. Berechtigungen, Gruppenverteilung, Historie und idempotente Retries
 bleiben identisch zu Textvorlagen. Keine Datenbankmigration oder Änderung des
 Vorlagenpakets nötig. Zuerst Homeserver 1.0.3, danach Firmware 1.0.6 installieren.
 
-Regenradarbilder zeigen Ringe bei 10 und 20 km (22/44 Pixel Radius), passend zur
-50-km-Karte des Flugradars. Die Ringe liegen über dem Regenbild. Ein neuer
+Regenradarbilder zeigen Ringe bei 10, 20 und 30 km (18/37/55 Pixel Radius), passend zur
+60-km-Karte des Flugradars. Die Ringe liegen über dem Regenbild. Ein neuer
 Cache-Schlüssel verhindert die Wiederverwendung der bisherigen Ringbilder.
+
+
+### WebSocket, Gerätefarbe und 60-km-Radare (1.0.4 / Firmware 1.0.8)
+
+Zuerst Homeserver 1.0.4 installieren (Migration 0013), danach Firmware 1.0.8.
+Kommunikation nutzt WebSocket-Push, HTTP bleibt für ältere Firmware verfügbar.
+Pro Gerät ist unter Allgemein eine Akzentfarbe wählbar (Türkis als Standard).
+Regenradar: neuer Cache-Key, 60 × 60 km, Ringe bei 10/20/30 km und N oben mittig.
+Firmware 1.0.8 verwendet dieselbe Flugradarprojektion und normal gezeichnete,
+unverdickte Überschriften. Protokoll, TLS und Proxy-Anforderungen: [API](docs/api.md).

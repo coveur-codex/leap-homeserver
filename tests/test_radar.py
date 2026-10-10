@@ -35,17 +35,17 @@ async def test_observation_cache_and_stale_fallback(db, monkeypatch):
     result = await radar.radar_for_location(52.52, 13.405)
     assert result["available"] and not result["stale"]
     assert result["source"] == "RainViewer"
-    assert result["mapWidthKm"] == 50
+    assert result["mapWidthKm"] == 60
     path = settings.data_dir / "images/weather-radar" / result["image"].rsplit("/", 1)[-1]
     with Image.open(path) as image:
         assert image.size == (112, 112) and image.mode == "RGB"
-        assert image.getpixel((30, 30))[1] > 150
-        # R=22 and R=44 are 10 km and 20 km in the shared 50-km square.
-        for radius in (22, 44):
+        assert image.getpixel((31, 30))[1] > 150
+        # R=18,37,55 are 10,20,30 km in the shared 60-km square.
+        for radius in (18, 37, 55):
             assert image.getpixel((56 + radius, 56)) == (56, 83, 99)
             assert image.getpixel((56 + radius, 55)) == (56, 83, 99)
-        # Former 18/36/54-pixel rings are absent off the central crosshair.
-        for radius in (18, 36, 54):
+        # Former 22/44-pixel rings are absent off the central crosshair.
+        for radius in (22, 44):
             assert image.getpixel((56 + radius, 55)) == (21, 44, 59)
     assert await radar.radar_for_location(52.52, 13.405) == result
     assert len(calls) == 2
@@ -108,11 +108,11 @@ def test_coverage_matches_firmware_projection(latitude):
     zoom, pixels = radar.radar_crop(latitude)
     assert 0 <= zoom <= 7 and 0 < pixels <= 256
     km_per_pixel = radar.EARTH_CIRCUMFERENCE_KM * math.cos(math.radians(latitude)) / (256 * 2**zoom)
-    assert pixels * km_per_pixel == pytest.approx(50)
+    assert pixels * km_per_pixel == pytest.approx(60)
     # Right edge longitude and top edge Mercator latitude for the same square.
-    half_projected = 25 / math.cos(math.radians(latitude))
+    half_projected = 30 / math.cos(math.radians(latitude))
     edge_lon = math.degrees(half_projected / 6378.137)
     edge_lat = math.degrees(2 * math.atan(math.exp(
         math.asinh(math.tan(math.radians(latitude))) + half_projected / 6378.137)) - math.pi/2)
-    assert math.radians(edge_lon) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(25)
-    assert (math.asinh(math.tan(math.radians(edge_lat))) - math.asinh(math.tan(math.radians(latitude)))) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(25)
+    assert math.radians(edge_lon) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(30)
+    assert (math.asinh(math.tan(math.radians(edge_lat))) - math.asinh(math.tan(math.radians(latitude)))) * 6378.137 * math.cos(math.radians(latitude)) == pytest.approx(30)

@@ -17,12 +17,12 @@ from app.core.config import settings
 METADATA = "https://api.rainviewer.com/public/weather-maps.json"
 TILES = "https://tilecache.rainviewer.com"
 _lock = asyncio.Lock()
-RADAR_WIDTH_KM = 50.0
+RADAR_WIDTH_KM = 60.0
 EARTH_CIRCUMFERENCE_KM = 40075.016686
 
 
 def radar_crop(latitude: float) -> tuple[int, float]:
-    """Mercator square spanning 50 km at the centre latitude, north up.
+    """Mercator square spanning 60 km at the centre latitude, north up.
 
     RainViewer's geographic-centre endpoint returns 256 pixels at the selected
     zoom. Crop before resizing; a fixed zoom alone changes coverage by latitude.
@@ -61,7 +61,7 @@ async def radar_for_location(latitude: float, longitude: float) -> dict:
     if not (math.isfinite(latitude) and math.isfinite(longitude)
             and -85 <= latitude <= 85 and -180 <= longitude <= 180):
         raise ValueError("Standort außerhalb der Radar-Karte")
-    key = hashlib.sha256(f"50km-10km-rings-v2:{latitude:.5f},{longitude:.5f}".encode()).hexdigest()
+    key = hashlib.sha256(f"60km-10km-rings-v3:{latitude:.5f},{longitude:.5f}".encode()).hexdigest()
     root = settings.data_dir / "images" / "weather-radar"
     root.mkdir(parents=True, exist_ok=True)
     meta = root / f"{key}.json"
@@ -99,12 +99,13 @@ async def radar_for_location(latitude: float, longitude: float) -> dict:
                 image = Image.alpha_composite(image, tile)
                 draw = ImageDraw.Draw(image)
                 # Same 55-pixel half-width and 10-km spacing as the firmware.
-                for radius in (22, 44):
+                for distance in (10, 20, 30):
+                    radius = round(distance * 55 / (RADAR_WIDTH_KM / 2))
                     draw.ellipse((56-radius, 56-radius, 56+radius, 56+radius), outline="#385363")
                 draw.line((56, 0, 56, 111), fill="#385363")
                 draw.line((0, 56, 111, 56), fill="#385363")
                 draw.ellipse((53, 53, 59, 59), fill="white", outline="#182d3c")
-                draw.text((3, 1), "N", fill="white")
+                draw.text((56, 1), "N", anchor="mt", fill="white")
                 output = io.BytesIO()
                 image.convert("RGB").save(output, format="PNG")
                 data = output.getvalue()
