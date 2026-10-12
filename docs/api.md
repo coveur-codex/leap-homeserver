@@ -119,7 +119,7 @@ oder `route.origin`/`route.destination` übernommen. ADS-B-Positionen allein
 enthalten keine Flugroute; die Standardquelle liefert diese Angaben nicht immer.
 Es gibt dafür keine zusätzlichen externen Einzelabfragen.
 
-Der gemeinsame Flugradar-Cache wird standardmäßig alle 30 Sekunden erneuert,
+Der gemeinsame Flugradar-Cache wird standardmäßig alle 15 Sekunden erneuert,
 auch bei mehreren Geräten am selben Standort. Bei Providerfehlern bleiben
 Beobachtung und ursprünglicher Zeitstempel mit `stale: true` erhalten.
 Die Webvorschau holt bei sichtbarer Radarkarte alle 30 Sekunden Daten und
