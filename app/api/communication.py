@@ -36,7 +36,7 @@ def participant(device_id, db):
 
 def snapshot(event):
     return {"id": event.id, "eventId": event.event_id, "senderId": event.sender_id,
-            "name": event.name, "text": event.text, "symbol": event.symbol,
+            "name": event.name, "accentColor": event.accent_color, "text": event.text, "symbol": event.symbol,
             "sentAt": event.sent_at.replace(tzinfo=timezone.utc) if event.sent_at.tzinfo is None else event.sent_at}
 
 
@@ -60,7 +60,7 @@ def send_message(device_id: str, body: RelaySend, db: Session = Depends(get_db))
         text, symbol = template.text, template.symbol
     event = CommunicationRelayEvent(sender_id=device_id, event_id=body.eventId,
         template_id=body.templateId, name=device.avatar_name or device.name,
-        text=text, symbol=symbol)
+        text=text, symbol=symbol, accent_color=device.accent_color)
     db.add(event)
     try:
         db.commit()

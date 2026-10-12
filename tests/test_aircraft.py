@@ -67,5 +67,5 @@ async def test_aircraft_cache_refresh_does_not_refresh_weather(db, monkeypatch):
     await location_data.refresh_location(db, "Test", 50, 7, weather_provider=Weather(), aircraft_provider=provider)
     assert provider.calls == 1
     assert cache.weather_data == {"current": {}}
-    assert location_data._fresh(now - timedelta(seconds=29), now, "aircraft")
-    assert not location_data._fresh(now - timedelta(seconds=31), now, "aircraft")
+    assert location_data._fresh(now - timedelta(seconds=14), now, "aircraft")
+    assert not location_data._fresh(now - timedelta(seconds=16), now, "aircraft")

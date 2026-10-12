@@ -328,3 +328,14 @@ Gerätekonfiguration enthält `accentColor` als `#RRGGBB`; Standard `#00d7c5`.
 Die Firmware wandelt in RGB565 um und verwendet bei fehlenden/ungültigen Werten
 das bisherige Türkis. Auswahl unter Geräte → Allgemein; wirksam nach Konfig-Sync.
 Beide Radare zeigen 60 × 60 km mit Ringen bei 10, 20 und 30 km und Norden oben mittig.
+
+## Benachrichtigungen ab 1.0.5
+
+`GET /devices/{id}/config` ergänzt `notificationSounds` mit den booleschen
+Schlüsseln `communication`, `news`, `aircraft` (Standard jeweils `true`) und
+`locationAltitudeMeters` (leer → 0). `/aircraft` liefert dieselbe Standorthöhe
+in `center.altitudeMeters`, auch bei gemeinsam genutztem Standort-Cache.
+`/news` ergänzt pro Artikel `fetchedEpoch` (UTC-Unixsekunden des erstmaligen Imports)
+für die Abgrenzung zu Artikeln vor dem Gerätestart. Kommunikationsereignisse
+enthalten `accentColor` als unveränderliche Absenderfarbe zum Sendezeitpunkt.
+Bestehende Ereignisse erhalten durch Migration 0014 die Standardfarbe Türkis.
