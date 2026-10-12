@@ -42,7 +42,7 @@ class Checkin(BaseModel):
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
-    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"knowledgeSource":d.knowledge_source,"accentColor":d.accent_color,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":x in d.enabled_games} for x, _ in GAME_REGISTRY],"homeSlots":d.home_slots}
+    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"knowledgeSource":d.knowledge_source,"notificationSounds":d.notification_sounds,"locationAltitudeMeters":d.location_altitude_meters or 0,"accentColor":d.accent_color,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":x in d.enabled_games} for x, _ in GAME_REGISTRY],"homeSlots":d.home_slots}
 @router.get("/devices/{device_id}/version")
 def version(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"contentVersion":max(d.news_version,d.weather_version,d.aircraft_version,d.quiz_version,d.knowledge_version)}
@@ -63,7 +63,7 @@ def checkin(device_id:str,data:Checkin,db:Session=Depends(get_db)):
 @router.get("/devices/{device_id}/news")
 def news(device_id:str,limit:int|None=Query(None,ge=1,le=100),since:datetime|None=None,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); rows=articles_for_device(d,db,limit=limit,since=since)
-    return {"version":d.news_version,"articles":[{"id":f"news_{a.id}","category":a.category,"title":a.title,"summary":a.summary,"source":a.source,"published":a.published_at,"image":f"/api/v1/assets/news/{a.id}/thumb.jpg" if a.image_leap else None} for a in rows]}
+    return {"version":d.news_version,"articles":[{"id":f"news_{a.id}","category":a.category,"title":a.title,"summary":a.summary,"source":a.source,"published":a.published_at,"fetchedEpoch":int(a.fetched_at.replace(tzinfo=timezone.utc).timestamp()),"image":f"/api/v1/assets/news/{a.id}/thumb.jpg" if a.image_leap else None} for a in rows]}
 @router.get("/devices/{device_id}/weather")
 async def weather(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
@@ -93,7 +93,7 @@ async def aircraft(device_id:str,db:Session=Depends(get_db)):
     try:
         data=await data_for_device(d,db,"aircraft")
         return {"version":d.aircraft_version,**data,
-                "center":{"latitude":d.latitude,"longitude":d.longitude}}
+                "center":{"latitude":d.latitude,"longitude":d.longitude,"altitudeMeters":d.location_altitude_meters or 0}}
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception: raise HTTPException(503,"Flugradar derzeit nicht verfügbar")
 @router.get("/devices/{device_id}/quiz")

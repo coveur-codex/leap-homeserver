@@ -60,7 +60,7 @@ uvicorn app.main:app --reload --port 8080
 pytest
 ```
 
-Wetter wird alle 15 Minuten, Flugradar standardmäßig alle 30 Sekunden (`LEAP_AIRCRAFT_CACHE_SECONDS`) einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
+Wetter wird alle 15 Minuten, Flugradar standardmäßig alle 15 Sekunden (`LEAP_AIRCRAFT_CACHE_SECONDS`) einmal je eindeutigem, konfiguriertem Koordinatenpaar aktualisiert und anschließend von allen Geräten an diesem Standort gemeinsam genutzt. Der Radius des Flugradars ist über `LEAP_AIRCRAFT_RADIUS_NM` konfigurierbar. Wissen verwendet je Gerät Klexikon oder MiniKlexikon und hält Artikel sowie verkleinerte Bilder im lokalen Cache. Details stehen in [`docs/api.md`](docs/api.md). V1 implementiert keine Tamagotchi-Logik, Cloud-Synchronisation, Push-Verbindung oder Multiplayer-Logik.
 
 Assets, Datenübernahme, Firmware-Kanäle und das vollständige ESP32-Installationsprotokoll: [`docs/distribution.md`](docs/distribution.md). Die Server-APIs sind implementiert; der Geräteclient muss das dort beschriebene Verfahren in seiner Firmware umsetzen.
 
@@ -184,3 +184,29 @@ Pro Gerät ist unter Allgemein eine Akzentfarbe wählbar (Türkis als Standard).
 Regenradar: neuer Cache-Key, 60 × 60 km, Ringe bei 10/20/30 km und N oben mittig.
 Firmware 1.0.8 verwendet dieselbe Flugradarprojektion und normal gezeichnete,
 unverdickte Überschriften. Protokoll, TLS und Proxy-Anforderungen: [API](docs/api.md).
+
+### Benachrichtigungen (1.0.5 / Firmware 1.0.9)
+
+Zuerst Homeserver 1.0.5 mit Migration 0014 installieren, danach Firmware 1.0.9.
+Unter **Geräte → Benachrichtigungstöne** lassen sich Pling (Kommunikation),
+Plong (News) und Zisch (Flugzeugnähe) unabhängig ein-/ausschalten. Visuelle
+Hinweise bleiben aktiv. Unter **Standort** steht die Höhe in Metern über Meer;
+ein leeres Feld entspricht 0 m. Diese gerätespezifische Höhe wird nicht im
+geteilten Standort-Cache gespeichert.
+
+Firmware zeigt Hinweise für 5 Sekunden anstelle des Avatars, bündelt neue News
+und markiert das passende Modul bis zum Öffnen. Startbestände bleiben still.
+Der Absendername und dessen zum Sendezeitpunkt gespeicherte Akzentfarbe gehören
+zur Kommunikationsmeldung. News und Flugzeugmeldungen verwenden die eigene Farbe.
+
+Flugradar läuft bei aktivierter Seite auch im Hintergrund und bei Gerätesperre.
+Geräteabfrage und Standard-Servercache: 15 Sekunden (`LEAP_AIRCRAFT_CACHE_SECONDS`);
+dazwischen wird die Position anhand Kurs und Geschwindigkeit sekündlich geschätzt,
+maximal bis 120 Sekunden Beobachtungsalter inklusive `positionAgeSeconds`.
+Die Meldung erfolgt beim Eintritt in eine räumliche 3-km-Kugel um den Standort;
+erneut erst nach mehr als 3,5 km Entfernung. Ohne bekannte Flugzeughöhe oder mit
+veralteten Daten gibt es keine Nähemeldung. Die ADS-B-Barometerhöhe dient als
+Näherung; tatsächliche Geräusche und exakte geometrische Höhe werden nicht gemessen.
+
+Firmware 1.0.9 aktualisiert News zusätzlich einmal pro Minute im RAM, damit neue
+Titel und Benachrichtigungen zeitnah erscheinen, ohne öfter Flash zu schreiben.

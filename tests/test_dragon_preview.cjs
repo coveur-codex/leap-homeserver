@@ -14,7 +14,7 @@ const ctx = {
 const canvas = {closest: s => s==='.games-card'?card:panel, getContext: () => ctx};
 let next;
 vm.runInNewContext(fs.readFileSync('app/static/device-preview.js','utf8'), {
-  document: {hidden:false, querySelectorAll: s => s==='[data-dragon-canvas]'?[canvas]:[]},
+  document: {hidden:false, querySelector: () => null, querySelectorAll: s => s==='[data-dragon-canvas]'?[canvas]:[]},
   requestAnimationFrame: fn => {next=fn;}
 });
 function frame(t) {rectangles.length=0; circles.length=0; texts.length=0; next(t);}
