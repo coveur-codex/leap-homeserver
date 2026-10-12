@@ -52,3 +52,17 @@ def test_news_has_arrival_timestamp(client, db):
     db.add(article); db.commit()
     rows = client.get('/api/v1/devices/news-notify/news').json()['articles']
     assert rows[0]['fetchedEpoch'] == int(fetched.timestamp())
+
+
+def test_observer_altitude_is_not_shared_between_devices(client, db, monkeypatch):
+    from app.api import routes
+    data = {'aircraft': [], 'center': {'latitude': 50, 'longitude': 7}, 'ageSeconds': 0}
+    async def cached(*args): return data
+    monkeypatch.setattr(routes, 'data_for_device', cached)
+    for did, altitude in [('valley', None), ('hill', 350)]:
+        d = Device(device_id=did, name=did, latitude=50, longitude=7, location_altitude_meters=altitude)
+        initialize_pages(d); db.add(d)
+    db.commit()
+    assert client.get('/api/v1/devices/valley/aircraft').json()['center']['altitudeMeters'] == 0
+    assert client.get('/api/v1/devices/hill/aircraft').json()['center']['altitudeMeters'] == 350
+    assert 'altitudeMeters' not in data['center']
