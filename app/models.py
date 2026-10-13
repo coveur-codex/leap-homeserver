@@ -39,6 +39,7 @@ class Device(Base):
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
     location_altitude_meters: Mapped[float|None] = mapped_column(Float)
+    notification_quiet_hours: Mapped[dict] = mapped_column(JSON, default=dict)
     notification_sounds: Mapped[dict] = mapped_column(JSON, default=lambda: {"communication": True, "news": True, "aircraft": True})
     weather_location: Mapped[str]=mapped_column(String(120), default=""); latitude: Mapped[float|None]=mapped_column(Float); longitude: Mapped[float|None]=mapped_column(Float)
     temperature_unit: Mapped[str]=mapped_column(String(2), default="C"); weather_fields: Mapped[list]=mapped_column(JSON, default=lambda:["temperature","rain","wind"])

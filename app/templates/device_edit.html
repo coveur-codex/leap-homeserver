@@ -36,7 +36,12 @@
 
   <h3>Quiz-Themen</h3>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}
     </section>
-    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small></section>
+    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
+    <input type="hidden" name="quiet_hours_settings" value="true">
+    <label><input type="checkbox" name="quiet_hours_enabled" {% if device.notification_quiet_hours.get('enabled', false) %}checked{% endif %}>Nachtruhe für Benachrichtigungstöne</label>
+    <label>Von<input type="time" name="quiet_hours_start" value="{{device.notification_quiet_hours.get('start') or '22:00'}}"></label>
+    <label>Bis<input type="time" name="quiet_hours_end" value="{{device.notification_quiet_hours.get('end') or '07:00'}}"></label>
+    <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small></section>
     <section><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
     </div>
   </div>
