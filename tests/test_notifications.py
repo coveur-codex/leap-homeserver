@@ -66,3 +66,30 @@ def test_observer_altitude_is_not_shared_between_devices(client, db, monkeypatch
     assert client.get('/api/v1/devices/valley/aircraft').json()['center']['altitudeMeters'] == 0
     assert client.get('/api/v1/devices/hill/aircraft').json()['center']['altitudeMeters'] == 350
     assert 'altitudeMeters' not in data['center']
+
+
+def test_quiet_hours_validation_preservation_and_duplicate(client, db):
+    d = Device(device_id='quiet', name='Quiet')
+    initialize_pages(d); db.add(d); db.commit()
+    url = f'/devices/{d.id}'
+    api = '/api/v1/devices/quiet/config'
+    assert client.get(api).json()['notificationQuietHours'] == {}
+    assert 'name="quiet_hours_start"' in client.get(url).text
+    form = {'name': d.name, 'age': 8, 'avatar': 'dragon', 'enabled': 'on',
+            'quiet_hours_settings': 'true', 'quiet_hours_enabled': 'on',
+            'quiet_hours_start': '22:30', 'quiet_hours_end': '07:15'}
+    assert client.post(url, data=form, follow_redirects=False).status_code == 303
+    expected = {'enabled': True, 'start': '22:30', 'end': '07:15'}
+    assert client.get(api).json()['notificationQuietHours'] == expected
+    client.post(f'{url}/duplicate', follow_redirects=False)
+    assert client.get('/api/v1/devices/quiet-copy/config').json()['notificationQuietHours'] == expected
+    version = d.config_version
+    for value in ['24:00', '7:15', '12:60', '', '22:30']:
+        assert client.post(url, data={**form, 'quiet_hours_end': value}, follow_redirects=False).status_code == 422
+        assert d.config_version == version
+    # Older forms/API clients cannot inadvertently remove quiet hours.
+    assert client.post(url, data={'name': d.name, 'age': 8, 'avatar': 'dragon', 'enabled': 'on'}, follow_redirects=False).status_code == 303
+    assert client.get(api).json()['notificationQuietHours'] == expected
+    form.pop('quiet_hours_enabled')
+    assert client.post(url, data=form, follow_redirects=False).status_code == 303
+    assert client.get(api).json()['notificationQuietHours']['enabled'] is False

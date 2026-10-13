@@ -339,3 +339,12 @@ in `center.altitudeMeters`, auch bei gemeinsam genutztem Standort-Cache.
 für die Abgrenzung zu Artikeln vor dem Gerätestart. Kommunikationsereignisse
 enthalten `accentColor` als unveränderliche Absenderfarbe zum Sendezeitpunkt.
 Bestehende Ereignisse erhalten durch Migration 0014 die Standardfarbe Türkis.
+
+## Nachtruhe ab 1.0.6
+
+`GET /devices/{id}/config` ergänzt `notificationQuietHours`, standardmäßig `{}`.
+Gespeicherte Einstellungen: `{"enabled":true,"start":"22:00","end":"07:00"}`.
+Uhrzeiten sind lokale Gerätezeit (`HH:MM`), Beginn inklusive, Ende exklusive;
+Mitternacht kann überschritten werden. Beim Duplizieren eines Geräts werden
+Nachtruhe-Einstellungen übernommen. Migration 0015 schaltet Nachtruhe für
+bestehende Geräte nicht automatisch ein.

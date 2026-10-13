@@ -210,3 +210,16 @@ Näherung; tatsächliche Geräusche und exakte geometrische Höhe werden nicht g
 
 Firmware 1.0.9 aktualisiert News zusätzlich einmal pro Minute im RAM, damit neue
 Titel und Benachrichtigungen zeitnah erscheinen, ohne öfter Flash zu schreiben.
+
+### Nachtruhe (1.0.6 / Firmware 1.0.10)
+
+Unter **Geräte → Benachrichtigungstöne** kann eine Nachtruhe mit Von-/Bis-Uhrzeit
+aktiviert werden. Es gilt die lokale Gerätezeit einschließlich Sommerzeit;
+Zeitbereiche über Mitternacht sind möglich. Der Beginn ist inklusive, das Ende
+exklusive. Nachtruhe ist standardmäßig ausgeschaltet; die vorbelegten Felder
+22:00–07:00 werden erst durch Aktivieren wirksam. Gleiche Start-/Endzeiten sind
+nicht zulässig. Während der Nachtruhe bleiben Hinweise sichtbar und der
+Standby-Seitenwechsel mit Artikel-/Flugzeugauswahl aktiv. Gedämpft werden nur
+Benachrichtigungstöne, keine vom Benutzer ausgelösten Spiel-/Bedientöne.
+
+Zuerst Homeserver 1.0.6 (Migration 0015), danach Firmware 1.0.10 installieren.
