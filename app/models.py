@@ -28,6 +28,7 @@ class Device(Base):
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
     weather_version: Mapped[int]=mapped_column(Integer, default=1); aircraft_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
     last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
+    chill_keyword: Mapped[str] = mapped_column(String(80), default="nature", server_default="nature")
     firmware_channel: Mapped[str] = mapped_column(String(10), default="stable")
     confirmed_firmware: Mapped[str|None] = mapped_column(String(40))
     last_sync: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
