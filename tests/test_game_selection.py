@@ -64,11 +64,11 @@ def test_migration_preserves_games_and_fresh_schema(tmp_path):
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
         games, version = connection.execute(text("SELECT enabled_games, config_version FROM devices")).one()
-        assert json.loads(games) == [gid for gid in DEFAULT_GAMES if gid != "dragon_run"] and version == 8
+        assert json.loads(games) == [gid for gid in DEFAULT_GAMES if gid not in {"dragon_run", "math_lab"}] and version == 8
         # Fresh installs already have the new column through metadata in 0001.
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
-        assert json.loads(connection.execute(text("SELECT enabled_games FROM devices")).scalar()) == [gid for gid in DEFAULT_GAMES if gid != "dragon_run"]
+        assert json.loads(connection.execute(text("SELECT enabled_games FROM devices")).scalar()) == [gid for gid in DEFAULT_GAMES if gid not in {"dragon_run", "math_lab"}]
 
 
 def test_dragon_run_selection_and_preview(client, db):
@@ -85,3 +85,18 @@ def test_dragon_run_selection_and_preview(client, db):
     d.enabled_games = ["snake"]
     db.commit()
     assert not BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser").select('[data-game-open="dragon"]')
+
+
+def test_math_lab_uses_existing_game_configuration(client, db):
+    d = make_device(db)
+    form = {"name": "Erik", "age": 9, "avatar": "dragon", "enabled": "on",
+            "page_ids": ["games"], "game_settings": "true", "game_ids": ["math_lab"]}
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    config = client.get("/api/v1/devices/leap-erik/config").json()
+    assert [g["id"] for g in config["games"] if g["enabled"]] == ["math_lab"]
+    html = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
+    assert html.select('input[name="game_ids"][value="math_lab"][checked]')
+    assert "Mathe-Labor" in html.get_text()
+    form.pop("game_ids")
+    client.post(f"/devices/{d.id}", data=form, follow_redirects=False)
+    assert not any(g["enabled"] for g in client.get("/api/v1/devices/leap-erik/config").json()["games"])
