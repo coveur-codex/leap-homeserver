@@ -264,3 +264,12 @@ Wenn beide Quellen ausfallen, bleibt das letzte Bild auf dem Gerät sichtbar.
 und wird bei der Rückkehr zu LoremFlickr wieder verwendet. Zufallsbilder beider
 Dienste sind nicht garantiert kindgerecht. Die Anpassung benötigt nur ein Update
 des Homeservers; Firmware, Chill-Auswahl und Bildübergänge bleiben kompatibel.
+
+## 1.1.1: Mathe-Labor
+
+Die vorhandene Spieleverwaltung bietet `math_lab` als einen Eintrag **Mathe-Labor**
+an. Er bündelt auf Firmware 1.1.1 Würfellabor, Zahlenwerkstatt, Würfelarchitekt und
+Würfeldetektiv. Im Geräteeditor aktivieren und synchronisieren; anschließend
+funktionieren alle Aktivitäten offline und ohne Assets. Bestehende Geräte behalten
+ihre Freigaben, neue Geräte erhalten die vorhandene Standardauswahl einschließlich
+des Labors. Keine neue Datenbankmigration oder zusätzliche Lernstatistiken.

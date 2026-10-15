@@ -389,3 +389,10 @@ unverändert. Nach einem LoremFlickr-Fehler wird fünf Minuten direkt Picsum ver
 danach wird die primäre Quelle erneut geprüft. Picsum unterstützt keine Keywords.
 Weiterleitungen sind je Quelle getrennt auf deren bekannte HTTPS-Bildhosts begrenzt:
 LoremFlickr/Flickr beziehungsweise `picsum.photos` und `fastly.picsum.photos`.
+
+### Mathe-Labor (1.1.1)
+
+Die bestehende `games`-Liste enthält zusätzlich `math_lab` / „Mathe-Labor“.
+Aktivierung, Duplizieren, Konfigurationsversion und Offline-Snapshot verwenden
+unverändert `enabled_games`; vier Unteraktivitäten werden nur in der Firmware
+angeboten. Mindestens Firmware 1.1.1 erforderlich; ältere Firmware ignoriert die ID.
