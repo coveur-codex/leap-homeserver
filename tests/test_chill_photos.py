@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 from app.services import chill
 from app.models import Device, AssetPackage
+from app.services.chill import download_picsum as real_download_picsum
 
 
 def image(size=(800, 600), color="green"):
@@ -14,10 +15,14 @@ def image(size=(800, 600), color="green"):
 
 
 @pytest.fixture(autouse=True)
-def clean_chill():
+def clean_chill(monkeypatch):
     chill._recent.clear()
     chill._locks.clear()
     chill._fetches.clear()
+    chill._primary_retry_at = 0
+    async def unavailable(): raise ValueError("Picsum unavailable in this test")
+    monkeypatch.setattr(chill, "download_picsum", unavailable)
+
 
 
 @pytest.mark.parametrize("value", ["nature", "forest,ocean", "Bäume", "snow mountains"])
@@ -188,6 +193,7 @@ async def test_rejected_image_logs_redirect_host_and_content_type(db, monkeypatc
     responses = [httpx.Response(302, headers={"location": "https://unexpected.example/photo.jpg"}),
                  httpx.Response(200, headers={"content-type": "text/html"}, content=b"html")]
     for index, response in enumerate(responses):
+        chill._primary_retry_at = 0
         monkeypatch.setattr(chill.httpx, "AsyncClient", lambda **kw: constructor(transport=httpx.MockTransport(lambda req: response), **kw))
         with pytest.raises(ValueError):
             await chill.photo(SimpleNamespace(id=index, device_id="leap-papa", chill_keyword="nature"))
@@ -300,8 +306,115 @@ async def test_total_upstream_budget_still_bounds_stalled_download(db, monkeypat
         try: await asyncio.Event().wait()
         finally: cancelled.set()
     monkeypatch.setattr(chill, "download", stuck)
-    monkeypatch.setattr(chill, "PHOTO_TOTAL_TIMEOUT", .01)
+    monkeypatch.setattr(chill, "PRIMARY_ATTEMPT_TIMEOUT", .01)
     d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
     with pytest.raises(TimeoutError): await chill.photo(d)
     assert cancelled.is_set() and not chill._fetches
     assert "stage=download error=TimeoutError" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["timeout", "status", "decode"])
+async def test_picsum_fallback_after_primary_failure(db, monkeypatch, failure):
+    import asyncio
+    calls = []
+    async def primary(topic):
+        calls.append(("loremflickr", topic))
+        if failure == "timeout": await asyncio.Event().wait()
+        if failure == "status":
+            httpx.Response(503, request=httpx.Request("GET", "https://loremflickr.com/photo")).raise_for_status()
+        return b"invalid JPEG"
+    async def fallback():
+        calls.append(("picsum", None))
+        return image()
+    monkeypatch.setattr(chill, "download", primary)
+    monkeypatch.setattr(chill, "download_picsum", fallback)
+    monkeypatch.setattr(chill, "PRIMARY_ATTEMPT_TIMEOUT", .01)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="forest")
+    info = await chill.photo(d)
+    assert info["source"] == "picsum" and info["keywordApplied"] is False
+    assert calls == [("loremflickr", "forest"), ("picsum", None)]
+    with Image.open(chill.photo_path(1, info["sha256"])) as picture:
+        assert picture.size == (428, 142)
+
+
+@pytest.mark.asyncio
+async def test_fallback_cooldown_and_primary_recovery(db, monkeypatch):
+    import time
+    calls = []
+    healthy = False
+    async def primary(topic):
+        calls.append(("loremflickr", topic))
+        if not healthy: raise httpx.ConnectError("offline")
+        return image()
+    async def fallback():
+        calls.append(("picsum", None))
+        return image()
+    monkeypatch.setattr(chill, "download", primary)
+    monkeypatch.setattr(chill, "download_picsum", fallback)
+    for id in (1, 2):
+        info = await chill.photo(SimpleNamespace(id=id, device_id=f"leap-{id}", chill_keyword="ocean"))
+        assert info["source"] == "picsum"
+    assert calls == [("loremflickr", "ocean"), ("picsum", None), ("picsum", None)]
+    healthy = True
+    chill._primary_retry_at = time.monotonic() - 1
+    info = await chill.photo(SimpleNamespace(id=3, device_id="leap-3", chill_keyword="forest"))
+    assert info["source"] == "loremflickr" and info["keywordApplied"] is True
+    assert calls[-1] == ("loremflickr", "forest") and chill._primary_retry_at == 0
+
+
+@pytest.mark.asyncio
+async def test_both_sources_fail_preserves_previous_photo(db, monkeypatch):
+    async def primary(topic): return image()
+    monkeypatch.setattr(chill, "download", primary)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    info = await chill.photo(d)
+    original = chill.photo_path(1, info["sha256"]).read_bytes()
+    async def fail(topic): raise httpx.ConnectError("offline")
+    async def corrupt(): return b"not a JPEG"
+    monkeypatch.setattr(chill, "download", fail)
+    monkeypatch.setattr(chill, "download_picsum", corrupt)
+    chill._recent.clear()
+    with pytest.raises(httpx.ConnectError): await chill.photo(d)
+    assert chill.photo_path(1, info["sha256"]).read_bytes() == original
+
+
+@pytest.mark.asyncio
+async def test_picsum_uses_its_own_bounded_redirect_hosts(monkeypatch):
+    calls = []
+    constructor = httpx.AsyncClient
+    def respond(request):
+        calls.append(request)
+        if request.url.host == "picsum.photos":
+            assert request.url.path == "/428/142" and "random" in request.url.params
+            return httpx.Response(302, headers={"location":"https://fastly.picsum.photos/id/42/428/142.jpg?hmac=example"})
+        return httpx.Response(200, headers={"content-type":"image/jpeg"}, content=image())
+    monkeypatch.setattr(chill.httpx, "AsyncClient", lambda **kw: constructor(transport=httpx.MockTransport(respond), **kw))
+    await real_download_picsum()
+    await real_download_picsum()
+    assert calls[0].url.params["random"] != calls[2].url.params["random"]
+    assert chill.safe_url(httpx.URL("https://fastly.picsum.photos/a.jpg"), "picsum")
+    assert not chill.safe_url(httpx.URL("https://live.staticflickr.com/a.jpg"), "picsum")
+    assert not chill.safe_url(httpx.URL("https://fastly.picsum.photos/a.jpg"), "loremflickr")
+    for url in ("http://picsum.photos/a", "https://picsum.photos.evil.org/a", "https://user@picsum.photos/a", "https://picsum.photos:8443/a", "https://127.0.0.1/a"):
+        assert not chill.safe_url(httpx.URL(url), "picsum")
+    def blocked(request): return httpx.Response(302, headers={"location":"https://127.0.0.1/private"})
+    monkeypatch.setattr(chill.httpx, "AsyncClient", lambda **kw: constructor(transport=httpx.MockTransport(blocked), **kw))
+    with pytest.raises(ValueError, match="Bildweiterleitung"): await real_download_picsum()
+
+
+@pytest.mark.asyncio
+async def test_fallback_timeout_is_bounded(db, monkeypatch, caplog):
+    import asyncio
+    cancelled = asyncio.Event()
+    async def primary(topic): raise httpx.ConnectError("LoremFlickr offline")
+    async def fallback():
+        try: await asyncio.Event().wait()
+        finally: cancelled.set()
+    monkeypatch.setattr(chill, "download", primary)
+    monkeypatch.setattr(chill, "download_picsum", fallback)
+    monkeypatch.setattr(chill, "FALLBACK_ATTEMPT_TIMEOUT", .01)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    with pytest.raises(httpx.ConnectError): await chill.photo(d)
+    assert cancelled.is_set() and not chill._fetches
+    assert "source=picsum stage=download error=TimeoutError" in caplog.text

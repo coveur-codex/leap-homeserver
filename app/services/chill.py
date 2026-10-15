@@ -1,4 +1,4 @@
-"""Bounded LoremFlickr proxy. External URLs never come from a device or form."""
+"""Bounded photo proxy with LoremFlickr topics and a Picsum availability fallback."""
 import asyncio
 import hashlib
 from io import BytesIO
@@ -19,8 +19,12 @@ PACKAGE_ID = "chill-loremflickr"
 MAX_DOWNLOAD = 4 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 PHOTO_READ_TIMEOUT = 60
-PHOTO_TOTAL_TIMEOUT = 70
 PHOTO_RESPONSE_WAIT = 1
+PRIMARY_ATTEMPT_TIMEOUT = 8
+FALLBACK_ATTEMPT_TIMEOUT = 20
+PHOTO_TOTAL_TIMEOUT = PRIMARY_ATTEMPT_TIMEOUT + FALLBACK_ATTEMPT_TIMEOUT
+PRIMARY_RETRY_SECONDS = 300
+_primary_retry_at = 0.0
 
 
 class PhotoPending(ValueError):
@@ -45,20 +49,32 @@ def keyword(value: str) -> str:
     return value
 
 
-def safe_url(url: httpx.URL) -> bool:
+def safe_url(url: httpx.URL, source: str = "loremflickr") -> bool:
     host = url.host.lower()
-    return (url.scheme == "https" and url.port in {None, 443} and not url.userinfo
-            and (host in {"loremflickr.com", "www.loremflickr.com"}
-                 or host == "live.staticflickr.com"
-                 or re.fullmatch(r"farm[0-9]+\.staticflickr\.com", host) is not None))
+    if url.scheme != "https" or url.port not in {None, 443} or url.userinfo:
+        return False
+    if source == "picsum":
+        return host in {"picsum.photos", "fastly.picsum.photos"}
+    return (host in {"loremflickr.com", "www.loremflickr.com", "live.staticflickr.com"}
+            or re.fullmatch(r"farm[0-9]+\.staticflickr\.com", host) is not None)
 
 
 async def download(topic: str) -> bytes:
     # A fresh random parameter bypasses LoremFlickr's cached random-photo selection.
     url = httpx.URL(f"https://loremflickr.com/{WIDTH}/{HEIGHT}/{quote(topic, safe=',')}?random={secrets.randbits(48)}")
+    return await _download_url(url, "loremflickr")
+
+
+async def download_picsum() -> bytes:
+    # Picsum provides random photographs, without a topic/search parameter.
+    url = httpx.URL(f"https://picsum.photos/{WIDTH}/{HEIGHT}?random={secrets.randbits(48)}")
+    return await _download_url(url, "picsum")
+
+
+async def _download_url(url: httpx.URL, source: str) -> bytes:
     async with httpx.AsyncClient(timeout=httpx.Timeout(PHOTO_READ_TIMEOUT, connect=5), follow_redirects=False) as client:
         for _ in range(6):
-            if not safe_url(url):
+            if not safe_url(url, source):
                 raise ValueError(f"Unzulässige Bildweiterleitung: {url.scheme}://{url.host}:{url.port or 443}")
             async with client.stream("GET", url, headers={"Accept": "image/jpeg,image/png"}) as response:
                 if response.is_redirect:
@@ -104,7 +120,20 @@ def photo_path(device_id: int, digest: str):
     return settings.data_dir / "images" / "chill" / str(device_id) / f"{digest}.jpg"
 
 
+def _failure_reason(error: Exception) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        return f"HTTP {error.response.status_code} from {error.request.url.host}"
+    reason = str(error) or type(error).__name__
+    if isinstance(error, httpx.RequestError):
+        try:
+            return f"{reason} from {error.request.url.host}"
+        except RuntimeError:  # a request-less error
+            pass
+    return reason
+
+
 async def _fetch_photo(device: PhotoDevice) -> dict:
+    global _primary_retry_at
     topic = keyword(device.chill_keyword)
     async with _locks.setdefault(device.id, asyncio.Lock()):
         previous = _recent.get(device.id)
@@ -116,9 +145,37 @@ async def _fetch_photo(device: PhotoDevice) -> dict:
         _recent[device.id] = (now, topic, None)
         stage = "download"
         try:
-            raw = await asyncio.wait_for(download(topic), timeout=PHOTO_TOTAL_TIMEOUT)
-            stage = "decode"
-            data = await asyncio.to_thread(convert, raw)
+            primary_error = None
+            primary_stage = "download"
+            source = "picsum"
+            now = time.monotonic()
+            try_primary = now >= _primary_retry_at
+            if try_primary and _primary_retry_at:
+                # Only one request probes recovery after an outage cooldown.
+                _primary_retry_at = now + PRIMARY_RETRY_SECONDS
+            providers = (["loremflickr"] if try_primary else []) + ["picsum"]
+            for source in providers:
+                stage = "download"
+                try:
+                    request = download(topic) if source == "loremflickr" else download_picsum()
+                    timeout = PRIMARY_ATTEMPT_TIMEOUT if source == "loremflickr" else FALLBACK_ATTEMPT_TIMEOUT
+                    raw = await asyncio.wait_for(request, timeout=timeout)
+                    stage = "decode"
+                    data = await asyncio.to_thread(convert, raw)
+                    if source == "loremflickr":
+                        _primary_retry_at = 0
+                    break
+                except (ValueError, TimeoutError, OSError, httpx.HTTPError) as error:
+                    log.warning("chill_source_failed device=%s source=%s stage=%s error=%s reason=%r",
+                                device.device_id, source, stage, type(error).__name__, _failure_reason(error)[:500])
+                    if source == "loremflickr":
+                        _primary_retry_at = time.monotonic() + PRIMARY_RETRY_SECONDS
+                        primary_error, primary_stage = error, stage
+                        continue
+                    if primary_error is not None:
+                        stage = primary_stage
+                        raise primary_error from error
+                    raise
             digest = hashlib.sha256(data).hexdigest()
             path = photo_path(device.id, digest)
             stage = "cache"
@@ -133,26 +190,18 @@ async def _fetch_photo(device: PhotoDevice) -> dict:
             for old in sorted(path.parent.glob("*.jpg"), key=lambda p: p.stat().st_mtime, reverse=True)[2:]:
                 old.unlink(missing_ok=True)
             info = {"width": WIDTH, "height": HEIGHT, "size": len(data), "sha256": digest,
-                    "url": f"/api/v1/devices/{quote(device.device_id, safe='')}/chill/photos/{digest}.jpg"}
+                    "url": f"/api/v1/devices/{quote(device.device_id, safe='')}/chill/photos/{digest}.jpg",
+                    "source": source, "keywordApplied": source == "loremflickr"}
         except (ValueError, TimeoutError, OSError, httpx.HTTPError) as error:
             _recent[device.id] = (time.monotonic(), topic, None)
             # Routes intentionally return a generic 503. Keep the actionable cause
             # here for both device requests and the browser preview, once per attempt.
-            if isinstance(error, httpx.HTTPStatusError):
-                reason = f"HTTP {error.response.status_code} from {error.request.url.host}"
-            elif isinstance(error, httpx.RequestError):
-                reason = str(error) or type(error).__name__
-                try:
-                    reason = f"{reason} from {error.request.url.host}"
-                except RuntimeError:  # request-less synthetic errors in tests
-                    pass
-            else:
-                reason = str(error) or type(error).__name__
+            reason = _failure_reason(error)
             log.warning("chill_photo_failed device=%s stage=%s error=%s reason=%r",
                         device.device_id, stage, type(error).__name__, reason[:500])
             raise
         _recent[device.id] = (time.monotonic(), topic, info)
-        log.info("chill_photo_ready device=%s bytes=%s", device.device_id, len(data))
+        log.info("chill_photo_ready device=%s source=%s bytes=%s", device.device_id, source, len(data))
         return info
 
 

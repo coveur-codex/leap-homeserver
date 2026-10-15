@@ -11,8 +11,9 @@ und bestehende Datenbanken einschließlich erhaltener Quizdaten ab.
 Nicht live geprüft: LoremFlickr antwortet aus dieser Arbeitsumgebung wegen der
 Netzwerkfreigabe mit HTTP 403. Vor Release den echten Dienst einschließlich
 Weiterleitungskette, zufälliger Bildauswahl und mehrerer Themen testen. Externe
-Verfügbarkeit und Bildinhalt sind nicht garantiert. HTTPS-Weiterleitungen werden
-nur zu LoremFlickr, live.staticflickr.com oder farmN.staticflickr.com akzeptiert.
+Verfügbarkeit und Bildinhalt sind nicht garantiert. HTTPS-Weiterleitungen werden je Quelle nur zu deren festen Hosts akzeptiert:
+LoremFlickr, live.staticflickr.com oder farmN.staticflickr.com für die Hauptquelle,
+picsum.photos oder fastly.picsum.photos für den Ersatzdienst.
 Ändert der Dienst seine Hosts oder Formate, bleibt das letzte Gerätebild bestehen.
 
 Die ESP32-Firmware benötigt physische Prüfungen über 5 und 30 Minuten ohne Eingabe,
@@ -56,7 +57,25 @@ Netz betroffen ist; Browserzugriff im WLAN und über Mobilfunk helfen bei der
 Unterscheidung. Eine längere Wartezeit allein garantiert kein Bild.
 
 Die Serveranpassung trennt deshalb den kurzen Geräteaufruf vom längeren, begrenzten
-Hintergrundabruf. Bereits erfolgreiche Bilder bleiben erhalten. Solange der
-externe Dienst keine Antwort liefert, bleibt die erste Bildanzeige ohne Cache
+Hintergrundabruf. Bereits erfolgreiche Bilder bleiben erhalten. Solange keine der
+beiden Quellen ein gültiges Bild liefert, bleibt die erste Bildanzeige ohne Cache
 schwarz; Musik und Bedienung laufen weiter. Ein Firmware-Update ist für diese
 Anpassung nicht erforderlich.
+
+
+## Verfügbarkeit durch Picsum-Fallback
+
+LoremFlickr hat ein Abrufbudget von acht Sekunden. Bei Timeout, HTTP-/Formatfehler
+oder fehlgeschlagener Bilddecodierung folgt automatisch Picsum mit einem Budget
+von 20 Sekunden. Die fünfminütige Wartezeit für die Hauptquelle gilt serverweit,
+sodass weitere Bilder und Geräte bei einer Störung direkt Picsum verwenden.
+Ein Abruf nach Ablauf der Wartezeit prüft LoremFlickr erneut. Funktioniert es
+wieder, werden die gespeicherten Themen wieder angewendet. Picsum liefert zufällige
+Fotografien und kann das Keyword nicht berücksichtigen; das steht auch am Themenfeld.
+
+Automatisiert geprüft: Fallback nach Timeout/HTTP-Fehler/defekten Bilddaten,
+begrenzter Fallback-Timeout, Wartezeit und Rückkehr zur Hauptquelle, zufällige
+Picsum-URLs und deren echte Redirect-Form mit einem HTTPX-Mock, getrennte Hostlisten
+sowie Erhalt des letzten Bildes beim Ausfall beider Quellen. Eine Live-Abfrage von
+Picsum ist aus der Entwicklungsumgebung aufgrund der ausgehenden Netzwerkfreigabe
+nicht möglich. Die Erreichbarkeit im tatsächlichen Heimnetz ist gesondert zu prüfen.
