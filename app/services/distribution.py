@@ -162,6 +162,7 @@ def deletion_block_reason(package):
     defaults = {"avatar-" + key for key in BUILTINS}
     defaults.update(path.name.removesuffix("-v1.zip") for path in
                     (Path(__file__).resolve().parents[1] / "defaults" / "chill").glob("*.zip"))
+    defaults.add("chill-loremflickr")
     if package.id in defaults:
         return "Dieses Standardpaket wird automatisch vom Server bereitgestellt."
     return None
@@ -300,11 +301,16 @@ def validate_chill(metadata, files):
     # Empty legacy packages can still be populated through the existing asset editor.
     if "scene" not in metadata:
         return
-    if not isinstance(metadata["scene"], str) or metadata["scene"] not in {"space", "fire", "snow"}:
+    if not isinstance(metadata["scene"], str) or metadata["scene"] not in {"space", "fire", "snow", "loremflickr"}:
         raise HTTPException(422, "Unbekannte Chill-Szene")
     slider = metadata.get("slider", {})
-    if not isinstance(slider, dict) or slider.get("min") != 0 or slider.get("max") != 100 or type(slider.get("default")) is not int or not 0 <= slider["default"] <= 100:
-        raise HTTPException(422, "Chill-Slider benötigt 0–100 und einen gültigen Standardwert")
+    maximum = 300 if metadata["scene"] == "loremflickr" else 100
+    if not isinstance(slider, dict) or slider.get("min") != 0 or slider.get("max") != maximum or type(slider.get("default")) is not int or not 0 <= slider["default"] <= maximum:
+        raise HTTPException(422, f"Chill-Slider benötigt 0–{maximum} und einen gültigen Standardwert")
+    if metadata["scene"] == "loremflickr":
+        if metadata.get("minFirmware") != "1.1.0" or metadata.get("sprites") != []:
+            raise HTTPException(422, "LoremFlickr benötigt Firmware 1.1.0 und keine Paket-Sprites")
+        return
     sprites = metadata.get("sprites")
     if not isinstance(sprites, list) or not 1 <= len(sprites) <= 16:
         raise HTTPException(422, "Chill benötigt 1–16 Sprites")
@@ -453,6 +459,12 @@ def ensure_packages(db):
             db.add(package); db.flush()
             publish_quiz(db, package, catalog, 0)
             changed = True
+    if not db.get(AssetPackage, "chill-loremflickr"):
+        package = AssetPackage(id="chill-loremflickr", kind="chill", name="LoremFlickr", current_version=0)
+        db.add(package); db.flush()
+        publish(db, package, {}, {"scene":"loremflickr", "minFirmware":"1.1.0",
+                "slider":{"min":0,"max":300,"default":200}, "sprites":[]}, 0)
+        changed = True
     for key, label in BUILTINS.items():
         package = db.get(AssetPackage, "avatar-" + key)
         svg = (Path("app/static/avatars") / f"{key}.svg").read_bytes()

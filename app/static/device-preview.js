@@ -196,3 +196,10 @@ document.querySelectorAll('[data-dragon-canvas]').forEach(canvas => {
 });
 
 document.querySelector("[data-accent-color]")?.addEventListener("input", event => { document.querySelector(".leap-preview")?.style.setProperty("--device-accent", event.target.value); });
+
+// Fetch one example only when the existing device preview actually shows its Chill card.
+document.querySelectorAll('[data-chill-photo-preview]').forEach(photo => {
+  const load = () => { if (!photo.closest('.chill-card').hidden && !photo.src) photo.src = photo.dataset.src; };
+  new MutationObserver(load).observe(photo.closest('.chill-card'), {attributes:true, attributeFilter:['hidden']});
+  load();
+});

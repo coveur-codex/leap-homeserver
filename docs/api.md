@@ -348,3 +348,28 @@ Uhrzeiten sind lokale Gerätezeit (`HH:MM`), Beginn inklusive, Ende exklusive;
 Mitternacht kann überschritten werden. Beim Duplizieren eines Geräts werden
 Nachtruhe-Einstellungen übernommen. Migration 0015 schaltet Nachtruhe für
 bestehende Geräte nicht automatisch ein.
+
+## Chill-Fotos (1.1.0)
+
+Die Gerätekonfiguration enthält `chill: {keyword: "nature", width: 428, height: 142}`.
+`chill_keyword` ist pro Gerät gespeichert und Teil des bestehenden Config-Version-Syncs.
+Die Maße entsprechen der aktuellen Displaykonfiguration (NV3007 im Querformat).
+
+`GET /api/v1/devices/{device_id}/chill/photo` liefert einen frischen Foto-Deskriptor:
+`{width,height,size,sha256,url}`. Die URL verweist auf
+`/api/v1/devices/{device_id}/chill/photos/{sha256}.jpg`, ein vollständig decodierbares
+Baseline-JPEG mit passender Zielauflösung und ohne Verzerrung. Die Firmware prüft
+Länge und SHA-256 vor dem Decodieren. Deskriptoren sind `no-store`; wiederholte
+Abrufe innerhalb von 20 Sekunden verwenden dieselbe erfolgreiche Antwort.
+Fehler werden für dieses Zeitfenster ebenfalls zurückgehalten und als 503 geliefert.
+
+Beide Routen verwenden die bestehende Gerätefreigabe: nur aktivierte Geräte mit
+`chill-loremflickr` in ihrer Inhaltsauswahl können zugreifen. Fehlende/ausgeschaltete
+Geräte ergeben 404, eine nicht freigegebene Szene 403, ungültige Bild-IDs 404.
+Die Web-Gerätevorschau verwendet `/devices/{id}/chill/preview.jpg` mit derselben
+Geräte-/Szenenprüfung. Alle Zugriffe bleiben im vorhandenen Homeserver-Zugriffsmodell.
+
+Keywords: 1–80 Buchstaben/Ziffern/Unterstriche, Leerzeichen, Bindestriche und optional
+kommagetrennte Begriffe; URL-Encoding erfolgt ausschließlich im Proxy. Es lassen
+sich keine Quell-URLs konfigurieren. Zufallsbilder sind nicht garantiert kindgerecht;
+die Themenwahl stellt keinen Inhaltsfilter dar.

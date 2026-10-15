@@ -223,3 +223,26 @@ Standby-Seitenwechsel mit Artikel-/Flugzeugauswahl aktiv. Gedämpft werden nur
 Benachrichtigungstöne, keine vom Benutzer ausgelösten Spiel-/Bedientöne.
 
 Zuerst Homeserver 1.0.6 (Migration 0015), danach Firmware 1.0.10 installieren.
+
+
+## 1.1.0: Generative Chill-Musik und LoremFlickr
+
+Unter **Gerät → Chill** steht neben Lagerfeuer, Weltraum und Schnee nun LoremFlickr
+zur Auswahl. Das Themenfeld speichert bis zu 80 Zeichen pro Gerät; Standard ist
+`nature`, mehrere Begriffe können mit Komma getrennt werden. Die vorhandene
+Displayvorschau lädt bei sichtbarer Chill-Karte ein Beispiel zum gespeicherten Thema.
+Zufallsbilder sind nicht garantiert kindgerecht. Keywords sind kein Inhaltsfilter.
+
+Vor dem Start `alembic upgrade head` ausführen. Migration 0016 ergänzt ausschließlich
+das Thema und hebt die Konfigurationsversion an; vorhandene Inhalte und Auswahlwerte
+bleiben erhalten. Das automatisch angelegte Paket `chill-loremflickr` erfordert
+Firmware 1.1.0. Stable-/Beta-Auswahl und OTA-Bestätigung verwenden den bisherigen Ablauf.
+
+Der Proxy folgt höchstens sechs HTTPS-Anfragen zu LoremFlickr bzw. bekannten
+Flickr-Bildhosts, begrenzt den Download auf 4 MiB und 25 Sekunden und konvertiert
+höchstens 20 Megapixel in ein nicht-progressives JPEG (428×142, maximal 128 KiB).
+Diese Größe folgt der bestehenden NV3007-Querformatkonfiguration. Pro Gerät bleiben
+höchstens zwei Bilddateien erhalten. Gleichzeitige Anfragen werden zusammengefasst,
+mit 20 Sekunden Mindestabstand. Netzwerk-/Bildfehler liefern 503; die Firmware
+behält ihr Bild und wiederholt mit Backoff. Die generative Musik benötigt kein Netz.
+Siehe [API](docs/api.md) und die [Abnahmehinweise](docs/chill-1.1.0.md).

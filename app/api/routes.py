@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 import random
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
@@ -42,7 +43,7 @@ class Checkin(BaseModel):
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
-    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"knowledgeSource":d.knowledge_source,"notificationQuietHours":d.notification_quiet_hours,"notificationSounds":d.notification_sounds,"locationAltitudeMeters":d.location_altitude_meters or 0,"accentColor":d.accent_color,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":x in d.enabled_games} for x, _ in GAME_REGISTRY],"homeSlots":d.home_slots}
+    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"chill":{"keyword":d.chill_keyword,"width":428,"height":142},"knowledgeSource":d.knowledge_source,"notificationQuietHours":d.notification_quiet_hours,"notificationSounds":d.notification_sounds,"locationAltitudeMeters":d.location_altitude_meters or 0,"accentColor":d.accent_color,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":x in d.enabled_games} for x, _ in GAME_REGISTRY],"homeSlots":d.home_slots}
 @router.get("/devices/{device_id}/version")
 def version(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"contentVersion":max(d.news_version,d.weather_version,d.aircraft_version,d.quiz_version,d.knowledge_version)}
@@ -158,3 +159,34 @@ def knowledge_image(source:str,image_id:str):
     path=settings.data_dir/"images"/"knowledge"/source/f"{image_id}.jpg"
     if not path.is_file(): raise HTTPException(404,"Wissensbild nicht gefunden")
     return FileResponse(path,media_type="image/jpeg",headers={"Cache-Control":"public, max-age=604800, immutable"})
+
+
+def chill_device(device_id: str, db: Session) -> Device:
+    from app.services.chill import PACKAGE_ID
+    device = device_or_404(device_id, db)
+    if PACKAGE_ID not in (device.content_selection or []):
+        raise HTTPException(403, "LoremFlickr ist für dieses Gerät nicht aktiviert")
+    return device
+
+
+@router.get("/devices/{device_id}/chill/photo")
+async def chill_photo(device_id: str, db: Session = Depends(get_db)):
+    from app.services.chill import photo
+    from fastapi.responses import JSONResponse
+    device = chill_device(device_id, db)
+    try:
+        return JSONResponse(await photo(device), headers={"Cache-Control": "no-store"})
+    except (ValueError, TimeoutError, OSError) as error:
+        raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+    except httpx.HTTPError as error:
+        raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+
+
+@router.get("/devices/{device_id}/chill/photos/{digest}.jpg")
+def chill_image(device_id: str, digest: str, db: Session = Depends(get_db)):
+    from app.services.chill import photo_path
+    device = chill_device(device_id, db)
+    try: path = photo_path(device.id, digest)
+    except ValueError: raise HTTPException(404)
+    if not path.is_file(): raise HTTPException(404)
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
