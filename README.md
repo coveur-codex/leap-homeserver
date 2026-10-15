@@ -238,11 +238,29 @@ das Thema und hebt die Konfigurationsversion an; vorhandene Inhalte und Auswahlw
 bleiben erhalten. Das automatisch angelegte Paket `chill-loremflickr` erfordert
 Firmware 1.1.0. Stable-/Beta-Auswahl und OTA-Bestätigung verwenden den bisherigen Ablauf.
 
-Der Proxy folgt höchstens sechs HTTPS-Anfragen zu LoremFlickr bzw. bekannten
-Flickr-Bildhosts, begrenzt den Download auf 4 MiB und 25 Sekunden und konvertiert
-höchstens 20 Megapixel in ein nicht-progressives JPEG (428×142, maximal 128 KiB).
+Der Proxy folgt pro Quelle höchstens sechs HTTPS-Anfragen zu deren bekannten
+Bildhosts und begrenzt den Download auf 4 MiB. LoremFlickr erhält bis zu 8 Sekunden,
+der Picsum-Fallback bis zu 20 Sekunden. Der Proxy konvertiert höchstens 20 Megapixel
+in ein nicht-progressives JPEG (428×142, maximal 128 KiB).
 Diese Größe folgt der bestehenden NV3007-Querformatkonfiguration. Pro Gerät bleiben
 höchstens zwei Bilddateien erhalten. Gleichzeitige Anfragen werden zusammengefasst,
-mit 20 Sekunden Mindestabstand. Netzwerk-/Bildfehler liefern 503; die Firmware
+mit 20 Sekunden Mindestabstand nach Abschluss. Pro Gerät läuft höchstens ein
+Hintergrundabruf; Geräteanfragen warten maximal eine Sekunde und erhalten während
+der Vorbereitung 503 mit Retry-After. Wiederholungen nutzen denselben Abruf.
+Netzwerk-/Bildfehler liefern 503; die Firmware
 behält ihr Bild und wiederholt mit Backoff. Die generative Musik benötigt kein Netz.
 Siehe [API](docs/api.md) und die [Abnahmehinweise](docs/chill-1.1.0.md).
+
+
+### Picsum-Fallback bei LoremFlickr-Ausfällen
+
+Bei Timeout, HTTP-Fehler oder unbrauchbaren Bilddaten von LoremFlickr wechselt der
+Homeserver automatisch zu **Lorem Picsum** (`picsum.photos`). Nach einem Fehler
+wird LoremFlickr fünf Minuten lang ausgesetzt und danach erneut geprüft. Bilder
+von Picsum werden genauso zugeschnitten, validiert, gehasht und zwischengespeichert.
+Wenn beide Quellen ausfallen, bleibt das letzte Bild auf dem Gerät sichtbar.
+
+**Picsum unterstützt keine Themenwahl.** Das gespeicherte Keyword bleibt erhalten
+und wird bei der Rückkehr zu LoremFlickr wieder verwendet. Zufallsbilder beider
+Dienste sind nicht garantiert kindgerecht. Die Anpassung benötigt nur ein Update
+des Homeservers; Firmware, Chill-Auswahl und Bildübergänge bleiben kompatibel.

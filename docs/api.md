@@ -360,7 +360,7 @@ Die Maße entsprechen der aktuellen Displaykonfiguration (NV3007 im Querformat).
 `/api/v1/devices/{device_id}/chill/photos/{sha256}.jpg`, ein vollständig decodierbares
 Baseline-JPEG mit passender Zielauflösung und ohne Verzerrung. Die Firmware prüft
 Länge und SHA-256 vor dem Decodieren. Deskriptoren sind `no-store`; wiederholte
-Abrufe innerhalb von 20 Sekunden verwenden dieselbe erfolgreiche Antwort.
+Abrufe innerhalb von 20 Sekunden nach Fertigstellung verwenden dieselbe erfolgreiche Antwort.
 Fehler werden für dieses Zeitfenster ebenfalls zurückgehalten und als 503 geliefert.
 
 Beide Routen verwenden die bestehende Gerätefreigabe: nur aktivierte Geräte mit
@@ -373,3 +373,19 @@ Keywords: 1–80 Buchstaben/Ziffern/Unterstriche, Leerzeichen, Bindestriche und 
 kommagetrennte Begriffe; URL-Encoding erfolgt ausschließlich im Proxy. Es lassen
 sich keine Quell-URLs konfigurieren. Zufallsbilder sind nicht garantiert kindgerecht;
 die Themenwahl stellt keinen Inhaltsfilter dar.
+
+Bilddienste werden im Hintergrund abgefragt (8 Sekunden Abrufbudget für
+LoremFlickr, zusätzlich bis zu 20 Sekunden für Picsum bei einem Fehler). Der Geräteaufruf wartet höchstens eine Sekunde und
+liefert während der Vorbereitung `503`, `Retry-After: 10` und `Cache-Control: no-store`.
+Wiederholungen verwenden denselben laufenden Abruf; ein abgebrochener Geräteaufruf
+bricht ihn nicht ab. Nach Fertigstellung wird der Deskriptor beim nächsten Aufruf
+zurückgegeben. Pro Gerät läuft höchstens ein Abruf; beim Serverstopp wird dieser
+abgebrochen. Die Browservorschau kann bis zu 33 Sekunden auf das Ergebnis warten.
+
+Der Deskriptor enthält zusätzlich `source` (`loremflickr` oder `picsum`) und
+`keywordApplied` (nur bei LoremFlickr `true`). Dies sind optionale Metadaten für
+bestehende Firmware. Der JPEG-Dateivertrag und die Geräteberechtigungen bleiben
+unverändert. Nach einem LoremFlickr-Fehler wird fünf Minuten direkt Picsum verwendet;
+danach wird die primäre Quelle erneut geprüft. Picsum unterstützt keine Keywords.
+Weiterleitungen sind je Quelle getrennt auf deren bekannte HTTPS-Bildhosts begrenzt:
+LoremFlickr/Flickr beziehungsweise `picsum.photos` und `fastly.picsum.photos`.
