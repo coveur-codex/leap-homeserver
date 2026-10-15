@@ -17,6 +17,7 @@ def image(size=(800, 600), color="green"):
 def clean_chill():
     chill._recent.clear()
     chill._locks.clear()
+    chill._fetches.clear()
 
 
 @pytest.mark.parametrize("value", ["nature", "forest,ocean", "Bäume", "snow mountains"])
@@ -54,7 +55,10 @@ async def test_real_download_protocol(monkeypatch):
             return httpx.Response(302, headers={"location":"https://live.staticflickr.com/photo.jpg"})
         return httpx.Response(200, headers={"content-type":"image/jpeg"}, content=image())
     constructor = httpx.AsyncClient
-    monkeypatch.setattr(chill.httpx, "AsyncClient", lambda **kw: constructor(transport=httpx.MockTransport(respond), **kw))
+    def client_with_read_budget(**kw):
+        assert kw["timeout"].read == 60 and kw["timeout"].connect == 5
+        return constructor(transport=httpx.MockTransport(respond), **kw)
+    monkeypatch.setattr(chill.httpx, "AsyncClient", client_with_read_budget)
     assert await chill.download("forest,ocean")
     first = calls[0].url.params["random"]
     await chill.download("forest,ocean")
@@ -142,3 +146,162 @@ def test_loremflickr_selection_sync_and_preview(client, db):
     assert 'name="chill_keyword" value="ocean"' in page
     package = db.get(AssetPackage, chill.PACKAGE_ID)
     assert distribution.current(db, package).manifest["definition"]["slider"] == {"min":0,"max":300,"default":200}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure,stage,reason", [
+    ("status", "download", "HTTP 429 from loremflickr.com"),
+    ("connection", "download", "Name or service not known"),
+    ("timeout", "download", "TimeoutError"),
+    ("decode", "decode", "Ungültige Bilddaten"),
+    ("disk", "cache", "Permission denied"),
+])
+async def test_photo_failure_diagnostics(db, monkeypatch, caplog, failure, stage, reason):
+    device = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    async def download(topic):
+        if failure == "status":
+            response = httpx.Response(429, request=httpx.Request("GET", "https://loremflickr.com/428/142/nature?random=1"))
+            response.raise_for_status()
+        if failure == "connection": raise httpx.ConnectError("Name or service not known")
+        if failure == "timeout": raise TimeoutError()
+        return b"invalid" if failure == "decode" else image()
+    monkeypatch.setattr(chill, "download", download)
+    if failure == "disk":
+        from pathlib import Path
+        def deny(*args, **kwargs): raise PermissionError("Permission denied")
+        monkeypatch.setattr(Path, "mkdir", deny)
+    with pytest.raises((ValueError, TimeoutError, OSError, httpx.HTTPError)):
+        await chill.photo(device)
+    failures = [record for record in caplog.records if record.message.startswith("chill_photo_failed")]
+    assert len(failures) == 1
+    assert f"device=leap-papa stage={stage}" in failures[0].message
+    assert reason in failures[0].message
+    # A cached failure must not flood logs or perform another external request.
+    with pytest.raises(ValueError, match="erneuten Versuch"):
+        await chill.photo(device)
+    assert len([r for r in caplog.records if r.message.startswith("chill_photo_failed")]) == 1
+
+
+@pytest.mark.asyncio
+async def test_rejected_image_logs_redirect_host_and_content_type(db, monkeypatch, caplog):
+    constructor = httpx.AsyncClient
+    responses = [httpx.Response(302, headers={"location": "https://unexpected.example/photo.jpg"}),
+                 httpx.Response(200, headers={"content-type": "text/html"}, content=b"html")]
+    for index, response in enumerate(responses):
+        monkeypatch.setattr(chill.httpx, "AsyncClient", lambda **kw: constructor(transport=httpx.MockTransport(lambda req: response), **kw))
+        with pytest.raises(ValueError):
+            await chill.photo(SimpleNamespace(id=index, device_id="leap-papa", chill_keyword="nature"))
+    assert "unexpected.example" in caplog.text and "text/html" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_slow_photo_survives_retries_and_is_delivered_once_ready(db, monkeypatch):
+    import asyncio
+    release = asyncio.Event()
+    calls = []
+    async def slow_download(topic):
+        calls.append(topic)
+        await release.wait()
+        return image()
+    monkeypatch.setattr(chill, "download", slow_download)
+    monkeypatch.setattr(chill, "PHOTO_RESPONSE_WAIT", .01)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    for _ in range(3):
+        with pytest.raises(chill.PhotoPending): await chill.photo(d)
+        assert len(calls) == 1 and not chill._fetches[1][1].done()
+    task = chill._fetches[1][1]
+    # A stale request start must not expire a just-completed slow download.
+    chill._recent[1] = (-1000, "nature", None)
+    release.set()
+    await task
+    info = await chill.photo(d)
+    assert chill.photo_path(1, info["sha256"]).is_file()
+    assert await chill.photo(d) == info and calls == ["nature"]
+    assert not chill._fetches
+
+
+@pytest.mark.asyncio
+async def test_disconnected_client_does_not_cancel_shared_fetch(db, monkeypatch):
+    import asyncio
+    release = asyncio.Event()
+    async def download(topic):
+        await release.wait()
+        return image()
+    monkeypatch.setattr(chill, "download", download)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    request = asyncio.create_task(chill.photo(d))
+    while 1 not in chill._fetches: await asyncio.sleep(0)
+    task = chill._fetches[1][1]
+    request.cancel()
+    with pytest.raises(asyncio.CancelledError): await request
+    assert not task.cancelled()
+    release.set()
+    await task
+    assert await chill.photo(d)
+
+
+@pytest.mark.asyncio
+async def test_background_fetch_shutdown_and_topic_change(db, monkeypatch):
+    import asyncio
+    release = asyncio.Event()
+    calls = []
+    async def download(topic):
+        calls.append(topic)
+        await release.wait()
+        return image()
+    monkeypatch.setattr(chill, "download", download)
+    monkeypatch.setattr(chill, "PHOTO_RESPONSE_WAIT", .01)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    with pytest.raises(chill.PhotoPending): await chill.photo(d)
+    d.chill_keyword = "forest"
+    with pytest.raises(chill.PhotoPending): await chill.photo(d)
+    assert calls == ["nature"]
+    release.set()
+    await chill._fetches[1][1]
+    await chill.photo(d)
+    assert calls == ["nature", "forest"]
+    release.clear()
+    d.chill_keyword = "ocean"
+    with pytest.raises(chill.PhotoPending): await chill.photo(d)
+    task = chill._fetches[1][1]
+    await chill.shutdown()
+    assert task.cancelled() and not chill._fetches
+
+
+def test_device_gets_prompt_pending_then_completed_photo(client, db, monkeypatch):
+    import asyncio
+    from threading import Event
+    release = Event()
+    calls = []
+    async def download(topic):
+        calls.append(topic)
+        while not release.is_set(): await asyncio.sleep(.001)
+        return image()
+    monkeypatch.setattr(chill, "download", download)
+    monkeypatch.setattr(chill, "PHOTO_RESPONSE_WAIT", .01)
+    db.add(Device(device_id="slow-photo", name="Photos", content_selection=[chill.PACKAGE_ID]))
+    db.commit()
+    response = client.get("/api/v1/devices/slow-photo/chill/photo")
+    assert response.status_code == 503 and response.headers["retry-after"] == "10"
+    assert response.headers["cache-control"] == "no-store"
+    assert "vorbereitet" in response.json()["detail"]
+    release.set()
+    monkeypatch.setattr(chill, "PHOTO_RESPONSE_WAIT", 1)
+    response = client.get("/api/v1/devices/slow-photo/chill/photo")
+    assert response.status_code == 200 and calls == ["nature"]
+    assert client.get(response.json()["url"]).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_total_upstream_budget_still_bounds_stalled_download(db, monkeypatch, caplog):
+    import asyncio
+    cancelled = asyncio.Event()
+    async def stuck(topic):
+        try: await asyncio.Event().wait()
+        finally: cancelled.set()
+    monkeypatch.setattr(chill, "download", stuck)
+    monkeypatch.setattr(chill, "PHOTO_TOTAL_TIMEOUT", .01)
+    d = SimpleNamespace(id=1, device_id="leap-papa", chill_keyword="nature")
+    with pytest.raises(TimeoutError): await chill.photo(d)
+    assert cancelled.is_set() and not chill._fetches
+    assert "stage=download error=TimeoutError" in caplog.text

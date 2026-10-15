@@ -171,11 +171,14 @@ def chill_device(device_id: str, db: Session) -> Device:
 
 @router.get("/devices/{device_id}/chill/photo")
 async def chill_photo(device_id: str, db: Session = Depends(get_db)):
-    from app.services.chill import photo
+    from app.services.chill import photo, PhotoPending
     from fastapi.responses import JSONResponse
     device = chill_device(device_id, db)
     try:
         return JSONResponse(await photo(device), headers={"Cache-Control": "no-store"})
+    except PhotoPending as error:
+        raise HTTPException(503, "Bild wird vorbereitet; später erneut versuchen",
+                            headers={"Retry-After":"10", "Cache-Control":"no-store"}) from error
     except (ValueError, TimeoutError, OSError) as error:
         raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
     except httpx.HTTPError as error:

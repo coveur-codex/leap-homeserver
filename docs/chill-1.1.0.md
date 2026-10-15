@@ -21,3 +21,42 @@ WLAN-Unterbrechung und Reconnect. Die dafür nötige Hardware ist hier nicht ver
 PSRAM-Obergrenze für zwei Foto-RGB565-Puffer: 243.104 Bytes zusätzlich zum bestehenden
 Canvas. Audio nutzt acht Stimmen und einen 6-KiB-Stack im vorhandenen Audio-Task.
 CPU-Last, Audioqualität und tatsächliche Display-Framerate sind am Gerät zu messen.
+
+## Diagnose bei HTTP 503 am Gerät
+
+Ein `503` auf `/api/v1/devices/.../chill/photo` kommt vom Foto-Proxy. Ein späterer
+`200` ohne Pfad im seriellen Log kann etwa der reguläre Flugradarabruf sein.
+Der Homeserver protokolliert jeden fehlgeschlagenen Foto-Versuch mit
+`chill_photo_failed device=... stage=download|decode|cache error=... reason=...`.
+Darin stehen beispielsweise der externe HTTP-Status, DNS-/TLS-Fehler, ein
+abgelehnter Weiterleitungshost, der Bildtyp oder ein Schreibfehler. Fehlgeschlagene
+Wiederholungen innerhalb der vorhandenen Wartezeit erzeugen keine weiteren Warnungen.
+API und Vorschau liefern weiterhin die generische 503-Antwort.
+
+Logs anzeigen: `docker logs --since 10m leap-homeserver`.
+Zum isolierten Test des laufenden Downloaders, auch auf älteren Versionen:
+
+```sh
+docker exec leap-homeserver python -c 'import asyncio; from app.services.chill import download; print("Bildbytes:", len(asyncio.run(download("nature"))))'
+```
+
+Der Test verändert keine Einstellungen und gibt bei Fehlern die ursprüngliche
+Python-Ausnahme aus. Die konkrete Ursache muss anhand dieser Ausgabe festgestellt
+werden; ein 503 allein belegt weder einen Displayfehler noch einen bestimmten
+Fehler des externen Bilddienstes.
+
+
+## Ausbleibende Antwort des Bilddienstes
+
+Ein `httpx.ReadTimeout` beim Empfang der HTTP-Antwortheader bedeutet, dass der
+angefragte Dienst innerhalb der Wartezeit keine Header geliefert hat. Auch ein
+60-Sekunden-Test ohne Weiterleitungen kann diesen Zustand bestätigen. Das belegt
+noch nicht, ob der Dienst allgemein ausfällt oder die Verbindung aus dem lokalen
+Netz betroffen ist; Browserzugriff im WLAN und über Mobilfunk helfen bei der
+Unterscheidung. Eine längere Wartezeit allein garantiert kein Bild.
+
+Die Serveranpassung trennt deshalb den kurzen Geräteaufruf vom längeren, begrenzten
+Hintergrundabruf. Bereits erfolgreiche Bilder bleiben erhalten. Solange der
+externe Dienst keine Antwort liefert, bleibt die erste Bildanzeige ohne Cache
+schwarz; Musik und Bedienung laufen weiter. Ein Firmware-Update ist für diese
+Anpassung nicht erforderlich.

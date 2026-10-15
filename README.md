@@ -239,10 +239,13 @@ bleiben erhalten. Das automatisch angelegte Paket `chill-loremflickr` erfordert
 Firmware 1.1.0. Stable-/Beta-Auswahl und OTA-Bestätigung verwenden den bisherigen Ablauf.
 
 Der Proxy folgt höchstens sechs HTTPS-Anfragen zu LoremFlickr bzw. bekannten
-Flickr-Bildhosts, begrenzt den Download auf 4 MiB und 25 Sekunden und konvertiert
+Flickr-Bildhosts, begrenzt den Download auf 4 MiB und 70 Sekunden Gesamtzeit (60 Sekunden Lese-Timeout) und konvertiert
 höchstens 20 Megapixel in ein nicht-progressives JPEG (428×142, maximal 128 KiB).
 Diese Größe folgt der bestehenden NV3007-Querformatkonfiguration. Pro Gerät bleiben
 höchstens zwei Bilddateien erhalten. Gleichzeitige Anfragen werden zusammengefasst,
-mit 20 Sekunden Mindestabstand. Netzwerk-/Bildfehler liefern 503; die Firmware
+mit 20 Sekunden Mindestabstand nach Abschluss. Pro Gerät läuft höchstens ein
+Hintergrundabruf; Geräteanfragen warten maximal eine Sekunde und erhalten während
+der Vorbereitung 503 mit Retry-After. Wiederholungen nutzen denselben Abruf.
+Netzwerk-/Bildfehler liefern 503; die Firmware
 behält ihr Bild und wiederholt mit Backoff. Die generative Musik benötigt kein Netz.
 Siehe [API](docs/api.md) und die [Abnahmehinweise](docs/chill-1.1.0.md).

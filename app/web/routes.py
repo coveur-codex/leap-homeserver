@@ -210,14 +210,14 @@ def download_database_backup(db: Session = Depends(get_db)):
 
 @router.get("/devices/{id}/chill/preview.jpg")
 async def chill_preview(id: int, db: Session = Depends(get_db)):
-    from app.services.chill import photo, photo_path, PACKAGE_ID
+    from app.services.chill import photo, photo_path, PACKAGE_ID, PHOTO_TOTAL_TIMEOUT
     from fastapi.responses import FileResponse
     import httpx
     device = db.get(Device, id)
     if not device: raise HTTPException(404)
     if not device.enabled or PACKAGE_ID not in (device.content_selection or []): raise HTTPException(403)
     try:
-        info = await photo(device)
+        info = await photo(device, wait=PHOTO_TOTAL_TIMEOUT + 5)
         return FileResponse(photo_path(device.id, info["sha256"]), media_type="image/jpeg", headers={"Cache-Control":"no-store"})
     except (ValueError, TimeoutError, OSError, httpx.HTTPError) as error:
         raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
