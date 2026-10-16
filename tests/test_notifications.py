@@ -8,14 +8,14 @@ def test_notification_settings_altitude_and_duplicate(client, db):
     initialize_pages(d); db.add(d); db.commit()
     url = f'/devices/{d.id}'
     api = '/api/v1/devices/notifications/config'
-    assert client.get(api).json()['notificationSounds'] == {'communication': True, 'news': True, 'aircraft': True}
+    assert client.get(api).json()['notificationSounds'] == {'communication': True, 'news': True, 'aircraft': True, 'time': True}
     assert client.get(api).json()['locationAltitudeMeters'] == 0
     assert 'name="sound_aircraft"' in client.get(url).text
     form = {'name': d.name, 'age': 8, 'avatar': 'dragon', 'enabled': 'on',
             'notification_settings': 'true', 'sound_news': 'on', 'location_altitude_meters': '512'}
     assert client.post(url, data=form, follow_redirects=False).status_code == 303
     config = client.get(api).json()
-    assert config['notificationSounds'] == {'communication': False, 'news': True, 'aircraft': False}
+    assert config['notificationSounds'] == {'communication': False, 'news': True, 'aircraft': False, 'time': False}
     assert config['locationAltitudeMeters'] == 512
     client.post(f'{url}/duplicate', follow_redirects=False)
     copied = client.get('/api/v1/devices/notifications-copy/config').json()

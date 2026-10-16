@@ -288,3 +288,11 @@ Ein automatisch erzeugtes Common-Paket verteilt die kleinen Kommunikationsbilder
 aller Avatare an alle Geräte. Die vollständigen fremden Avatarpakete werden nicht
 benötigt. Migration 0017 wird beim üblichen Serverstart ausgeführt.
 Details: [Anzeige und Bilder 1.1.2](docs/display-photos-chat-1.1.2.md).
+
+Das Modul **Zeit** bietet auf der passenden Firmware Timer (1/3/10/60 Minuten
+oder eigene Zeit bis 99:59) und eine Stoppuhr mit Zwischenzeiten. Migration
+`0018` aktiviert die Seite auf bestehenden Geräten, ohne deren Reihenfolge zu
+ändern. Im Geräteeditor lassen sich Seite, Reihenfolge und Timer-Warnton
+konfigurieren; die Vorschau verwendet die Geräte-Akzentfarbe. Der Timer läuft
+lokal auch auf anderen Seiten und ohne WLAN weiter. Lautstärke, Tonfreigabe und
+Nachtruhe gelten. Neustart/Ausschalten verwirft die lokale Zeitmessung.
