@@ -80,3 +80,23 @@ def test_invalid_upload_selection_and_album_limit(client, db, monkeypatch):
     assert client.post(f"/devices/{device.id}/chill/album", data={"photo_ids": [str(i) for i in range(25)]}).status_code == 422
     assert client.get("/chill/photos/not-a-hash.jpg").status_code == 404
     assert client.get("/devices/9999/chill/album").status_code == 404
+
+
+def test_migration_adds_fields_to_existing_database(tmp_path):
+    from importlib import import_module
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import create_engine, inspect, text
+    migration = import_module("migrations.versions.0017_albums_and_message_avatars")
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE devices (id INTEGER PRIMARY KEY, config_version INTEGER NOT NULL, name TEXT)"))
+        connection.execute(text("INSERT INTO devices VALUES (1,7,'Bestehend')"))
+        connection.execute(text("CREATE TABLE communication_relay_events (id INTEGER PRIMARY KEY, text TEXT)"))
+        connection.execute(text("INSERT INTO communication_relay_events VALUES (1,'Hallo')"))
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+        row = connection.execute(text("SELECT name,config_version,chill_album_id,chill_photos FROM devices")).one()
+        assert tuple(row) == ('Bestehend', 8, '', '[]')
+        assert connection.execute(text("SELECT text,avatar_image FROM communication_relay_events")).one() == ('Hallo', '')
+        assert 'chill_photos' in inspect(connection).get_table_names()
