@@ -16,7 +16,7 @@ def test_time_config_preview_and_sound(client, db):
     assert "#ff9900" in page.select_one(".leap-preview")["style"]
     assert page.select_one('[name="sound_time"]').has_attr("checked")
     client.post(f"/devices/{device.id}", data={"name": "Zeit", "age": 9, "avatar": "dragon",
-                "page_ids": ["home"], "notification_settings": "true"})
+                "enabled": "on", "page_ids": ["home"], "notification_settings": "true"})
     config = client.get("/api/v1/devices/time-test/config").json()
     assert not next(p for p in config["pages"] if p["id"] == "time")["enabled"]
     assert config["notificationSounds"]["time"] is False
