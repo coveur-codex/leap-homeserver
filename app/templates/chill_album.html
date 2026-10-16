@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Eigene Chill-Bilder · {{device.name}}</h1>
+<p><a href="/devices/{{device.id}}">Zurück zum Gerät</a></p>
+<p>Bilder werden auf das Displayformat zugeschnitten und als kleine JPEG-Dateien gespeichert.
+Die Originale werden nicht aufbewahrt. Die Bibliothek steht für alle Geräte zur Auswahl bereit;
+dieses Gerät erhält nur die hier ausgewählten Bilder. Höchstens 24 Bilder pro Album.</p>
+<section>
+<h2>Bilder hochladen</h2>
+<form method="post" enctype="multipart/form-data" action="/devices/{{device.id}}/chill/album/upload">
+<label>Bilddateien (je höchstens 8 MiB)<input type="file" name="files" accept="image/png,image/jpeg,image/webp" multiple required></label>
+<button>Hochladen und zu diesem Album hinzufügen</button>
+</form>
+</section>
+<section>
+<h2>Bilder für {{device.name}} auswählen</h2>
+<form method="post" action="/devices/{{device.id}}/chill/album">
+<div style="display:flex;flex-wrap:wrap;gap:1rem">
+{% for photo in photos %}
+<label style="max-width:240px"><input type="checkbox" name="photo_ids" value="{{photo.id}}" {% if photo.id in device.chill_photos %}checked{% endif %}>
+<img src="/chill/photos/{{photo.id}}.jpg" width="214" height="71" loading="lazy" alt="{{photo.name}}" style="object-fit:cover"><br>{{photo.name}} · {{(photo.size/1024)|round(1)}} KiB</label>
+{% else %}<p>Noch keine eigenen Bilder. Lade oben Bilder hoch.</p>{% endfor %}
+</div>
+{% if photos %}<button>Auswahl speichern und eigene Bilder aktivieren</button>{% endif %}
+</form>
+</section>
+{% endblock %}
