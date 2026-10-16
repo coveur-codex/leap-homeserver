@@ -81,4 +81,4 @@ with SessionLocal() as db:
     with sqlite3.connect(database) as connection:
         settings, version, name = connection.execute("SELECT math_quiz,config_version,name FROM devices").fetchone()
         assert json.loads(settings) == {"operation": "add", "limit": 20}
-        assert version == 4 and name == "Bestehend"
+        assert version == 5 and name == "Bestehend"

@@ -157,7 +157,7 @@ def current(db, package):
 
 
 def deletion_block_reason(package):
-    if package.kind == "communication":
+    if package.kind == "communication" or package.id == "communication-avatars":
         return "Das gemeinsame Kommunikationspaket wird vom Server verwaltet."
     defaults = {"avatar-" + key for key in BUILTINS}
     defaults.update(path.name.removesuffix("-v1.zip") for path in
@@ -301,12 +301,20 @@ def validate_chill(metadata, files):
     # Empty legacy packages can still be populated through the existing asset editor.
     if "scene" not in metadata:
         return
-    if not isinstance(metadata["scene"], str) or metadata["scene"] not in {"space", "fire", "snow", "loremflickr"}:
+    if not isinstance(metadata["scene"], str) or metadata["scene"] not in {"space", "fire", "snow", "loremflickr", "album"}:
         raise HTTPException(422, "Unbekannte Chill-Szene")
     slider = metadata.get("slider", {})
-    maximum = 300 if metadata["scene"] == "loremflickr" else 100
+    maximum = 300 if metadata["scene"] in {"loremflickr", "album"} else 100
     if not isinstance(slider, dict) or slider.get("min") != 0 or slider.get("max") != maximum or type(slider.get("default")) is not int or not 0 <= slider["default"] <= maximum:
         raise HTTPException(422, f"Chill-Slider benötigt 0–{maximum} und einen gültigen Standardwert")
+    if metadata["scene"] == "album":
+        photos = metadata.get("photos")
+        if (metadata.get("minFirmware") != "1.1.2" or metadata.get("sprites") != []
+                or not isinstance(photos, list) or not 1 <= len(photos) <= 24
+                or any(not isinstance(p, str) or not p.endswith(".jpg") or p not in files for p in photos)
+                or len(set(photos)) != len(photos)):
+            raise HTTPException(422, "Eigenes Album benötigt 1–24 JPEG-Bilder und Firmware 1.1.2")
+        return
     if metadata["scene"] == "loremflickr":
         if metadata.get("minFirmware") != "1.1.0" or metadata.get("sprites") != []:
             raise HTTPException(422, "LoremFlickr benötigt Firmware 1.1.0 und keine Paket-Sprites")
@@ -496,6 +504,8 @@ def ensure_packages(db):
         if enriched != metadata:
             publish(db, package, files, enriched, package.current_version)
             changed = True
+    from app.services.communication_avatars import ensure_package as ensure_avatars
+    changed = ensure_avatars(db) or changed
     if changed:
         db.commit()
 

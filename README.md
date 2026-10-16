@@ -273,3 +273,18 @@ Würfeldetektiv. Im Geräteeditor aktivieren und synchronisieren; anschließend
 funktionieren alle Aktivitäten offline und ohne Assets. Bestehende Geräte behalten
 ihre Freigaben, neue Geräte erhalten die vorhandene Standardauswahl einschließlich
 des Labors. Keine neue Datenbankmigration oder zusätzliche Lernstatistiken.
+
+## 1.1.2: Eigene Chill-Bilder und Nachrichtenavatare
+
+**Gerät → Chill → Eigene Bilder auswählen / hochladen** öffnet die gemeinsame
+Bilderbibliothek. Jedes Gerät wählt daraus sein eigenes Album (1–24 Bilder).
+Uploads werden ausgerichtet, auf 428×142 zugeschnitten und als kleine JPEGs ohne
+EXIF gespeichert; die Originale werden nicht aufbewahrt. Beim Duplizieren eines
+Geräts wird die Auswahl unabhängig kopiert, die Bilddateien bleiben dedupliziert.
+Nach dem normalen Sync spielt Firmware 1.1.2 die Bilder vollständig offline ab.
+
+Chatnachrichten enthalten jetzt den unveränderlichen Hash eines 48px-Absenderbildes.
+Ein automatisch erzeugtes Common-Paket verteilt die kleinen Kommunikationsbilder
+aller Avatare an alle Geräte. Die vollständigen fremden Avatarpakete werden nicht
+benötigt. Migration 0017 wird beim üblichen Serverstart ausgeführt.
+Details: [Anzeige und Bilder 1.1.2](docs/display-photos-chat-1.1.2.md).

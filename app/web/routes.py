@@ -91,10 +91,10 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         if firmware_channel not in {"stable", "beta"}: raise HTTPException(422,"Ungültiger Firmware-Kanal")
         if chill_id:
             chill_package=db.get(AssetPackage,chill_id)
-            if not chill_package or chill_package.kind!="chill": raise HTTPException(422,"Unbekannte Chill-Szene")
+            if not chill_package or chill_package.kind!="chill" or (chill_id.startswith("chill-album-") and chill_id != d.chill_album_id): raise HTTPException(422,"Unbekannte Chill-Szene")
             content_ids=[*content_ids,chill_id]
         if sum(1 for key in set(content_ids) if (p:=db.get(AssetPackage,key)) and p.kind=="chill")>1: raise HTTPException(422,"Bitte genau eine Chill-Szene auswählen")
-        if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
+        if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} or (key.startswith("chill-album-") and key != d.chill_album_id) for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
         if any(not db.get(QuizCatalog,key) for key in quiz_catalog_ids): raise HTTPException(422,"Unbekannter Quiz-Katalog")
         avatar_id=avatar if avatar.startswith("avatar-") else "avatar-"+avatar
         avatar_package=db.get(AssetPackage,avatar_id)
@@ -138,7 +138,14 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs))
+    d.content_selection=[key for key in d.content_selection if key != old.chill_album_id]
+    initialize_pages(d); db.add(d); db.flush()
+    if old.chill_photos:
+        from app.services.chill_album import publish
+        album=publish(db,d,list(old.chill_photos))
+        if old.chill_album_id in old.content_selection: d.content_selection=[*d.content_selection,album.id]
+    db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")
@@ -221,3 +228,46 @@ async def chill_preview(id: int, db: Session = Depends(get_db)):
         return FileResponse(photo_path(device.id, info["sha256"]), media_type="image/jpeg", headers={"Cache-Control":"no-store"})
     except (ValueError, TimeoutError, OSError, httpx.HTTPError) as error:
         raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+
+
+@router.get("/devices/{id}/chill/album", response_class=HTMLResponse)
+def chill_album_editor(id: int, request: Request, db: Session = Depends(get_db)):
+    from app.services.chill_album import library
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    return templates.TemplateResponse(request, "chill_album.html", {"device": device, "photos": library(db)})
+
+
+def activate_album(db, device, package):
+    other = [key for key in (device.content_selection or [])
+             if (p := db.get(AssetPackage, key)) and p.kind != "chill"]
+    device.content_selection = [*other, package.id]
+    db.commit()
+
+
+@router.post("/devices/{id}/chill/album/upload")
+async def chill_album_upload(id: int, files: list[UploadFile] = File(), db: Session = Depends(get_db)):
+    from app.services.chill_album import upload
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    package = await upload(db, device, files)
+    activate_album(db, device, package)
+    return redir(f"/devices/{id}/chill/album")
+
+
+@router.post("/devices/{id}/chill/album")
+def chill_album_selection(id: int, photo_ids: list[str] = Form([]), db: Session = Depends(get_db)):
+    from app.services.chill_album import publish
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    package = publish(db, device, photo_ids)
+    activate_album(db, device, package)
+    return redir(f"/devices/{id}/chill/album")
+
+
+@router.get("/chill/photos/{digest}.jpg")
+def chill_library_photo(digest: str, db: Session = Depends(get_db)):
+    from app.models import ChillPhoto
+    if not db.get(ChillPhoto, digest): raise HTTPException(404)
+    return FileResponse(distribution_service.blob_path(digest), media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})

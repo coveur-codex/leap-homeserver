@@ -11,7 +11,8 @@
     <div class="device-settings-stack">
     <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
     <section><h2>Chill</h2>
-    <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+    <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' and (not p.id.startswith('chill-album-') or p.id==device.chill_album_id) %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+    <p><a href="/devices/{{device.id}}/chill/album">Eigene Bilder auswählen / hochladen</a></p>
     <fieldset id="loremflickr-settings" {% if 'chill-loremflickr' not in device.content_selection %}hidden{% endif %}><legend>LoremFlickr – Themenwahl</legend>
       <label>Thema <input name="chill_keyword" value="{{device.chill_keyword}}" maxlength="80" required placeholder="nature"></label>
       <small>Zum Beispiel nature, forest, ocean oder animals. Mehrere Begriffe mit Komma trennen. Bei Ausfall von LoremFlickr werden zufällige Fotos von Picsum ohne Themenfilter verwendet. Zufallsbilder sind nicht garantiert kindgerecht; Keywords sind kein Inhaltsfilter.</small>
@@ -149,10 +150,10 @@
     <article class="leap-card"><div class="empty-preview"><strong>Keine Vorschau-Seite aktiv</strong><span>Aktiviere Home, News, Wetter, Wissen, Quiz, Flugzeuge oder Kommunikation.</span></div></article>
   {% endfor %}
   {% for c in preview_chill %}<article class="leap-card chill-card" data-preview-card="RUHEZEIT" data-scene="{{c.scene}}" hidden>
-    {% if c.scene=='loremflickr' %}<img data-chill-photo-preview data-src="/devices/{{device.id}}/chill/preview.jpg" alt="Fotovorschau (LoremFlickr mit Picsum-Fallback)" width="428" height="142" style="max-width:100%;object-fit:cover;background:black">{% else %}
+    {% if c.scene=='album' %}<img src="{{c.preview}}" alt="Eigene Chill-Bilder" width="428" height="142" style="max-width:100%;object-fit:cover">{% elif c.scene=='loremflickr' %}<img data-chill-photo-preview data-src="/devices/{{device.id}}/chill/preview.jpg" alt="Fotovorschau (LoremFlickr mit Picsum-Fallback)" width="428" height="142" style="max-width:100%;object-fit:cover;background:black">{% else %}
     <canvas data-chill-preview data-scene="{{c.scene}}" width="428" height="142" aria-label="{{c.name}}"></canvas>
     {% for s in c.sprites %}<img hidden data-chill-sprite data-role="{{s.role}}" data-x="{{s.x|default(0)}}" data-y="{{s.y|default(0)}}" data-width="{{s.size[0]}}" data-height="{{s.size[1]}}" src="{{s.url}}" alt="">{% endfor %}
-    {% endif %}<input type="range" min="0" max="{{300 if c.scene=='loremflickr' else 100}}" value="{{c.slider}}" data-chill-slider aria-label="Chill-Intensität">
+    {% endif %}<input type="range" min="0" max="{{300 if c.scene in ['loremflickr','album'] else 100}}" value="{{c.slider}}" data-chill-slider aria-label="Chill-Intensität">
   </article>{% endfor %}
   {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>

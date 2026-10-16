@@ -13,6 +13,13 @@ device_quiz_catalogs = Table("device_quiz_catalogs", Base.metadata,
     Column("device_id", ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
     Column("catalog_id", ForeignKey("quiz_catalogs.id", ondelete="CASCADE"), primary_key=True))
 
+class ChillPhoto(Base):
+    __tablename__ = "chill_photos"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    size: Mapped[int] = mapped_column(Integer)
+
+
 class Device(Base):
     __tablename__="devices"
     id: Mapped[int]=mapped_column(primary_key=True)
@@ -28,6 +35,8 @@ class Device(Base):
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
     weather_version: Mapped[int]=mapped_column(Integer, default=1); aircraft_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
     last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
+    chill_album_id: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    chill_photos: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     chill_keyword: Mapped[str] = mapped_column(String(80), default="nature", server_default="nature")
     firmware_channel: Mapped[str] = mapped_column(String(10), default="stable")
     confirmed_firmware: Mapped[str|None] = mapped_column(String(40))
@@ -156,6 +165,7 @@ class CommunicationRelayEvent(Base):
     __tablename__ = "communication_relay_events"
     __table_args__ = (UniqueConstraint("sender_id", "event_id"), {"sqlite_autoincrement": True})
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    avatar_image: Mapped[str] = mapped_column(String(64), default="", server_default="")
     sender_id: Mapped[str] = mapped_column(String(80))
     accent_color: Mapped[str] = mapped_column(String(7), default="#00d7c5", server_default="#00d7c5")
     event_id: Mapped[str] = mapped_column(String(64))
