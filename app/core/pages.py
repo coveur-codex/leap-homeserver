@@ -10,5 +10,5 @@ PAGE_REGISTRY = [
     PageDefinition("weather", "Wetter"), PageDefinition("quiz", "Quiz"),
     PageDefinition("games", "Spiele"), PageDefinition("aircraft", "Flugzeuge"),
     PageDefinition("communication", "Kommunikation"),
-    PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
+    PageDefinition("time", "Zeit"), PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
 ]

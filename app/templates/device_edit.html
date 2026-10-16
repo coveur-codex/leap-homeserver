@@ -42,7 +42,7 @@
 
   <h3>Quiz-Themen</h3>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}
     </section>
-    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
+    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch"), ("time", "Timer · Warnton")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
     <input type="hidden" name="quiet_hours_settings" value="true">
     <label><input type="checkbox" name="quiet_hours_enabled" {% if device.notification_quiet_hours.get('enabled', false) %}checked{% endif %}>Nachtruhe für Benachrichtigungstöne</label>
     <label>Von<input type="time" name="quiet_hours_start" value="{{device.notification_quiet_hours.get('start') or '22:00'}}"></label>
@@ -77,6 +77,11 @@
         <div><span aria-hidden="true">▤</span><b>{{preview_articles|length}}</b><small>NEUE NEWS</small></div>
         <div><span aria-hidden="true">?</span><b>{% if preview_question %}1{% else %}0{% endif %}</b><small>QUIZ</small></div>
       </div>
+    </article>
+    {% elif page_id == 'time' %}
+    <article class="leap-card time-card" data-preview-card="ZEIT"{% if not loop.first %} hidden{% endif %}>
+      <div class="time-preview-ring"><svg viewBox="0 0 120 120" role="img" aria-label="Timer: noch drei Viertel der Zeit"><circle cx="60" cy="60" r="50" class="time-ring-track"/><circle cx="60" cy="60" r="50" class="time-ring-fill"/></svg><strong>03:00</strong></div>
+      <div><h3>Timer & Stoppuhr</h3><p>1 · 3 · 10 · 60 Minuten<br>oder eigene Zeit bis 99:59.</p><p>Zwischenzeiten auf Knopfdruck.</p><small>Läuft auf dem Gerät auch im Hintergrund.<br>Bei Ablauf: Hinweis und Warnton.<br>Lautstärke, Tonfreigabe und Nachtruhe gelten.</small></div>
     </article>
     {% elif page_id == 'news' %}
     <article class="leap-card news-card" data-preview-card="NEWS" data-news-carousel{% if not loop.first %} hidden{% endif %}>
