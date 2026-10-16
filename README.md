@@ -289,7 +289,9 @@ aller Avatare an alle Geräte. Die vollständigen fremden Avatarpakete werden ni
 benötigt. Migration 0017 wird beim üblichen Serverstart ausgeführt.
 Details: [Anzeige und Bilder 1.1.2](docs/display-photos-chat-1.1.2.md).
 
-Das Modul **Zeit** bietet auf der passenden Firmware Timer (1/3/10/60 Minuten
+## 1.1.3: Zeit-Modul
+
+Das Modul **Zeit** bietet auf Firmware 1.1.4 Timer (1/3/10/60 Minuten
 oder eigene Zeit bis 99:59) und eine Stoppuhr mit Zwischenzeiten. Migration
 `0018` aktiviert die Seite auf bestehenden Geräten, ohne deren Reihenfolge zu
 ändern. Im Geräteeditor lassen sich Seite, Reihenfolge und Timer-Warnton
