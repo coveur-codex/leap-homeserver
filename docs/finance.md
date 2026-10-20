@@ -135,3 +135,10 @@ Die Abdeckung des eigenen API-Schlüssels muss beim tatsächlichen Abruf geprüf
 Die Symbolkonfiguration steht ab 1.2.1 oben bei den übrigen Geräteeinstellungen.
 Symbolaktionen speichern weiterhin sofort und unabhängig vom allgemeinen
 Geräteformular; dessen ungespeicherte Änderungen werden dabei nicht mitgespeichert.
+
+**Gespeicherte Fehlermeldung nach einem Update:** Symbolfehler werden bis zu sechs
+Stunden zwischengespeichert. Mit **Erneut prüfen** bei der betreffenden Zeile wird
+diese Wartezeit gezielt aufgehoben. Globale API-Limits und 429-Sperren gelten
+weiterhin. Bei einer weiteren Ablehnung nennt die Meldung jetzt den gemeldeten
+Handelsplatz oder ein fehlendes Profil, statt pauschal einen internationalen
+Markt zu vermuten.

@@ -60,6 +60,7 @@
 <span>{{quote.name or ''}}{% if quote.error %} · {{quote.error}}{% elif quote.stale %} · Kursdaten veraltet{% elif quote.available %} · {{quote.quoteTime}}{% endif %}</span>
 <button form="finance-change-{{loop.index}}" name="action" value="up" aria-label="{{quote.symbol}} nach oben"{% if loop.first %} disabled{% endif %}>↑</button>
 <button form="finance-change-{{loop.index}}" name="action" value="down" aria-label="{{quote.symbol}} nach unten"{% if loop.last %} disabled{% endif %}>↓</button>
+<button form="finance-change-{{loop.index}}" name="action" value="retry">Erneut prüfen</button>
 <button form="finance-change-{{loop.index}}" name="action" value="delete">Entfernen</button>
 </div>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
 <div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>

@@ -197,8 +197,13 @@ class FinnhubProvider:
         meta = previous.get("meta")
         if not meta:
             profile = await request(db, self.name, "stock/profile2", {"symbol": symbol})
-            if not isinstance(profile, dict) or not profile or not us_listing(profile.get("exchange")) or not profile.get("currency"):
-                raise ProviderError("Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar", "unsupported", 21600)
+            if not isinstance(profile, dict) or not profile:
+                raise ProviderError("Kein Unternehmensprofil für dieses Symbol verfügbar", "unsupported", 21600)
+            if not us_listing(profile.get("exchange")):
+                exchange = str(profile.get("exchange") or "unbekannt")[:80]
+                raise ProviderError(f"Handelsplatz {exchange} wird vom kostenlosen US-Adapter nicht unterstützt", "unsupported", 21600)
+            if not profile.get("currency"):
+                raise ProviderError("Währung fehlt im Unternehmensprofil")
             meta = {"name": str(profile.get("name", symbol))[:100], "currency": profile["currency"], "timezone": "America/New_York"}
         q = await request(db, self.name, "quote", {"symbol": symbol})
         if not isinstance(q, dict): raise ProviderError("Ungültige Kursantwort")
@@ -294,11 +299,11 @@ def provider():
     return PROVIDERS[settings.finance_provider]
 
 
-async def refresh_symbol(db, symbol):
+async def refresh_symbol(db, symbol, *, force=False):
     api = provider()
     row = cache_row(db, api.name, symbol)
     now = utcnow()
-    if row.next_fetch and aware(row.next_fetch) > now:
+    if not force and row.next_fetch and aware(row.next_fetch) > now:
         return row
     try:
         data = await api.quote(db, symbol, row.data or {})

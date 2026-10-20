@@ -284,7 +284,7 @@ async def test_finnhub_uses_listing_not_canadian_issuer_domicile(db, monkeypatch
     api=f.FinnhubProvider()
     q=await api.quote(db,"CCJ",{})
     assert q["symbol"]=="CCJ" and q["currency"]=="USD" and q["timezone"]=="America/New_York"
-    with pytest.raises(f.ProviderError,match="internationaler Markt"):
+    with pytest.raises(f.ProviderError,match="TORONTO STOCK EXCHANGE"):
         await api.quote(db,"CCO.TO",{})
     assert not any(path=="quote" and params["symbol"]=="CCO.TO" for path,params in calls)
 
@@ -314,3 +314,27 @@ def test_finance_editor_in_top_settings_with_independent_form_owners(client,db):
 ])
 def test_us_listing_exchange_validation(exchange,expected):
     assert f.us_listing(exchange) is expected
+
+
+def test_manual_retry_rechecks_negative_cache_without_changing_settings(client,db,provider):
+    d=device(db,symbols=["CCJ"])
+    row=f.cache_row(db,"finnhub","CCJ")
+    row.error="Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar"
+    row.next_fetch=f.utcnow()+timedelta(hours=6);db.commit()
+    version=d.config_version
+    response=client.post(f"/devices/{d.id}/finance/change",data={"symbol":"CCJ","action":"retry"})
+    assert response.status_code==200 and provider.calls==["CCJ"]
+    assert row.error is None and row.data["symbol"]=="CCJ"
+    assert f.symbols_for(d)==["CCJ"] and d.config_version==version
+
+
+@pytest.mark.asyncio
+async def test_forced_symbol_retry_preserves_global_quota_cooldown(db,monkeypatch):
+    monkeypatch.setattr(f.settings,"finance_finnhub_key","test-key")
+    budget=f.cache_row(db,"finnhub","!budget")
+    budget.next_fetch=f.utcnow()+timedelta(minutes=10)
+    row=f.cache_row(db,"finnhub","CCJ")
+    row.next_fetch=f.utcnow()+timedelta(hours=6);db.commit()
+    row=await f.refresh_symbol(db,"CCJ",force=True)
+    assert "API-Limit" in row.error
+    assert f.aware(budget.next_fetch)>f.utcnow()+timedelta(minutes=9)
