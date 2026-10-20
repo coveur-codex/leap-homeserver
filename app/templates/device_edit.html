@@ -3,12 +3,9 @@
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
 <form method="post">
-  <div class="tabs device-settings">
-    <div class="device-settings-stack">
+  <div class="device-settings">
     <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Akzentfarbe<input type="color" name="accent_color" value="{{device.accent_color}}" data-accent-color></label><small>Farbe für Überschriften und Markierungen auf diesem Gerät. Standard: Türkis.</small><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
     <section><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
-    </div>
-    <div class="device-settings-stack">
     <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
     <section><h2>Chill</h2>
     <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' and (not p.id.startswith('chill-album-') or p.id==device.chill_album_id) %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
@@ -19,16 +16,12 @@
     </fieldset>
     <script>document.addEventListener('DOMContentLoaded',()=>{const select=document.querySelector('[name="chill_id"]');const box=document.getElementById('loremflickr-settings');const update=()=>{box.hidden=select.value!=='chill-loremflickr';box.querySelector('input').disabled=box.hidden;};select.addEventListener('change',update);update();});</script>
     </section>
-    </div>
-    <div class="device-settings-stack">
     <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
     <section><h2>Spiele auf dem Gerät</h2>
     <small>Zum Spielen die Seite „Spiele“ aktivieren.</small>
     <input type="hidden" name="game_settings" value="true">
     {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
   </section>
-    </div>
-    <div class="device-settings-stack">
     <section><h2>Quiz</h2>
   <h3>Mathe-Quiz</h3>
     <input type="hidden" name="math_settings" value="true">
@@ -49,11 +42,9 @@
     <label>Bis<input type="time" name="quiet_hours_end" value="{{device.notification_quiet_hours.get('end') or '07:00'}}"></label>
     <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small></section>
     <section><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
-    </div>
-    <div class="device-settings-stack">
 <section id="finance"><h2>Finanzen</h2>
-<p>Aktivierung und Reihenfolge der Finanzseite unter „Seiten“. Symbole werden in dieser Liste sofort gespeichert. Bis zu 48 pro Gerät.</p>
-<p>Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p>
+<p>Symbole werden sofort gespeichert. Aktivierung unter „Seiten“.</p>
+<details><summary>Datenquelle & Hinweise</summary><p>Bis zu 48 Symbole pro Gerät. Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p></details>
 {% for quote in preview_finance.securities %}
 <div class="finance-symbol-row">
 <input type="hidden" name="symbol" value="{{quote.symbol}}" form="finance-change-{{loop.index}}"><strong>{{quote.symbol}}</strong>
@@ -65,7 +56,6 @@
 </div>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
 <div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>
 </section>
-    </div>
   </div>
   <button class="device-settings-save">Speichern & Version erhöhen</button>
 
@@ -199,10 +189,11 @@
 </form>
 
 {# External form owners keep finance actions independent of unsaved device settings. #}
-<form id="finance-add" method="post" action="/devices/{{device.id}}/finance/add"></form>
-{% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
+<form id="finance-add" hidden method="post" action="/devices/{{device.id}}/finance/add"></form>
+{% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
+<script src="/static/device-settings.js?v=1" defer></script>
 <script src="/static/device-preview.js?v=5" defer></script>
 <script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
 <script src="/static/finance-preview.js?v=1" defer></script>
