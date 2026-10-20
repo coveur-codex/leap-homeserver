@@ -244,3 +244,27 @@ def test_finance_migration_preserves_existing_settings(db):
     page=next(p for p in d.pages if p.page_id=="finance")
     assert not page.enabled and page.position==43
     assert next(p for p in d.pages if p.page_id=="home").settings=={"preserve":True} and d.config_version>version
+
+
+@pytest.mark.asyncio
+async def test_older_provider_quote_cannot_replace_newer_cache(db, provider):
+    row=await f.refresh_symbol(db,"AAPL")
+    original=row.data["timestamp"]
+    row.data={**row.data,"timestamp":original+10};row.next_fetch=f.utcnow()-timedelta(seconds=1);db.commit()
+    await f.refresh_symbol(db,"AAPL")
+    assert row.data["timestamp"]==original+10 and "älteren Kurs" in row.error
+
+
+@pytest.mark.asyncio
+async def test_news_quota_commit_does_not_advance_old_quote_freshness(db, provider):
+    row=await f.refresh_symbol(db,"AAPL")
+    old=f.utcnow()-timedelta(hours=2)
+    row.fetched_at=old;row.news_at=old;row.next_fetch=old;db.commit()
+    async def news(db,symbol,q):
+        db.commit() # same commit as the real HTTP quota reservation
+        assert f.aware(row.fetched_at)==old
+        raise f.ProviderError("Nachrichten fehlen")
+    provider.news=news
+    await f.refresh_symbol(db,"AAPL")
+    assert f.aware(row.fetched_at)>old and row.error is None
+    assert row.data["news"]["title"]=="Company earnings" and row.news_error

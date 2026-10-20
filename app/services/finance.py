@@ -7,6 +7,7 @@ import asyncio
 import copy
 import math
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 from zoneinfo import ZoneInfo
@@ -166,7 +167,9 @@ class FinnhubProvider:
         row = cache_row(db, self.name, "!market-US")
         if not row.fetched_at or utcnow() - aware(row.fetched_at) >= timedelta(minutes=5):
             try:
-                row.data = await request(db, self.name, "stock/market-status", {"exchange": "US"})
+                value = await request(db, self.name, "stock/market-status", {"exchange": "US"})
+                if not isinstance(value, dict): raise ProviderError("Ungültiger Marktstatus")
+                row.data = value
                 row.fetched_at = utcnow()
                 db.commit()
             except ProviderError:
@@ -179,10 +182,11 @@ class FinnhubProvider:
         meta = previous.get("meta")
         if not meta:
             profile = await request(db, self.name, "stock/profile2", {"symbol": symbol})
-            if not profile or profile.get("country") != "US" or not profile.get("currency"):
+            if not isinstance(profile, dict) or not profile or profile.get("country") != "US" or not profile.get("currency"):
                 raise ProviderError("Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar", "unsupported", 21600)
             meta = {"name": str(profile.get("name", symbol))[:100], "currency": profile["currency"], "timezone": "America/New_York"}
         q = await request(db, self.name, "quote", {"symbol": symbol})
+        if not isinstance(q, dict): raise ProviderError("Ungültige Kursantwort")
         price, opening = number(q.get("c")), number(q.get("o"))
         timestamp = int(q.get("t") or 0)
         if not price or timestamp <= 0 or timestamp > utcnow().timestamp() + 60:
@@ -203,7 +207,8 @@ class FinnhubProvider:
     async def news(self, db, symbol, quote):
         today = utcnow().date()
         rows = await request(db, self.name, "company-news", {"symbol": symbol, "from": (today-timedelta(days=7)).isoformat(), "to": today.isoformat()})
-        rows = [r for r in rows if r.get("headline") and r.get("datetime") and symbol in {s.strip() for s in str(r.get("related", "")).split(",")}]
+        if not isinstance(rows, list): raise ProviderError("Ungültige Nachrichtenantwort")
+        rows = [r for r in rows if isinstance(r, dict) and r.get("headline") and r.get("datetime") and symbol in {s.strip() for s in str(r.get("related", "")).split(",")}]
         if not rows: return None
         r = max(rows, key=lambda r: int(r["datetime"]))
         return {"title": str(r["headline"])[:300], "source": str(r.get("source", ""))[:60], "timestamp": int(r["datetime"])}
@@ -220,14 +225,17 @@ class TwelveDataProvider:
             if symbol not in names:
                 raise ProviderError("Unbekanntes Indexkürzel: natives Anbietersymbol verwenden", "unsupported", 21600)
             search = await request(db, self.name, "symbol_search", {"symbol": names[symbol], "outputsize": 30})
+            if not isinstance(search, dict): raise ProviderError("Ungültige Symbolsuche")
             matches = [r for r in search.get("data", []) if r.get("instrument_type", "").lower() == "index" and r.get("instrument_name", "").casefold() == names[symbol].casefold()]
             if len(matches) != 1:
                 raise ProviderError("Index nicht eindeutig auflösbar: natives Anbietersymbol verwenden", "unsupported", 21600)
             native = matches[0]["symbol"]
         q = await request(db, self.name, "quote", {"symbol": native})
+        if not isinstance(q, dict): raise ProviderError("Ungültige Kursantwort")
         chart_error = None
         try:
             series = await request(db, self.name, "time_series", {"symbol": native, "interval": "5min", "outputsize": 500, "timezone": "UTC", "order": "ASC"})
+            if not isinstance(series, dict): raise ProviderError("Ungültige Intraday-Antwort")
         except ProviderError:
             series = {}
             chart_error = "Intraday-Historie nicht verfügbar; nur gesammelte Kurse"
@@ -281,17 +289,21 @@ async def refresh_symbol(db, symbol):
         data = await api.quote(db, symbol, row.data or {})
         if data.get("timestamp", 0) < (row.data or {}).get("timestamp", 0):
             raise ProviderError("Anbieter liefert einen älteren Kurs; letzter Cache bleibt erhalten")
-        row.fetched_at = now
-        row.error = None
+        news_at, news_error = row.news_at, row.news_error
         # Preserve headline if only its source is temporarily unavailable.
         data["news"] = (row.data or {}).get("news")
         if not row.news_at or now - aware(row.news_at) >= timedelta(hours=1):
             try:
                 data["news"] = await api.news(db, symbol, data)
-                row.news_error = None
+                news_error = None
             except ProviderError:
-                row.news_error = "Nachrichtenabruf derzeit nicht verfügbar"
-            row.news_at = now
+                news_error = "Nachrichtenabruf derzeit nicht verfügbar"
+            news_at = now
+        # Quota reservations may commit during HTTP work; publish the complete
+        # result only after all awaits, without advancing old quote freshness.
+        row.fetched_at = now
+        row.error = None
+        row.news_at, row.news_error = news_at, news_error
         row.data = data
         row.next_fetch = now + timedelta(minutes=15 if data["market"] == "closed" else 5)
     except ProviderError as error:
@@ -315,7 +327,10 @@ async def refresh_configured(db):
         def due(s):
             row = db.get(FinanceCache, f"{name}:{s}")
             return aware(row.next_fetch) if row and row.next_fetch else datetime.min.replace(tzinfo=timezone.utc)
+        started = time.monotonic()
         for symbol in sorted(symbols, key=due)[:MAX_GLOBAL_SYMBOLS]:
+            if time.monotonic() - started > 45:
+                break  # Bound outage work; due ordering continues next cycle.
             try: await refresh_symbol(db, symbol)
             except ProviderError: break
 
