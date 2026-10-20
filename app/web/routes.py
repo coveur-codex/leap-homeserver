@@ -15,6 +15,7 @@ from app.core.pages import PAGE_REGISTRY
 from app.core.games import GAME_REGISTRY
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages, page_enabled
+from app.services import finance as finance_service
 from app.services import communication
 from app.services.backup import backup_database
 from app.services.feeds import fetch_feed
@@ -57,8 +58,8 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     distribution_service.ensure_packages(db)
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time"}]
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
 def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
     d=db.get(Device,id)
@@ -140,7 +141,12 @@ def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id
 def duplicate_device(id:int,db:Session=Depends(get_db)):
     old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs))
     d.content_selection=[key for key in d.content_selection if key != old.chill_album_id]
-    initialize_pages(d); db.add(d); db.flush()
+    initialize_pages(d)
+    for page in d.pages:
+        original=next((p for p in old.pages if p.page_id==page.page_id),None)
+        if original:
+            page.enabled=original.enabled; page.position=original.position; page.settings=dict(original.settings or {})
+    db.add(d); db.flush()
     if old.chill_photos:
         from app.services.chill_album import publish
         album=publish(db,d,list(old.chill_photos))

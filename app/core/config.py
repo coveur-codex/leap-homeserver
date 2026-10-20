@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     aircraft_provider_url: str = "https://api.adsb.lol/v2/lat/{latitude}/lon/{longitude}/dist/{radius}"
     request_timeout: float = 10.0
     max_download_bytes: int = 8_000_000
+    finance_provider: str = "finnhub"
+    finance_finnhub_key: str = ""
+    finance_twelve_data_key: str = ""
     knowledge_cache_hours: int = 168
     knowledge_search_cache_minutes: int = 15
     klexikon_api_url: str = "https://klexikon.zum.de/api.php"
