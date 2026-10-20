@@ -72,7 +72,7 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 
 .preview-nav[hidden]{display:none}
 
-.device-settings-stack{display:flex;flex-direction:column;gap:1rem;align-self:start;min-width:0}.device-settings-stack>button{align-self:start}
+
 
 .device-memory{margin:1rem 0}
 .device-memory dl{display:grid;grid-template-columns:1fr auto;gap:.4rem 1rem;margin:.5rem 0;padding:0;box-shadow:none;background:transparent}
@@ -92,9 +92,19 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 .chill-card [data-chill-slider] { position: absolute; bottom: 8%; left: 29%; width: 42%; opacity: 0; transition: opacity .6s; }
 .chill-card:hover [data-chill-slider], .chill-card:focus-within [data-chill-slider] { opacity: .6; }
 
-/* Keep device configuration compact above the display preview. */
-.device-settings{align-items:start}
-.device-settings section{min-width:0}
+/* Independent cards flow into responsive columns without tall grid-row gaps. */
+main:has(.device-settings){max-width:1440px}
+.device-settings{column-width:280px;column-gap:1rem}
+.device-settings>section{display:inline-block;width:100%;min-width:0;margin:0 0 1rem;vertical-align:top;break-inside:avoid;overflow-wrap:anywhere}
+.device-settings.device-settings-packed{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));grid-auto-rows:1px;grid-auto-flow:dense;gap:0 1rem;align-items:start;column-width:auto}
+.device-settings-packed>section{margin:0;grid-row-end:span var(--settings-rows,1)}
+.device-settings label{margin:.45rem 0}
+.device-settings input:not([type=checkbox]),.device-settings select{padding:.45rem}
+.device-settings p{margin:.5rem 0;font-size:.9rem}
+.device-settings .finance-symbol-row{gap:.4rem;padding:.5rem 0;border-top:1px solid var(--border)}
+.device-settings .finance-symbol-row span{flex-basis:calc(100% - 4rem);min-width:0;font-size:.85rem}
+.device-settings .finance-symbol-row button{font-size:.8rem;padding:.35rem .5rem}
+.device-settings .finance-symbol-add button{margin-top:.25rem}
 .device-settings h2{margin-top:0}
 .device-settings h3{margin:1rem 0 .5rem;font-size:1rem}
 .device-settings small{color:var(--muted)}
