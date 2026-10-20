@@ -50,6 +50,22 @@
     <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small></section>
     <section><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
     </div>
+    <div class="device-settings-stack">
+<section id="finance"><h2>Finanzen</h2>
+<p>Aktivierung und Reihenfolge der Finanzseite unter „Seiten“. Symbole werden in dieser Liste sofort gespeichert. Bis zu 48 pro Gerät.</p>
+<p>Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p>
+{% for quote in preview_finance.securities %}
+<div class="finance-symbol-row">
+<input type="hidden" name="symbol" value="{{quote.symbol}}" form="finance-change-{{loop.index}}"><strong>{{quote.symbol}}</strong>
+<span>{{quote.name or ''}}{% if quote.error %} · {{quote.error}}{% elif quote.stale %} · Kursdaten veraltet{% elif quote.available %} · {{quote.quoteTime}}{% endif %}</span>
+<button form="finance-change-{{loop.index}}" name="action" value="up" aria-label="{{quote.symbol}} nach oben"{% if loop.first %} disabled{% endif %}>↑</button>
+<button form="finance-change-{{loop.index}}" name="action" value="down" aria-label="{{quote.symbol}} nach unten"{% if loop.last %} disabled{% endif %}>↓</button>
+<button form="finance-change-{{loop.index}}" name="action" value="retry">Erneut prüfen</button>
+<button form="finance-change-{{loop.index}}" name="action" value="delete">Entfernen</button>
+</div>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
+<div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>
+</section>
+    </div>
   </div>
   <button class="device-settings-save">Speichern & Version erhöhen</button>
 
@@ -167,6 +183,11 @@
   </article>{% endfor %}
   {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
+<div data-finance-controls><span>Finanzvorschau:</span>
+<button type="button" data-finance-key="ArrowLeft">←</button><button type="button" data-finance-key="ArrowRight">→</button>
+<button type="button" data-finance-key="Enter">Details / Zurück</button>
+<button type="button" data-finance-key="ArrowUp">↑</button><button type="button" data-finance-key="ArrowDown">↓</button>
+</div><small>Vorschau nutzt konfigurierte Cache-Daten. Ein fehlender Kurs wird als fehlend angezeigt. Intraday-Zeiten gelten in der Börsenzeitzone.</small>
 
 <p><a href="/devices/{{device.id}}/quiz-results">Quiz-Ergebnisse und Antwortzeiten</a></p>
 {{memory_status(device)}}
@@ -177,24 +198,9 @@
   <button>Speichern & Version erhöhen</button>
 </form>
 
-<section id="finance"><h2>Finanzen</h2>
-<p>Aktivierung und Reihenfolge der Finanzseite unter „Seiten“. Symbole werden in dieser Liste sofort gespeichert. Bis zu 48 pro Gerät.</p>
-<p>Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p>
-{% for quote in preview_finance.securities %}
-<form method="post" action="/devices/{{device.id}}/finance/change" class="finance-symbol-row">
-<input type="hidden" name="symbol" value="{{quote.symbol}}"><strong>{{quote.symbol}}</strong>
-<span>{{quote.name or ''}}{% if quote.error %} · {{quote.error}}{% elif quote.stale %} · Kursdaten veraltet{% elif quote.available %} · {{quote.quoteTime}}{% endif %}</span>
-<button name="action" value="up" aria-label="{{quote.symbol}} nach oben"{% if loop.first %} disabled{% endif %}>↑</button>
-<button name="action" value="down" aria-label="{{quote.symbol}} nach unten"{% if loop.last %} disabled{% endif %}>↓</button>
-<button name="action" value="delete">Entfernen</button>
-</form>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
-<form method="post" action="/devices/{{device.id}}/finance/add"><label>Symbol<input name="symbol" maxlength="32" placeholder="AAPL" required></label><button>Hinzufügen & prüfen</button></form>
-<div data-finance-controls><span>Finanzvorschau:</span>
-<button type="button" data-finance-key="ArrowLeft">←</button><button type="button" data-finance-key="ArrowRight">→</button>
-<button type="button" data-finance-key="Enter">Details / Zurück</button>
-<button type="button" data-finance-key="ArrowUp">↑</button><button type="button" data-finance-key="ArrowDown">↓</button>
-</div><small>Vorschau nutzt konfigurierte Cache-Daten. Ein fehlender Kurs wird als fehlend angezeigt. Intraday-Zeiten gelten in der Börsenzeitzone.</small>
-</section>
+{# External form owners keep finance actions independent of unsaved device settings. #}
+<form id="finance-add" method="post" action="/devices/{{device.id}}/finance/add"></form>
+{% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
 <script src="/static/device-preview.js?v=5" defer></script>

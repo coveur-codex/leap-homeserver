@@ -49,10 +49,15 @@ async def add(id: int, symbol: str = Form(), db: Session = Depends(get_db)):
 
 
 @router.post("/devices/{id}/finance/change")
-def change(id: int, symbol: str = Form(), action: str = Form(), db: Session = Depends(get_db)):
+async def change(id: int, symbol: str = Form(), action: str = Form(), db: Session = Depends(get_db)):
     device, page = page_for(db, id)
     symbols = finance.symbols_for(device)
     if symbol not in symbols: raise HTTPException(404, "Symbol nicht konfiguriert")
+    if action == "retry":
+        async with finance._lock:
+            try: await finance.refresh_symbol(db, symbol, force=True)
+            except finance.ProviderError as error: raise HTTPException(422, str(error))
+        return RedirectResponse(f"/devices/{id}#finance", status_code=303)
     index = symbols.index(symbol)
     if action == "delete": symbols.remove(symbol)
     elif action in {"up", "down"}:

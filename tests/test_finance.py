@@ -101,7 +101,7 @@ def test_closed_is_not_technical_failure(db, market, age, expected):
 async def test_finnhub_open_basis_and_real_collected_chart(db, monkeypatch):
     stamp = int(f.utcnow().timestamp()) - 30
     async def request(db, provider, path, params):
-        if path == "stock/profile2": return {"country":"US", "name":"Apple Inc.", "currency":"USD"}
+        if path == "stock/profile2": return {"country":"US", "exchange":"NASDAQ NMS - GLOBAL MARKET", "name":"Apple Inc.", "currency":"USD"}
         if path == "quote": return {"c":105, "o":100, "h":107, "l":99, "pc":90, "t":stamp}
         if path == "stock/market-status": return {"isOpen":False, "holiday":""}
         raise AssertionError(path)
@@ -268,3 +268,73 @@ async def test_news_quota_commit_does_not_advance_old_quote_freshness(db, provid
     await f.refresh_symbol(db,"AAPL")
     assert f.aware(row.fetched_at)>old and row.error is None
     assert row.data["news"]["title"]=="Company earnings" and row.news_error
+
+
+@pytest.mark.asyncio
+async def test_finnhub_uses_listing_not_canadian_issuer_domicile(db, monkeypatch):
+    calls=[]
+    async def request(db, provider, path, params):
+        calls.append((path,params))
+        if path=="stock/profile2":
+            return {"country":"CA", "exchange":"NEW YORK STOCK EXCHANGE, INC." if params["symbol"]=="CCJ" else "TORONTO STOCK EXCHANGE", "name":"Cameco Corp", "currency":"USD" if params["symbol"]=="CCJ" else "CAD"}
+        if path=="quote": return {"c":100,"o":99,"h":101,"l":98,"t":int(f.utcnow().timestamp())-30}
+        if path=="stock/market-status":return {"isOpen":True}
+        raise AssertionError(path)
+    monkeypatch.setattr(f,"request",request)
+    api=f.FinnhubProvider()
+    q=await api.quote(db,"CCJ",{})
+    assert q["symbol"]=="CCJ" and q["currency"]=="USD" and q["timezone"]=="America/New_York"
+    with pytest.raises(f.ProviderError,match="TORONTO STOCK EXCHANGE"):
+        await api.quote(db,"CCO.TO",{})
+    assert not any(path=="quote" and params["symbol"]=="CCO.TO" for path,params in calls)
+
+
+def test_finance_editor_in_top_settings_with_independent_form_owners(client,db):
+    from bs4 import BeautifulSoup
+    d=device(db,symbols=["CCJ","AAPL"])
+    html=client.get(f"/devices/{d.id}").text
+    soup=BeautifulSoup(html,"html.parser")
+    section=soup.select_one('.device-settings #finance')
+    assert section and html.index('id="finance"')<html.index('Display-Vorschau')
+    assert not section.select('form')
+    add_input=section.select_one('input[form="finance-add"]')
+    assert add_input and soup.select_one('form#finance-add')['action'].endswith('/finance/add')
+    for i,row in enumerate(section.select('.finance-symbol-row'),1):
+        owner=f"finance-change-{i}"
+        assert row.select_one('input[name="symbol"]')['form']==owner
+        assert all(b['form']==owner for b in row.select('button'))
+        assert soup.select_one(f'form#{owner}')['action'].endswith('/finance/change')
+    assert not soup.select('form form')
+
+
+@pytest.mark.parametrize("exchange,expected", [
+    ("NASDAQ NMS - GLOBAL MARKET",True), ("NEW YORK STOCK EXCHANGE, INC.",True),
+    ("XNYS",True), ("TORONTO STOCK EXCHANGE",False), ("NYSE EURONEXT PARIS",False),
+    ("NASDAQ STOCKHOLM",False), ("NASDAQ OMX NORDIC",False), ("",False),
+])
+def test_us_listing_exchange_validation(exchange,expected):
+    assert f.us_listing(exchange) is expected
+
+
+def test_manual_retry_rechecks_negative_cache_without_changing_settings(client,db,provider):
+    d=device(db,symbols=["CCJ"])
+    row=f.cache_row(db,"finnhub","CCJ")
+    row.error="Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar"
+    row.next_fetch=f.utcnow()+timedelta(hours=6);db.commit()
+    version=d.config_version
+    response=client.post(f"/devices/{d.id}/finance/change",data={"symbol":"CCJ","action":"retry"})
+    assert response.status_code==200 and provider.calls==["CCJ"]
+    assert row.error is None and row.data["symbol"]=="CCJ"
+    assert f.symbols_for(d)==["CCJ"] and d.config_version==version
+
+
+@pytest.mark.asyncio
+async def test_forced_symbol_retry_preserves_global_quota_cooldown(db,monkeypatch):
+    monkeypatch.setattr(f.settings,"finance_finnhub_key","test-key")
+    budget=f.cache_row(db,"finnhub","!budget")
+    budget.next_fetch=f.utcnow()+timedelta(minutes=10)
+    row=f.cache_row(db,"finnhub","CCJ")
+    row.next_fetch=f.utcnow()+timedelta(hours=6);db.commit()
+    row=await f.refresh_symbol(db,"CCJ",force=True)
+    assert "API-Limit" in row.error
+    assert f.aware(budget.next_fetch)>f.utcnow()+timedelta(minutes=9)

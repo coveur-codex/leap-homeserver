@@ -160,6 +160,21 @@ async def request(db, provider, path, params):
     return value
 
 
+def us_listing(exchange):
+    # profile.country describes the issuer's domicile, not the listing market.
+    # ADRs and cross-listed Canadian companies may trade in the US as well.
+    name = str(exchange or "").strip().upper()
+    return name in {
+        "XNYS", "XNAS", "XASE", "ARCX", "BATS", "IEXG",
+        "NASDAQ", "NASDAQ NMS - GLOBAL MARKET", "NASDAQ/NGS (GLOBAL SELECT MARKET)",
+        "NASDAQ GLOBAL SELECT MARKET", "NASDAQ GLOBAL MARKET", "NASDAQ CAPITAL MARKET",
+        "NYSE", "NEW YORK STOCK EXCHANGE", "NEW YORK STOCK EXCHANGE, INC.",
+        "NYSE ARCA", "NYSE ARCA, INC.", "NYSE AMERICAN", "NYSEAMERICAN", "NYSE MKT LLC",
+        "CBOE BZX", "CBOE BZX EXCHANGE", "CBOE US", "IEX EXCHANGE",
+    }
+
+
+
 class FinnhubProvider:
     name = "finnhub"
 
@@ -182,8 +197,13 @@ class FinnhubProvider:
         meta = previous.get("meta")
         if not meta:
             profile = await request(db, self.name, "stock/profile2", {"symbol": symbol})
-            if not isinstance(profile, dict) or not profile or profile.get("country") != "US" or not profile.get("currency"):
-                raise ProviderError("Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar", "unsupported", 21600)
+            if not isinstance(profile, dict) or not profile:
+                raise ProviderError("Kein Unternehmensprofil für dieses Symbol verfügbar", "unsupported", 21600)
+            if not us_listing(profile.get("exchange")):
+                exchange = str(profile.get("exchange") or "unbekannt")[:80]
+                raise ProviderError(f"Handelsplatz {exchange} wird vom kostenlosen US-Adapter nicht unterstützt", "unsupported", 21600)
+            if not profile.get("currency"):
+                raise ProviderError("Währung fehlt im Unternehmensprofil")
             meta = {"name": str(profile.get("name", symbol))[:100], "currency": profile["currency"], "timezone": "America/New_York"}
         q = await request(db, self.name, "quote", {"symbol": symbol})
         if not isinstance(q, dict): raise ProviderError("Ungültige Kursantwort")
@@ -279,11 +299,11 @@ def provider():
     return PROVIDERS[settings.finance_provider]
 
 
-async def refresh_symbol(db, symbol):
+async def refresh_symbol(db, symbol, *, force=False):
     api = provider()
     row = cache_row(db, api.name, symbol)
     now = utcnow()
-    if row.next_fetch and aware(row.next_fetch) > now:
+    if not force and row.next_fetch and aware(row.next_fetch) > now:
         return row
     try:
         data = await api.quote(db, symbol, row.data or {})
