@@ -298,3 +298,7 @@ oder eigene Zeit bis 99:59) und eine Stoppuhr mit Zwischenzeiten. Migration
 konfigurieren; die Vorschau verwendet die Geräte-Akzentfarbe. Der Timer läuft
 lokal auch auf anderen Seiten und ohne WLAN weiter. Lautstärke, Tonfreigabe und
 Nachtruhe gelten. Neustart/Ausschalten verwirft die lokale Zeitmessung.
+
+## Finanzen (1.2.0)
+
+Pro Gerät unter **Seiten → Finanzen** aktivieren und im Abschnitt **Finanzen** Symbole hinzufügen, entfernen und sortieren. Einrichtung, Datenquellen, Tarifgrenzen und Offline-Verhalten: [docs/finance.md](docs/finance.md).

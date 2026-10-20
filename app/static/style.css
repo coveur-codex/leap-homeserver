@@ -115,3 +115,5 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 .time-ring-fill { stroke:currentColor; stroke-dasharray:236 314; stroke-linecap:round; }
 .time-preview-ring strong { position:absolute; inset:0; display:grid; place-items:center; font-size:clamp(16px, 3vw, 30px); }
 .time-card h3 { color:var(--device-accent); }
+
+.finance-symbol-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:.4rem 0;padding:.5rem}.finance-symbol-row span{flex:1;min-width:160px}.finance-symbol-row button{padding:.3rem .6rem}.finance-card{overflow:hidden;background:#101c29!important}.finance-card canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;outline-offset:-2px}[data-finance-controls]{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin:.8rem 0}

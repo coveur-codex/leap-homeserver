@@ -193,3 +193,11 @@ def chill_image(device_id: str, digest: str, db: Session = Depends(get_db)):
     except ValueError: raise HTTPException(404)
     if not path.is_file(): raise HTTPException(404)
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
+
+@router.get("/devices/{device_id}/finance")
+def finance(device_id: str, db: Session = Depends(get_db)):
+    from app.services.finance import data_for_device
+    device = device_or_404(device_id, db)
+    if not any(p.page_id == "finance" and p.enabled for p in device.pages):
+        raise HTTPException(403, "Finanzen ist für dieses Gerät nicht aktiviert")
+    return data_for_device(device, db)

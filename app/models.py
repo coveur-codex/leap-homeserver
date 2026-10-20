@@ -174,3 +174,16 @@ class CommunicationRelayEvent(Base):
     text: Mapped[str] = mapped_column(String(120))
     symbol: Mapped[str] = mapped_column(String(16))
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+
+
+class FinanceCache(Base):
+    __tablename__ = "finance_cache"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    symbol: Mapped[str] = mapped_column(String(32))
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_fetch: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    news_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    news_error: Mapped[str | None] = mapped_column(Text)

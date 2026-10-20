@@ -25,6 +25,11 @@ async def scheduled_feeds():
         for feed in db.scalars(select(Feed).where(Feed.enabled==True)).all():
             last=feed.last_fetch.replace(tzinfo=timezone.utc) if feed.last_fetch and feed.last_fetch.tzinfo is None else feed.last_fetch
             if not last or last < now-timedelta(minutes=feed.update_interval): await fetch_feed(feed,db)
+async def scheduled_finance():
+    from app.services.finance import refresh_configured
+    with SessionLocal() as db:
+        await refresh_configured(db)
+
 def cleanup():
     with SessionLocal() as db:
         old=db.scalars(select(Article).where(Article.fetched_at<datetime.now(timezone.utc)-timedelta(days=settings.news_retention_days))).all()
@@ -53,7 +58,7 @@ async def lifespan(app):
     with SessionLocal() as db:
         ensure_packages(db)
     scheduler=AsyncIOScheduler()
-    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.start()
+    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.start()
     try:
         yield
     finally:
@@ -71,3 +76,6 @@ from app.api.quiz_tracking import router as quiz_tracking_api
 app.include_router(quiz_tracking_api)
 
 app.include_router(communication_api)
+
+from app.web.finance import router as finance_web
+app.include_router(finance_web)

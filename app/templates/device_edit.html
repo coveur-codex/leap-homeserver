@@ -145,6 +145,11 @@
       </div>
       <div class="communication-options"><small>NACHRICHT AUSWÄHLEN</small>{% for message in preview_messages %}<button type="button" data-message-choice>{{message.symbol}} {{message.text}}</button>{% else %}<span>Vorlagen unter Kommunikation anlegen.</span>{% endfor %}</div>
     </article>
+    {% elif page_id == 'finance' %}
+    <article class="leap-card finance-card" data-preview-card="FINANZEN"{% if not loop.first %} hidden{% endif %}>
+      <canvas width="342" height="142" data-finance-preview tabindex="0" aria-label="Finanzen: Pfeiltasten zur Auswahl, Enter für Details, Escape zurück"></canvas>
+      <script type="application/json" data-finance-data>{{preview_finance|tojson}}</script>
+    </article>
     {% elif page_id == 'knowledge' %}
     <article class="leap-card knowledge-card{% if not preview_knowledge.image %} no-knowledge-image{% endif %}" data-preview-card="WISSEN"{% if not loop.first %} hidden{% endif %}>
       <div class="knowledge-copy"><div class="knowledge-meta"><strong data-knowledge-source-label>{{preview_knowledge.sourceName}}</strong><span>⌕ Suche&nbsp;&nbsp;⤨ Zufall</span></div><h3>{{preview_knowledge.title}}</h3><p>{{preview_knowledge.text}}</p><div class="knowledge-links"><b>WEITER:</b>{% for link in preview_knowledge.links %}<span>{{link.title}}</span>{% endfor %}</div></div>
@@ -172,8 +177,27 @@
   <button>Speichern & Version erhöhen</button>
 </form>
 
+<section id="finance"><h2>Finanzen</h2>
+<p>Aktivierung und Reihenfolge der Finanzseite unter „Seiten“. Symbole werden in dieser Liste sofort gespeichert. Bis zu 48 pro Gerät.</p>
+<p>Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p>
+{% for quote in preview_finance.securities %}
+<form method="post" action="/devices/{{device.id}}/finance/change" class="finance-symbol-row">
+<input type="hidden" name="symbol" value="{{quote.symbol}}"><strong>{{quote.symbol}}</strong>
+<span>{{quote.name or ''}}{% if quote.error %} · {{quote.error}}{% elif quote.stale %} · Kursdaten veraltet{% elif quote.available %} · {{quote.quoteTime}}{% endif %}</span>
+<button name="action" value="up" aria-label="{{quote.symbol}} nach oben"{% if loop.first %} disabled{% endif %}>↑</button>
+<button name="action" value="down" aria-label="{{quote.symbol}} nach unten"{% if loop.last %} disabled{% endif %}>↓</button>
+<button name="action" value="delete">Entfernen</button>
+</form>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
+<form method="post" action="/devices/{{device.id}}/finance/add"><label>Symbol<input name="symbol" maxlength="32" placeholder="AAPL" required></label><button>Hinzufügen & prüfen</button></form>
+<div data-finance-controls><span>Finanzvorschau:</span>
+<button type="button" data-finance-key="ArrowLeft">←</button><button type="button" data-finance-key="ArrowRight">→</button>
+<button type="button" data-finance-key="Enter">Details / Zurück</button>
+<button type="button" data-finance-key="ArrowUp">↑</button><button type="button" data-finance-key="ArrowDown">↓</button>
+</div><small>Vorschau nutzt konfigurierte Cache-Daten. Ein fehlender Kurs wird als fehlend angezeigt. Intraday-Zeiten gelten in der Börsenzeitzone.</small>
+</section>
 {% include 'device_distribution.html' %}
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
 <script src="/static/device-preview.js?v=5" defer></script>
 <script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
+<script src="/static/finance-preview.js?v=1" defer></script>
 {% endblock %}
