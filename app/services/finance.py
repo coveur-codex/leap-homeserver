@@ -160,6 +160,21 @@ async def request(db, provider, path, params):
     return value
 
 
+def us_listing(exchange):
+    # profile.country describes the issuer's domicile, not the listing market.
+    # ADRs and cross-listed Canadian companies may trade in the US as well.
+    name = str(exchange or "").strip().upper()
+    return name in {
+        "XNYS", "XNAS", "XASE", "ARCX", "BATS", "IEXG",
+        "NASDAQ", "NASDAQ NMS - GLOBAL MARKET", "NASDAQ/NGS (GLOBAL SELECT MARKET)",
+        "NASDAQ GLOBAL SELECT MARKET", "NASDAQ GLOBAL MARKET", "NASDAQ CAPITAL MARKET",
+        "NYSE", "NEW YORK STOCK EXCHANGE", "NEW YORK STOCK EXCHANGE, INC.",
+        "NYSE ARCA", "NYSE ARCA, INC.", "NYSE AMERICAN", "NYSEAMERICAN", "NYSE MKT LLC",
+        "CBOE BZX", "CBOE BZX EXCHANGE", "CBOE US", "IEX EXCHANGE",
+    }
+
+
+
 class FinnhubProvider:
     name = "finnhub"
 
@@ -182,7 +197,7 @@ class FinnhubProvider:
         meta = previous.get("meta")
         if not meta:
             profile = await request(db, self.name, "stock/profile2", {"symbol": symbol})
-            if not isinstance(profile, dict) or not profile or profile.get("country") != "US" or not profile.get("currency"):
+            if not isinstance(profile, dict) or not profile or not us_listing(profile.get("exchange")) or not profile.get("currency"):
                 raise ProviderError("Kein unterstützter US-Aktientitel; internationaler Markt im kostenlosen Zugang nicht verfügbar", "unsupported", 21600)
             meta = {"name": str(profile.get("name", symbol))[:100], "currency": profile["currency"], "timezone": "America/New_York"}
         q = await request(db, self.name, "quote", {"symbol": symbol})

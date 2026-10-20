@@ -116,3 +116,22 @@ Uhr; die Firmware prüft Navigation sowie die echte Zeichenroutine mit Displaygr
 Eine echte API-Abnahme benötigt eigene passende Zugangsdaten; eine Hardwareabnahme
 muss am ESP32-S3 erfolgen. Finanzdaten-Hosts müssen im Servernetz erreichbar sein:
 `finnhub.io`, optional `api.twelvedata.com`.
+
+## Cameco und ausländische Unternehmen mit US-Notierung (1.2.1)
+
+Der Finnhub-Adapter prüft den **Handelsplatz** im Profil, nicht das Herkunftsland
+des Unternehmens. Ein kanadisches Unternehmen darf beispielsweise an der NYSE
+notiert sein. Bekannte US-Handelsplätze werden akzeptiert; Toronto oder europäische
+Nasdaq-/Euronext-Plätze bleiben von der kostenlosen US-Konfiguration ausgeschlossen.
+
+[Cameco](https://www.cameco.com/invest/stock-information) handelt in Toronto als
+`CCO` (häufig `CCO.TO`, CAD) und an der NYSE als `CCJ` (USD). Wer Cameco über den
+US-Zugang beobachten möchte, kann ausdrücklich `CCJ` konfigurieren. Das ist ein
+anderer Handelsplatz mit anderer Währung; es gibt keine automatische Umbenennung
+oder Umrechnung von `CCO.TO`. Für den exakten Toronto-Kurs wird ein freigeschalteter
+TSX-Datenzugang benötigt, siehe [Finnhub TSX-Angebot](https://api.finnhub.io/tsx-end-of-day-level-1-data).
+Die Abdeckung des eigenen API-Schlüssels muss beim tatsächlichen Abruf geprüft werden.
+
+Die Symbolkonfiguration steht ab 1.2.1 oben bei den übrigen Geräteeinstellungen.
+Symbolaktionen speichern weiterhin sofort und unabhängig vom allgemeinen
+Geräteformular; dessen ungespeicherte Änderungen werden dabei nicht mitgespeichert.
