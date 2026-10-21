@@ -29,6 +29,8 @@ class Device(Base):
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
     accent_color: Mapped[str] = mapped_column(String(7), default="#00d7c5", server_default="#00d7c5")
     communication_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    network_config: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    math_lab: Mapped[dict] = mapped_column(JSON, default=lambda:{"targets":[10]}, server_default='{"targets":[10]}')
     math_quiz: Mapped[dict] = mapped_column(JSON, default=lambda:{"operation":"add", "limit":20}, server_default='{"operation":"add","limit":20}')
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)

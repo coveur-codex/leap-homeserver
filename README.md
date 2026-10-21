@@ -1,4 +1,4 @@
-# LEAP Home Server v1
+# LEAP Home Server 1.3.0-beta.1
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -302,3 +302,15 @@ Nachtruhe gelten. Neustart/Ausschalten verwirft die lokale Zeitmessung.
 ## Finanzen (1.2.0)
 
 Pro Gerät unter **Seiten → Finanzen** aktivieren und im Abschnitt **Finanzen** Symbole hinzufügen, entfernen und sortieren. Einrichtung, Datenquellen, Tarifgrenzen und Offline-Verhalten: [docs/finance.md](docs/finance.md).
+
+## WLAN und Zahlenzerlegung (1.3.0-beta.1)
+
+Migration 0020 ergänzt je Gerät Serveradresse, vier WLAN-Profile und Zielzahlen
+für „Fehlenden Teil finden“ im Mathe-Labor (z. B. `9,10` oder `3-15`, 1–100).
+Die Firmware bietet zusätzlich vier lokale WLAN-Profile mit Eingabe am Gerät.
+Im Geräteeditor über „WLAN und Server“ / „Zahlenzerlegung“ erreichbar.
+Neue Geräte-Route: `GET /api/v1/devices/{id}/network-config`, `Cache-Control: no-store`.
+HTTP überträgt Passwörter unverschlüsselt; WLANs im vertrauten Heimnetz vorbereiten.
+Die bestehende Geräte-API erhält dadurch keine automatische Zugriffssicherung.
+Die optionale kostenlose Yahoo-Quelle für deutsche EUR-Kurse ist in
+[Finanzen](docs/finance.md) beschrieben. Keine kostenpflichtigen Dienste erforderlich.
