@@ -79,3 +79,5 @@ app.include_router(communication_api)
 
 from app.web.finance import router as finance_web
 app.include_router(finance_web)
+from app.web.connectivity import router as connectivity_web
+app.include_router(connectivity_web)

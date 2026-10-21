@@ -2,6 +2,7 @@
 {% from 'device_memory.html' import memory_status %}
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
+<p><a href="#network">WLAN und Server</a> · <a href="#math-lab">Zahlenzerlegung</a></p>
 <form method="post">
   <div class="device-settings">
     <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Akzentfarbe<input type="color" name="accent_color" value="{{device.accent_color}}" data-accent-color></label><small>Farbe für Überschriften und Markierungen auf diesem Gerät. Standard: Türkis.</small><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
@@ -54,6 +55,9 @@
 <button form="finance-change-{{loop.index}}" name="action" value="retry">Erneut prüfen</button>
 <button form="finance-change-{{loop.index}}" name="action" value="delete">Entfernen</button>
 </div>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
+<p>Deutsche EUR-Kurse (Frankfurt, kostenlose optionale Yahoo-Quelle):</p>
+<p><button form="finance-german-cameco">Cameco · 882017 hinzufügen</button> <button form="finance-german-rocket">Rocket Lab · A419CG hinzufügen</button></p>
+<small>Yahoo nutzt eine inoffizielle Schnittstelle ohne Verfügbarkeits- oder Verzögerungsgarantie. Kurse werden als verzögert markiert. Vorhandene US-/Toronto-Symbole bei Bedarf separat entfernen.</small>
 <div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>
 </section>
   </div>
@@ -189,9 +193,23 @@
 </form>
 
 {# External form owners keep finance actions independent of unsaved device settings. #}
+<form id="finance-german-cameco" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:CJ6.F"></form>
+<form id="finance-german-rocket" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:6RJ0.F"></form>
 <form id="finance-add" hidden method="post" action="/devices/{{device.id}}/finance/add"></form>
 {% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
 {% include 'device_distribution.html' %}
+
+<section id="network"><h2>WLAN und Server · {{device.name}}</h2>
+<p>Serverprofile werden beim nächsten Sync übertragen. Direkt am Gerät gespeicherte WLANs bleiben erhalten. Reihenfolge: zuletzt gespeichertes Profil zuerst.</p>
+<form method="post" action="/devices/{{device.id}}/network"><label>Serveradresse<input name="server" maxlength="256" value="{{device.network_config.get('serverUrl', 'http://ndk.tstromi.de:8080')}}" required></label><button>Serveradresse speichern</button></form>
+{% for profile in device.network_config.get('wifiProfiles', []) %}
+<form method="post" action="/devices/{{device.id}}/network/remove"><span>{{loop.index}}. {{profile.ssid}}</span><input type="hidden" name="ssid" value="{{profile.ssid}}"><button>Entfernen</button></form>
+{% endfor %}
+<form method="post" action="/devices/{{device.id}}/network/wifi" autocomplete="off"><label>WLAN-Name (SSID)<input name="ssid" required maxlength="32"></label><label>Passwort<input type="password" name="password" maxlength="64" autocomplete="new-password"></label><small>Leer für offene Netze. Vorhandenen WLAN-Namen erneut speichern, um sein Passwort zu ändern. Maximal vier Serverprofile.</small><button>WLAN speichern</button></form>
+<p><small>Bei HTTP werden Zugangsdaten unverschlüsselt übertragen. WLAN-Profile im vertrauten Heimnetz synchronisieren. Unterstützt werden 2,4-GHz-Netze ohne Anmeldeseite.</small></p></section>
+<section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
+<form method="post" action="/devices/{{device.id}}/math-lab"><label>Zielzahlen<input name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button>Zielzahlen speichern</button></form></section>
+
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
 <script src="/static/device-settings.js?v=1" defer></script>
 <script src="/static/device-preview.js?v=5" defer></script>

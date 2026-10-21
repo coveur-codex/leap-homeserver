@@ -1,6 +1,7 @@
 """Provider-neutral finance cache. Only scheduler/admin actions contact providers.
 
-No unofficial endpoints or HTML scraping. Prices and timestamps always originate
+Yahoo is explicitly opt-in and uses an unofficial JSON endpoint (no HTML scraping).
+Prices and timestamps always originate
 with the provider; Finnhub's free fallback chart contains collected quotes only.
 """
 import asyncio
@@ -109,8 +110,8 @@ def reserve_call(db, provider):
         data.update(day=day, daily=0)
     if data.get("minute") != minute:
         data.update(minute=minute, count=0)
-    per_minute = 50 if provider == "finnhub" else 8
-    per_day = 0 if provider == "finnhub" else 800
+    per_minute = {"finnhub":50, "yahoo":6}.get(provider,8)
+    per_day = {"finnhub":0, "yahoo":600}.get(provider,800)
     if data.get("count", 0) >= per_minute or (per_day and data.get("daily", 0) >= per_day):
         raise ProviderError("Kostenloses API-Abruflimit erreicht", "rate_limit", 60)
     data["count"] = data.get("count", 0) + 1
@@ -290,7 +291,101 @@ class TwelveDataProvider:
         return None
 
 
-PROVIDERS = {"finnhub": FinnhubProvider(), "twelve_data": TwelveDataProvider()}
+
+# Explicit German listings, never currency conversions of overseas prices.
+GERMAN_LISTINGS = {
+    "CJ6.F": {"name":"Cameco", "isin":"CA13321L1085", "wkn":"882017"},
+    "6RJ0.F": {"name":"Rocket Lab", "isin":"US7731211089", "wkn":"A419CG"},
+}
+
+async def yahoo_chart(db, symbol):
+    reserve_call(db, "yahoo")
+    try:
+        async with httpx.AsyncClient(timeout=settings.request_timeout, follow_redirects=False) as client:
+            async with client.stream("GET", "https://query1.finance.yahoo.com/v8/finance/chart/" + symbol,
+                    params={"interval":"5m", "range":"1d"}, headers={"User-Agent":"LEAP-Homeserver/1.3"}) as response:
+                if response.status_code == 429:
+                    row = cache_row(db, "yahoo", "!budget")
+                    row.next_fetch = utcnow() + timedelta(minutes=30)
+                    db.commit()
+                    raise ProviderError("Yahoo-Abruflimit erreicht; Abruf pausiert", "rate_limit", 1800)
+                if response.status_code in {401,403,404}:
+                    raise ProviderError("Yahoo-Kurs nicht frei abrufbar; keine Zugangssperren-Umgehung", "unsupported", 21600)
+                response.raise_for_status()
+                raw = bytearray()
+                async for part in response.aiter_bytes():
+                    raw.extend(part)
+                    if len(raw) > 1_000_000: raise ProviderError("Finanzdaten-Antwort zu groß")
+                import json
+                return json.loads(raw)
+    except (httpx.HTTPError, ValueError):
+        raise ProviderError("Yahoo-Kursdaten derzeit nicht erreichbar") from None
+
+class YahooProvider:
+    """Optional free source with no API availability or delay guarantee."""
+    name = "yahoo"
+
+    async def quote(self, db, symbol, previous):
+        native = symbol.removeprefix("YAHOO:")
+        if native not in GERMAN_LISTINGS:
+            raise ProviderError("Yahoo-Adapter: CJ6.F oder 6RJ0.F für Frankfurt in EUR verwenden", "unsupported", 21600)
+        response = await yahoo_chart(db, native)
+        if not isinstance(response, dict) or not isinstance(response.get("chart"), dict):
+            raise ProviderError("Ungültige Yahoo-Kursantwort")
+        chart = response["chart"]
+        if chart.get("error") or not chart.get("result"):
+            raise ProviderError("Yahoo liefert keine deutschen Kursdaten", "unsupported", 21600)
+        result = chart["result"][0]
+        if not isinstance(result, dict) or not isinstance(result.get("meta"), dict):
+            raise ProviderError("Yahoo-Kursmetadaten fehlen")
+        meta = result["meta"]
+        if (meta.get("symbol") != native or meta.get("currency") != "EUR" or
+            meta.get("exchangeName") not in {"FRA", "Frankfurt"} or
+            meta.get("exchangeTimezoneName") != "Europe/Berlin"):
+            raise ProviderError("Notierung stimmt nicht mit Frankfurt/EUR überein", "unsupported", 21600)
+        price = number(meta.get("regularMarketPrice")); stamp = int(meta.get("regularMarketTime") or 0)
+        now = utcnow().timestamp()
+        if not price or stamp <= 0 or stamp > now + 60:
+            raise ProviderError("Kein gültiger Originalkurs von Yahoo")
+        zone = ZoneInfo("Europe/Berlin")
+        session = datetime.fromtimestamp(stamp, zone).date().isoformat()
+        opening = number(meta.get("regularMarketOpen"))
+        # Only actual supplied intraday points, never forward-filled OHLC bars.
+        points = []
+        indicators = result.get("indicators", {}).get("quote", [])
+        bars = indicators[0] if indicators else {}
+        for t, close in zip(result.get("timestamp") or [], bars.get("close") or []):
+            if t is not None and 0 < int(t) <= stamp and number(close) and datetime.fromtimestamp(int(t),zone).date().isoformat() == session:
+                points.append([int(t),float(close)])
+        if opening is None:
+            for t, value in zip(result.get("timestamp") or [], bars.get("open") or []):
+                if t is not None and number(value) and 0 < int(t) <= stamp and datetime.fromtimestamp(int(t),zone).date().isoformat() == session:
+                    opening = float(value); break
+        chart_mode = "intraday"
+        if not points:
+            points = previous.get("samples", []) if previous.get("session") == session else []
+            points = [p for p in points if p[0] != stamp] + [[stamp,price]]
+            chart_mode = "collected"
+        points = sorted(points)[-400:]
+        # Yahoo supplies scheduled session bounds; these are not a holiday calendar.
+        # Avoid guessing that a market is closed from missing trades or a stale date.
+        market = "unknown"
+        period = meta.get("currentTradingPeriod", {}).get("regular", {})
+        start, end = int(period.get("start") or 0), int(period.get("end") or 0)
+        if start <= stamp <= end and start <= now < end: market = "open"
+        if start <= stamp <= end and end <= now < end+12*3600: market = "closed"
+        return {"symbol":symbol, "displaySymbol":native, "name":GERMAN_LISTINGS[native]["name"],
+            "isin":GERMAN_LISTINGS[native]["isin"], "exchange":"Frankfurt", "currency":"EUR",
+            "price":price, "timestamp":stamp, "open":opening, "high":number(meta.get("regularMarketDayHigh")),
+            "low":number(meta.get("regularMarketDayLow")), "changePercent":(price/opening-1)*100 if opening else None,
+            "session":session, "timezone":"Europe/Berlin", "market":market, "delayed":True,
+            "points":chart_points(points), "samples":points, "chartMode":chart_mode,
+            "gapSeconds":900, "provider":self.name}
+
+    async def news(self, db, symbol, quote):
+        return None
+
+PROVIDERS = {"finnhub": FinnhubProvider(), "twelve_data": TwelveDataProvider(), "yahoo": YahooProvider()}
 
 
 def provider():
@@ -299,8 +394,12 @@ def provider():
     return PROVIDERS[settings.finance_provider]
 
 
+def provider_for_symbol(symbol):
+    return PROVIDERS["yahoo"] if symbol.startswith("YAHOO:") else provider()
+
+
 async def refresh_symbol(db, symbol, *, force=False):
-    api = provider()
+    api = provider_for_symbol(symbol)
     row = cache_row(db, api.name, symbol)
     now = utcnow()
     if not force and row.next_fetch and aware(row.next_fetch) > now:
@@ -343,9 +442,8 @@ async def refresh_configured(db):
             if any(p.page_id == "finance" and p.enabled for p in device.pages):
                 symbols.update(symbols_for(device))
         # Earliest due first: large lists cannot starve the same trailing symbols.
-        name = settings.finance_provider
         def due(s):
-            row = db.get(FinanceCache, f"{name}:{s}")
+            row = db.get(FinanceCache, f"{provider_for_symbol(s).name}:{s}")
             return aware(row.next_fetch) if row and row.next_fetch else datetime.min.replace(tzinfo=timezone.utc)
         started = time.monotonic()
         for symbol in sorted(symbols, key=due)[:MAX_GLOBAL_SYMBOLS]:
@@ -379,5 +477,5 @@ def public_quote(row, symbol):
 
 
 def data_for_device(device, db):
-    rows = [public_quote(db.get(FinanceCache, f"{settings.finance_provider}:{s}"), s) for s in symbols_for(device)]
+    rows = [public_quote(db.get(FinanceCache, f"{provider_for_symbol(s).name}:{s}"), s) for s in symbols_for(device)]
     return {"schemaVersion": 1, "generatedAt": int(utcnow().timestamp()), "securities": rows}

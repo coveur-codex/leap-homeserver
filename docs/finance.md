@@ -29,8 +29,9 @@ Vor dem Update wie gewohnt das Datenverzeichnis sichern.
 
 Ein kostenloser allgemeiner Zugang für deutsche und US-Aktien **plus** DAX,
 S&P 500 und NASDAQ inklusive historischer Intraday-Charts konnte damit nicht
-belegt werden. LEAP verwendet ausschließlich dokumentierte APIs; keine
-inoffiziellen Yahoo-Endpunkte, HTML-Abfragen oder Scraping-Umgehungen.
+belegt werden. Die ursprünglichen Adapter verwenden dokumentierte APIs. Ab 1.3.0-beta.1
+steht zusätzlich eine ausdrücklich wählbare inoffizielle Yahoo-Quelle bereit,
+siehe unten. Es gibt keine HTML-Abfragen oder Sperrenumgehungen.
 
 Finnhub liefert über `/quote` Kurs, Öffnung, Tageshoch/-tief und Originalzeitstempel.
 Die Veränderung wird **gegen die Eröffnung** berechnet; `pc`, `d`, `dp` werden nicht
@@ -142,3 +143,53 @@ diese Wartezeit gezielt aufgehoben. Globale API-Limits und 429-Sperren gelten
 weiterhin. Bei einer weiteren Ablehnung nennt die Meldung jetzt den gemeldeten
 Handelsplatz oder ein fehlendes Profil, statt pauschal einen internationalen
 Markt zu vermuten.
+
+## Kostenlose Frankfurter EUR-Kurse (1.3.0-beta.1)
+
+Zusätzlich zur bisherigen Quelle kann je Symbol ausdrücklich der optionale
+Yahoo-Adapter gewählt werden. Im Geräteeditor bieten zwei Schaltflächen:
+
+| Eintrag | Wertpapier | WKN | Handelsplatz / Währung |
+|---|---|---|---|
+| `YAHOO:CJ6.F` | Cameco, ISIN CA13321L1085 | 882017 | Frankfurt / EUR |
+| `YAHOO:6RJ0.F` | Rocket Lab, ISIN US7731211089 | A419CG | Frankfurt / EUR |
+
+Die API verwendet weiterhin das konfigurierte Symbol als Identität und liefert
+zusätzlich `displaySymbol` und `exchange`. Firmware und Vorschau zeigen die
+kurze Notierung und den Handelsplatz. Vorhandene Einträge wie `CCO.TO`, `CCJ`
+oder `RKLB` werden nicht umbenannt oder umgerechnet; nicht mehr gewünschte
+Notierungen separat entfernen. US-Werte können gleichzeitig über Finnhub laufen.
+Es ist kein neuer API-Key und kein Abonnement erforderlich.
+
+**Diese Option nutzt eine inoffizielle Yahoo-JSON-Schnittstelle.** Sie hat keine
+Verfügbarkeitsgarantie, und eine feste Verzögerung von höchstens 15 Minuten kann
+nicht zugesagt werden. Kursseiten:
+[Cameco](https://finance.yahoo.com/quote/CJ6.F/) und
+[Rocket Lab](https://finance.yahoo.com/quote/6RJ0.F/).
+Der kostenlose Versuch ist für persönliche Nutzung vorgesehen. Er bietet keinen
+Ersatz für einen zugesicherten Marktdatenzugang. Die bisherige Beschränkung auf
+rein dokumentierte APIs wird für diese ausdrücklich wählbare Quelle aufgehoben.
+
+Nur exakt passende Symbole, Frankfurt, EUR und Europe/Berlin werden akzeptiert.
+Der Adapter ruft alle fünf Minuten einen eintägigen 5-Minuten-Chart ab. Er nutzt
+Originalkurs und Originalzeit sowie vorhandene Intraday-Punkte; Nullwerte bleiben
+Datenlücken. Fehlt eine Kurve, werden ausschließlich tatsächlich empfangene Kurse
+gesammelt. Fehlt die Eröffnung, bleibt die Veränderung unbekannt. Kursabrufe
+sind auf sechs pro Minute und 600 pro UTC-Tag begrenzt. Bei HTTP 429 pausiert die
+Quelle mindestens 30 Minuten. HTTP 401/403 werden als fehlender freier Zugang
+angezeigt; es gibt keine Cookie-/Login-/Sperrenumgehung.
+
+Alle Yahoo-Kurse tragen `delayed: true`. Bei Fehlern bleibt der vorherige Kurs
+mit seinem Originalzeitpunkt erhalten und wird als veraltet markiert. Es gibt
+keinen automatischen Wechsel zu einem USD-/CAD-Kurs oder einer anderen Börse.
+Handelsstatus verwendet nur die gelieferten Sessionzeiten; ausbleibende Trades
+werden nicht als Beweis für einen Feiertag behandelt.
+
+Für den Server muss `query1.finance.yahoo.com` erreichbar sein. Tests verwenden
+kontrollierte Anbieterantworten (richtiger/falscher Handelsplatz und Währung,
+Kurszeit, fehlende Werte, Ausfall und Cache). Die Live-Abnahme beider konkreten
+Notierungen muss am erreichbaren Server erfolgen: hinzufügen, **Erneut prüfen**,
+Originalzeit/EUR/Frankfurt kontrollieren, Gerät synchronisieren und während des
+deutschen Handelstags nochmals prüfen. Ein erfolgreicher Test beweist keine
+langfristige API-Verfügbarkeit. Ist die freie Quelle nicht nutzbar, bleibt ein
+passender kostenpflichtiger Datenzugang eine spätere Entscheidung.

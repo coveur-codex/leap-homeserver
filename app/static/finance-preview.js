@@ -47,20 +47,20 @@ document.querySelectorAll('[data-finance-preview]').forEach(canvas => {
         const x=86+j*114;
         ctx.strokeStyle=first+j===selected ? C.white : C.panel;
         ctx.strokeRect(x-84+0.5,3.5,110,114);
-        text(q.symbol,x+7,10,99);
+        text(q.displaySymbol||q.symbol,x+7,10,99);
         if(q.market==='closed') moon(x+101,15);
         if(!q.available) {text('Kein Kurs',x+7,42,100,1,C.muted);text('Server prüfen',x+7,64,100,1,C.muted);return;}
-        text(number(q.price),x+7,32,100,2);text(q.currency,x+7,52,100,1,C.muted);
+        text(number(q.price),x+7,32,100,2);text([q.currency,q.exchange].filter(Boolean).join(" "),x+7,52,100,1,C.muted);
         change(q,x+7,70,98);text(q.quoteTime,x+7,88,100,1,C.muted);text(status(q),x+7,102,100,1,C.muted);
       });
       text('Mitte: Details',94,121,200,1,C.muted);
       text(`${page+1}/${Math.ceil(rows.length/3)}`,391,121,37,1,C.muted);
     } else {
       const q=rows[detailSelected];
-      text(q.symbol,94,6,145);if(q.market==='closed')moon(246,10);
+      text(q.displaySymbol||q.symbol,94,6,145);if(q.market==='closed')moon(246,10);
       if(!q.available){text(q.error || 'Kein Kurs verfügbar',94,30,320,1,C.muted);}
       else {
-        text(number(q.price),94,23,158,2);text(q.currency,94,42,158,1,C.muted);change(q,94,55,155);
+        text(number(q.price),94,23,158,2);text([q.currency,q.exchange].filter(Boolean).join(" "),94,42,158,1,C.muted);change(q,94,55,155);
         text(`${q.quoteTime || ''} ${q.timezone || ''}`,265,6,155,1,C.muted);text(status(q),265,19,155,1,C.muted);
         const words=(q.news?.title || 'Keine Nachricht verfügbar').split(/\s+/);let lines=[''];
         words.forEach(word => {
