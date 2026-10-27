@@ -1,3 +1,15 @@
+# 1.4.0-beta.1 – Kooperatives Multiplayer-Snake
+
+- Autoritatives kooperatives Snake für 2–4 Geräte über vorhandene WebSockets:
+  automatische 10s-Lobby, 3–2–1, 120s Spielzeit, gemeinsame Früchte/Punkte,
+  sichere simultane Kollisionen und Wiedereinstieg nach drei Sekunden.
+- Wiederverbindung mit Sessionkennung, Eingabesequenzen und vollständigen
+  Zuständen; langsame Empfänger blockieren keine anderen Geräte.
+- Automatisches gemeinsames `game-avatars` aus `pagestatics/games.png`,
+  80×80 transparent, Hashreuse und regulärer Asset-Sync.
+- Betrieb mit einem Uvicorn-Worker. Keine Datenbankmigration oder neue Abhängigkeit.
+- Protokoll und noch erforderliche Hardware-Abnahme: `docs/snake-multiplayer.md`.
+
 # 1.3.0-beta.1 – WLAN, Zahlenzerlegung und deutsche EUR-Kurse
 
 - Geräteeditor: Serveradresse und vier WLAN-Profile je Gerät mit separater

@@ -96,7 +96,7 @@ def test_config_drives_assets_and_delayed_cleanup(client, db):
     assert response.status_code == 303
     plan = sync(client, {"avatar-dragon": 1})
     assert plan["firmwareChannel"] == "beta"
-    assert plan["desiredAssets"] == {"avatar-jellyfish": 1, "chill-sea": 1, "communication-avatars": 1}
+    assert plan["desiredAssets"] == {"avatar-jellyfish": 1, "chill-sea": 1, "communication-avatars": 1, "game-avatars": 1}
     assert not plan["cleanupAllowed"]
     assert event(client, plan, event="boot_success", firmwareVersion="0.8.0", installedAssets={"avatar-dragon": 1}).status_code == 409
     assert event(client, plan, event="asset_installed", packageId="avatar-jellyfish", version=1).json()["cleanupAllowed"] is False

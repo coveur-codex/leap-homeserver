@@ -57,11 +57,14 @@ async def lifespan(app):
     from app.services.distribution import ensure_packages
     with SessionLocal() as db:
         ensure_packages(db)
+    from app.api.snake import hub as snake_hub
+    snake_hub.start()
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.start()
     try:
         yield
     finally:
+        await snake_hub.stop()
         from app.services import chill
         await chill.shutdown()
         scheduler.shutdown(wait=False)
@@ -81,3 +84,6 @@ from app.web.finance import router as finance_web
 app.include_router(finance_web)
 from app.web.connectivity import router as connectivity_web
 app.include_router(connectivity_web)
+
+from app.api.snake import router as snake_api
+app.include_router(snake_api)
