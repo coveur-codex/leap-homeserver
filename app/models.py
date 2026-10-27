@@ -70,6 +70,8 @@ class LocationCache(Base):
     weather_error: Mapped[str|None]=mapped_column(Text)
     aircraft_fetched_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); aircraft_data: Mapped[dict|None]=mapped_column(JSON)
     aircraft_error: Mapped[str|None]=mapped_column(Text)
+    weather_next_attempt_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+    aircraft_next_attempt_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
 class QuizCatalog(Base):
     __tablename__="quiz_catalogs"; id: Mapped[int]=mapped_column(primary_key=True); name: Mapped[str]=mapped_column(String(120)); enabled: Mapped[bool]=mapped_column(Boolean, default=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); questions: Mapped[list["QuizQuestion"]]=relationship(cascade="all, delete-orphan")
 class QuizQuestion(Base):
