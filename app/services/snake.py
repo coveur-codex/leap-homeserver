@@ -79,7 +79,7 @@ class Room:
         p.seq = seq
         # One buffered turn; delayed/replayed inputs never steer a future move.
         if (self.phase == "playing" and self.tick <= tick <= self.tick + 1 and
-                p.queued is None and direction != (p.direction ^ 1)):
+                p.queued is None and direction not in {p.direction, p.direction ^ 1}):
             p.queued = direction
 
     def spawn(self, p, now):

@@ -44,13 +44,15 @@ def test_lobby_deadline_capacity_and_reconnect():
 
 def test_input_dedup_late_reverse_one_turn():
     r=playing(); p=r.players['0']
-    r.input('0',{'type':'input','seq':1,'tick':0,'direction':2},13001)
+    r.input('0',{'type':'input','seq':1,'tick':0,'direction':3},13000)
+    assert p.queued is None  # Repeated straight input must not consume the turn.
+    r.input('0',{'type':'input','seq':2,'tick':0,'direction':2},13001)
     assert p.queued is None
-    r.input('0',{'type':'input','seq':2,'tick':0,'direction':0},13002)
-    r.input('0',{'type':'input','seq':3,'tick':0,'direction':1},13003)
+    r.input('0',{'type':'input','seq':3,'tick':0,'direction':0},13002)
+    r.input('0',{'type':'input','seq':4,'tick':0,'direction':1},13003)
     assert p.queued==0
     p.queued=None; r.tick=8
-    for seq,tick in [(4,0),(5,10),(5,8)]:
+    for seq,tick in [(5,0),(6,10),(6,8)]:
         r.input('0',{'type':'input','seq':seq,'tick':tick,'direction':1},13004)
     assert p.queued is None
     with pytest.raises(ValueError): r.input('0',{'type':'input','seq':True,'tick':8,'direction':0},13005)
