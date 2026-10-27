@@ -1,0 +1,17 @@
+{% macro memory_status(d) %}
+<div class="device-memory">
+  <strong>Speicher (belegt / gesamt)</strong>
+  {% if d.memory_usage %}
+  <dl>
+    {% for key, label in [('flash', 'Flash (Firmware)'), ('littlefs', 'LittleFS'), ('psram', 'PSRAM')] %}
+    {% set usage = d.memory_usage[key] %}
+    <dt>{{label}}</dt>
+    <dd>{% if usage.total %}{{('%.1f'|format(usage.used / 1048576))|replace('.', ',')}} / {{('%.1f'|format(usage.total / 1048576))|replace('.', ',')}} MB{% else %}Nicht verfügbar{% endif %}</dd>
+    {% endfor %}
+  </dl>
+  <small>Stand: {{d.last_seen}} · letzter Gerätekontakt</small>
+  {% else %}
+  <p>Noch keine Speicherwerte gemeldet.</p>
+  {% endif %}
+</div>
+{% endmacro %}

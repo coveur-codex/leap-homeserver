@@ -1,28 +1,52 @@
+import logging
 import re
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter,Depends,File,Form,HTTPException,Request,UploadFile
-from fastapi.responses import HTMLResponse,RedirectResponse
+from fastapi import APIRouter,Depends,File,Form,HTTPException,Query,Request,UploadFile
+from fastapi.responses import FileResponse,HTMLResponse,RedirectResponse
+from starlette.background import BackgroundTask
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func,select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.pages import PAGE_REGISTRY
+from app.core.games import GAME_REGISTRY
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages, page_enabled
+from app.services import finance as finance_service
 from app.services import communication
+from app.services.backup import backup_database
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
 from app.services.location_data import cache_for_device
+from app.services.weather_icons import weather_icon, weather_label
 from app.services.knowledge import demo_article
 from app.services import distribution as distribution_service
-from app.models import AssetPackage
+from app.models import AssetPackage, QuizAttempt
 router=APIRouter(); templates=Jinja2Templates(directory="app/templates")
+templates.env.globals.update(weather_icon=weather_icon, weather_label=weather_label)
 def redir(p): return RedirectResponse(p,303)
 @router.get("/",response_class=HTMLResponse)
 def dashboard(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"dashboard.html",{"devices":db.scalars(select(Device)).all(),"device_count":db.scalar(select(func.count(Device.id))),"feed_count":db.scalar(select(func.count(Feed.id)).where(Feed.enabled==True)),"article_count":db.scalar(select(func.count(Article.id))),"feed_errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None)))})
 @router.get("/devices",response_class=HTMLResponse)
 def devices(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"devices.html",{"devices":db.scalars(select(Device).order_by(Device.name)).all()})
+
+@router.get("/devices/{id}/quiz-results", response_class=HTMLResponse)
+def quiz_results(id: int, request: Request, offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    device = db.get(Device, id)
+    if not device:
+        raise HTTPException(404)
+    query = select(QuizAttempt).where(QuizAttempt.device_id == id)
+    rows = db.scalars(query.order_by(QuizAttempt.id.desc()).offset(offset).limit(51)).all()
+    total = db.scalar(select(func.count(QuizAttempt.id)).where(QuizAttempt.device_id == id))
+    correct = db.scalar(select(func.count(QuizAttempt.id)).where(
+        QuizAttempt.device_id == id, QuizAttempt.correct == True))
+    return templates.TemplateResponse(request, "quiz_results.html", {
+        "device": device, "attempts": rows[:50], "total": total, "correct": correct,
+        "offset": offset, "has_more": len(rows) > 50})
+
 @router.post("/devices")
 def create_device(device_id:str=Form(),name:str=Form(),child_name:str=Form(""),age:int=Form(8),avatar:str=Form("dragon"),avatar_name:str=Form(""),db:Session=Depends(get_db)):
     if db.scalar(select(Device).where(Device.device_id==device_id)): raise HTTPException(409,"device_id bereits vorhanden")
@@ -34,22 +58,44 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     distribution_service.ensure_packages(db)
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication"}]
-    catalog_ids=[catalog.id for catalog in d.quiz_catalogs if catalog.enabled]
-    preview_question=db.scalar(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age).order_by(QuizQuestion.id)) if catalog_ids else None
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_question":preview_question,"preview_knowledge":demo_article(d.knowledge_source),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
+    if accent_color is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent_color):
+        raise HTTPException(422,"Akzentfarbe muss eine Farbe im Format #RRGGBB sein")
+    if location_altitude_meters is not None:
+        try:
+            altitude=float(location_altitude_meters) if location_altitude_meters.strip() else None
+            if altitude is not None and not -500 <= altitude <= 9000: raise ValueError()
+        except ValueError:
+            raise HTTPException(422,"Standorthöhe muss zwischen −500 und 9000 Metern liegen")
+    if quiet_hours_settings:
+        for value in (quiet_hours_start, quiet_hours_end):
+            if value and not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value):
+                raise HTTPException(422,"Nachtruhe: Uhrzeiten im Format HH:MM angeben")
+        if quiet_hours_enabled and (not quiet_hours_start or not quiet_hours_end or quiet_hours_start == quiet_hours_end):
+            raise HTTPException(422,"Nachtruhe: unterschiedliche Start- und Endzeit angeben")
+    if math_settings:
+        if math_operation not in {"add", "subtract", "multiply"} or not 3 <= math_limit <= (20 if math_operation == "multiply" else 1000):
+            raise HTTPException(422,"Mathe: +/− mit Zahlenbereich 3–1000 oder Malreihen 1 bis 3–20 wählen")
     new_device_id=(device_id or d.device_id).strip()
     if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
     if knowledge_source not in {"klexikon","miniklexikon"}: raise HTTPException(422,"Unbekannte Wissensquelle")
+    if game_settings and any(key not in {gid for gid, _ in GAME_REGISTRY} for key in game_ids):
+        raise HTTPException(422,"Unbekanntes Spiel")
     if distribution_settings:
         distribution_service.ensure_packages(db)
         if firmware_channel not in {"stable", "beta"}: raise HTTPException(422,"Ungültiger Firmware-Kanal")
-        if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
+        if chill_id:
+            chill_package=db.get(AssetPackage,chill_id)
+            if not chill_package or chill_package.kind!="chill" or (chill_id.startswith("chill-album-") and chill_id != d.chill_album_id): raise HTTPException(422,"Unbekannte Chill-Szene")
+            content_ids=[*content_ids,chill_id]
+        if sum(1 for key in set(content_ids) if (p:=db.get(AssetPackage,key)) and p.kind=="chill")>1: raise HTTPException(422,"Bitte genau eine Chill-Szene auswählen")
+        if any(not (p:=db.get(AssetPackage,key)) or p.kind not in {"chill","sound","weather","game"} or (key.startswith("chill-album-") and key != d.chill_album_id) for key in content_ids): raise HTTPException(422,"Unbekannte Inhaltsauswahl")
         if any(not db.get(QuizCatalog,key) for key in quiz_catalog_ids): raise HTTPException(422,"Unbekannter Quiz-Katalog")
         avatar_id=avatar if avatar.startswith("avatar-") else "avatar-"+avatar
         avatar_package=db.get(AssetPackage,avatar_id)
@@ -60,6 +106,19 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         d.content_selection=sorted(set(content_ids))
         d.quiz_catalogs=[db.get(QuizCatalog,key) for key in set(quiz_catalog_ids)]
         d.quiz_version+=1
+    if math_settings: d.math_quiz={"operation":math_operation,"limit":math_limit}
+    if game_settings:
+        d.enabled_games=[gid for gid, _ in GAME_REGISTRY if gid in game_ids]
+    if accent_color is not None: d.accent_color=accent_color.lower()
+    if location_altitude_meters is not None: d.location_altitude_meters=altitude
+    if notification_settings:
+        d.notification_sounds={"communication":sound_communication,"news":sound_news,"aircraft":sound_aircraft,"time":sound_time}
+    if quiet_hours_settings:
+        d.notification_quiet_hours={"enabled":quiet_hours_enabled,"start":quiet_hours_start,"end":quiet_hours_end}
+    if chill_keyword is not None:
+        from app.services.chill import keyword
+        try: d.chill_keyword=keyword(chill_keyword)
+        except ValueError as error: raise HTTPException(422,str(error))
     old_knowledge_source=d.knowledge_source
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.communication_enabled=communication_enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
@@ -72,12 +131,27 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
             page.enabled=d.communication_enabled
             page.position=positions.get(page.page_id,page.position)
     if old_knowledge_source != knowledge_source: d.knowledge_version+=1
-    d.config_version+=1; db.commit(); return redir(f"/devices/{id}")
+    d.config_version+=1; db.commit();
+    from app.api.communication import relay_hub
+    relay_hub.publish()
+    return redir(f"/devices/{id}")
 @router.post("/devices/{id}/delete")
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,communication_enabled=old.communication_enabled,weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,content_selection=list(old.content_selection),quiz_catalogs=list(old.quiz_catalogs)); initialize_pages(d); db.add(d); db.commit(); return redir(f"/devices/{d.id}")
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),math_lab=dict(old.math_lab),network_config=dict(old.network_config),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs))
+    d.content_selection=[key for key in d.content_selection if key != old.chill_album_id]
+    initialize_pages(d)
+    for page in d.pages:
+        original=next((p for p in old.pages if p.page_id==page.page_id),None)
+        if original:
+            page.enabled=original.enabled; page.position=original.position; page.settings=dict(original.settings or {})
+    db.add(d); db.flush()
+    if old.chill_photos:
+        from app.services.chill_album import publish
+        album=publish(db,d,list(old.chill_photos))
+        if old.chill_album_id in old.content_selection: d.content_selection=[*d.content_selection,album.id]
+    db.commit(); return redir(f"/devices/{d.id}")
 @router.get("/news/feeds",response_class=HTMLResponse)
 def feeds(request:Request,db:Session=Depends(get_db)): return templates.TemplateResponse(request,"feeds.html",{"feeds":db.scalars(select(Feed)).all(),"categories":db.scalars(select(Category)).all(),"articles":db.scalars(select(Article).order_by(Article.published_at.desc()).limit(20)).all()})
 @router.post("/news/categories")
@@ -118,6 +192,88 @@ def system(request:Request,db:Session=Depends(get_db)):
     location_status=[]
     for location in locations:
         weather_at=aware(location.weather_fetched_at); aircraft_at=aware(location.aircraft_fetched_at)
-        location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":aware(location.weather_next_attempt_at) or (weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None),"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aware(location.aircraft_next_attempt_at) or (aircraft_at+timedelta(minutes=settings.weather_cache_minutes) if aircraft_at else None),"aircraft_error":location.aircraft_error})
+        location_status.append({"name":location.location or location.location_key,"coordinates":f"{location.latitude:.5f}, {location.longitude:.5f}","weather_at":weather_at,"weather_next":aware(location.weather_next_attempt_at) or (weather_at+timedelta(minutes=settings.weather_cache_minutes) if weather_at else None),"weather_error":location.weather_error,"aircraft_at":aircraft_at,"aircraft_next":aware(location.aircraft_next_attempt_at) or (aircraft_at+timedelta(seconds=settings.aircraft_cache_seconds) if aircraft_at else None),"aircraft_error":location.aircraft_error})
     latest_feed=db.scalar(select(func.max(Feed.last_success)))
-    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_radius":settings.aircraft_radius_nm,"started_at":started_at,"uptime":now-started_at,"now":now})
+    return templates.TemplateResponse(request,"system.html",{"version":__version__,"database":make_url(settings.database_url).render_as_string(hide_password=True),"sqlite_backup_available":db.get_bind().dialect.name=="sqlite","cache_size":size(settings.data_dir/"cache"),"image_size":size(settings.data_dir/"images"),"feeds":db.scalar(select(func.count(Feed.id))),"errors":db.scalar(select(func.count(Feed.id)).where(Feed.last_error.is_not(None))),"articles":db.scalar(select(func.count(Article.id))),"devices":db.scalar(select(func.count(Device.id))),"active_devices":db.scalar(select(func.count(Device.id)).where(Device.enabled.is_(True))),"latest_feed":aware(latest_feed),"locations":location_status,"location_interval":settings.weather_cache_minutes,"aircraft_interval":settings.aircraft_cache_seconds,"aircraft_radius":round(settings.aircraft_radius_nm*1.852,1),"started_at":started_at,"uptime":now-started_at,"now":now})
+
+
+@router.get("/system/database/backup", response_class=FileResponse)
+def download_database_backup(db: Session = Depends(get_db)):
+    engine = db.get_bind()
+    if engine.dialect.name != "sqlite":
+        raise HTTPException(503, "Der Datenbank-Download ist nur für SQLite verfügbar.")
+    temporary = None
+    try:
+        temporary = TemporaryDirectory(prefix="leap-backup-")
+        snapshot = Path(temporary.name) / "leap.db"
+        backup_database(engine, snapshot)
+        filename = datetime.now(timezone.utc).strftime("leap-backup-%Y-%m-%d_%H-%M-%S-UTC.db")
+        return FileResponse(
+            snapshot,
+            media_type="application/vnd.sqlite3",
+            filename=filename,
+            headers={"Cache-Control": "no-store"},
+            background=BackgroundTask(temporary.cleanup),
+        )
+    except Exception:
+        if temporary is not None:
+            temporary.cleanup()
+        logging.getLogger("leap").exception("database_backup_failed")
+        raise HTTPException(500, "Das Datenbank-Backup konnte nicht erstellt werden.") from None
+
+@router.get("/devices/{id}/chill/preview.jpg")
+async def chill_preview(id: int, db: Session = Depends(get_db)):
+    from app.services.chill import photo, photo_path, PACKAGE_ID, PHOTO_TOTAL_TIMEOUT
+    from fastapi.responses import FileResponse
+    import httpx
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    if not device.enabled or PACKAGE_ID not in (device.content_selection or []): raise HTTPException(403)
+    try:
+        info = await photo(device, wait=PHOTO_TOTAL_TIMEOUT + 5)
+        return FileResponse(photo_path(device.id, info["sha256"]), media_type="image/jpeg", headers={"Cache-Control":"no-store"})
+    except (ValueError, TimeoutError, OSError, httpx.HTTPError) as error:
+        raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+
+
+@router.get("/devices/{id}/chill/album", response_class=HTMLResponse)
+def chill_album_editor(id: int, request: Request, db: Session = Depends(get_db)):
+    from app.services.chill_album import library
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    return templates.TemplateResponse(request, "chill_album.html", {"device": device, "photos": library(db)})
+
+
+def activate_album(db, device, package):
+    other = [key for key in (device.content_selection or [])
+             if (p := db.get(AssetPackage, key)) and p.kind != "chill"]
+    device.content_selection = [*other, package.id]
+    db.commit()
+
+
+@router.post("/devices/{id}/chill/album/upload")
+async def chill_album_upload(id: int, files: list[UploadFile] = File(), db: Session = Depends(get_db)):
+    from app.services.chill_album import upload
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    package = await upload(db, device, files)
+    activate_album(db, device, package)
+    return redir(f"/devices/{id}/chill/album")
+
+
+@router.post("/devices/{id}/chill/album")
+def chill_album_selection(id: int, photo_ids: list[str] = Form([]), db: Session = Depends(get_db)):
+    from app.services.chill_album import publish
+    device = db.get(Device, id)
+    if not device: raise HTTPException(404)
+    package = publish(db, device, photo_ids)
+    activate_album(db, device, package)
+    return redir(f"/devices/{id}/chill/album")
+
+
+@router.get("/chill/photos/{digest}.jpg")
+def chill_library_photo(digest: str, db: Session = Depends(get_db)):
+    from app.models import ChillPhoto
+    if not db.get(ChillPhoto, digest): raise HTTPException(404)
+    return FileResponse(distribution_service.blob_path(digest), media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})

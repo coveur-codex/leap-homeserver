@@ -15,6 +15,7 @@ from app.services.feeds import fetch_feed
 from app.services.location_data import refresh_configured_locations
 from app.web.routes import router as web_router
 from app.api.distribution import router as distribution_api
+from app.api.communication import router as communication_api
 from app.web.distribution import router as distribution_web
 logging.basicConfig(level=settings.log_level,format='%(asctime)s %(levelname)s %(name)s %(message)s')
 log=logging.getLogger("leap"); START=time.monotonic()
@@ -24,10 +25,17 @@ async def scheduled_feeds():
         for feed in db.scalars(select(Feed).where(Feed.enabled==True)).all():
             last=feed.last_fetch.replace(tzinfo=timezone.utc) if feed.last_fetch and feed.last_fetch.tzinfo is None else feed.last_fetch
             if not last or last < now-timedelta(minutes=feed.update_interval): await fetch_feed(feed,db)
+async def scheduled_finance():
+    from app.services.finance import refresh_configured
+    with SessionLocal() as db:
+        await refresh_configured(db)
+
 def cleanup():
     with SessionLocal() as db:
         old=db.scalars(select(Article).where(Article.fetched_at<datetime.now(timezone.utc)-timedelta(days=settings.news_retention_days))).all()
         for a in old: db.delete(a)
+        from app.services.communication import prune_relay
+        prune_relay(db)
         db.commit()
 async def scheduled_location_data():
     with SessionLocal() as db:
@@ -49,8 +57,17 @@ async def lifespan(app):
     from app.services.distribution import ensure_packages
     with SessionLocal() as db:
         ensure_packages(db)
+    from app.api.snake import hub as snake_hub
+    snake_hub.start()
     scheduler=AsyncIOScheduler()
-    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",minutes=1,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.start();yield;scheduler.shutdown(wait=False)
+    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.start()
+    try:
+        yield
+    finally:
+        await snake_hub.stop()
+        from app.services import chill
+        await chill.shutdown()
+        scheduler.shutdown(wait=False)
 app=FastAPI(title="LEAP Home Server",version=__version__,lifespan=lifespan)
 app.mount("/static",StaticFiles(directory="app/static"),name="static");app.include_router(api_router);app.include_router(leap_router);app.include_router(knowledge_asset_router);app.include_router(web_router)
 
@@ -58,3 +75,15 @@ app.include_router(distribution_api)
 app.include_router(distribution_web)
 from app.web.communication import router as communication_web
 app.include_router(communication_web)
+from app.api.quiz_tracking import router as quiz_tracking_api
+app.include_router(quiz_tracking_api)
+
+app.include_router(communication_api)
+
+from app.web.finance import router as finance_web
+app.include_router(finance_web)
+from app.web.connectivity import router as connectivity_web
+app.include_router(connectivity_web)
+
+from app.api.snake import router as snake_api
+app.include_router(snake_api)

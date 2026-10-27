@@ -71,7 +71,27 @@ def edit_package(package_id: str, request: Request, version: int | None = None, 
     return templates.TemplateResponse(request, "asset_edit.html", {"package": package, "versions": versions, "selected": selected,
         "definition": json.dumps(service.editable_definition(selected), ensure_ascii=False, indent=2),
         "quiz_json": json.dumps({"questions": service.quiz_data(catalog)}, ensure_ascii=False, indent=2) if catalog else None,
-        "catalog": catalog, "kinds": service.KINDS})
+        "catalog": catalog, "kinds": service.KINDS, "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.get("/assets/{package_id}/delete")
+def confirm_delete_package(package_id: str, request: Request, db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    versions = db.scalars(select(AssetVersion).where(AssetVersion.package_id == package.id)).all()
+    return templates.TemplateResponse(request, "asset_delete.html", {"package": package,
+        "version_count": len(versions), "devices": service.package_devices(db, package),
+        "deletion_block_reason": service.deletion_block_reason(package)})
+
+
+@router.post("/assets/{package_id}/delete")
+def delete_package(package_id: str, expected: int = Form(), confirmed: bool = Form(False), db: Session = Depends(get_db)):
+    package = package_or_404(db, package_id)
+    if not confirmed:
+        raise HTTPException(422, "Bitte das endgültige Löschen des Assetpakets bestätigen.")
+    kind = package.kind
+    service.delete_package(db, package, expected)
+    db.commit()
+    return redir(f"/assets?kind={kind}")
 
 @router.post("/assets/{package_id}/files")
 async def upload_files(package_id: str, files: list[UploadFile] = File(), folder: str = Form(""), expected: int = Form(), db: Session = Depends(get_db)):
@@ -85,11 +105,12 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if package.current_version != expected:
         raise HTTPException(409, "Paket wurde inzwischen geändert. Bitte neu laden.")
     incoming = {}
+    imported_definition = {}
     for upload in files:
         name = service.safe_name((folder.rstrip("/") + "/" if folder else "") + (upload.filename or ""))
         is_zip = (upload.filename or "").lower().endswith(".zip")
         info = await service.store_upload(upload, service.ASSET_FILE_LIMIT)
-        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder) if is_zip else {name: info}
+        imported = await run_in_threadpool(service.unpack_asset_zip, service.blob_path(info["sha256"]), folder, imported_definition if package.kind == "chill" else None) if is_zip else {name: info}
         if incoming.keys() & imported.keys():
             raise HTTPException(422, "Upload enthält doppelte Dateipfade")
         incoming.update(imported)
@@ -99,10 +120,16 @@ async def upload_files(package_id: str, files: list[UploadFile] = File(), folder
     if any(str(parent) in mapping for name in mapping for parent in PurePosixPath(name).parents):
         raise HTTPException(422, "Ein Dateipfad wird zugleich als Ordner verwendet")
     definition = service.editable_definition(previous)
+    definition.update(imported_definition)
     # Auto-discovered animation folders must include newly uploaded frames.
     for name, animation in definition.get("animations", {}).items():
         prefix = f"animations/{name}/"
         animation["frames"] = sorted(set(animation["frames"]) | {p for p in mapping if p.startswith(prefix)})
+    pet = definition.get("tamagotchi", {})
+    discovered = service.discover_pet(mapping)
+    for name, animation in pet.get("animations", {}).items():
+        if name in discovered["animations"]:
+            animation["frames"] = sorted(set(animation["frames"]) | set(discovered["animations"][name]["frames"]))
     service.publish(db, package, mapping, definition, expected)
     db.commit()
     return redir(f"/assets/{package.id}")
@@ -121,6 +148,10 @@ def delete_file(package_id: str, path: str = Form(), expected: int = Form(), db:
     animations = definition.get("animations", {})
     definition["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
         for name, animation in animations.items() if any(f != path for f in animation["frames"])}
+    pet = definition.get("tamagotchi", {})
+    pet["animations"] = {name: {**animation, "frames": [f for f in animation["frames"] if f != path]}
+                         for name, animation in pet.get("animations", {}).items() if any(f != path for f in animation["frames"])}
+    pet["backgrounds"] = {period: p for period, p in pet.get("backgrounds", {}).items() if p != path}
     if definition.get("preview") == path:
         definition.pop("preview")
     service.publish(db, package, mapping, definition, expected)
@@ -163,7 +194,7 @@ def edit_quiz(package_id: str, content: str = Form(), expected: int = Form(), db
 
 @router.get("/firmware")
 def firmware(request: Request, db: Session = Depends(get_db)):
-    releases = db.scalars(select(FirmwareRelease)).all()
+    releases = db.scalars(select(FirmwareRelease).where(FirmwareRelease.deleted.is_(False))).all()
     releases.sort(key=lambda r: service.version_key(r.version), reverse=True)
     return templates.TemplateResponse(request, "firmware.html", {"releases": releases})
 
@@ -173,14 +204,18 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
     if channel not in {"stable", "beta"} or len(notes) > 20000:
         raise HTTPException(422)
     if db.scalar(select(FirmwareRelease).where(FirmwareRelease.version == version)):
-        raise HTTPException(409, "Firmware-Version existiert bereits; Binary bleibt unverändert")
+        raise HTTPException(409, "Firmware-Version wurde bereits verwendet; bitte eine neue Version vergeben")
     if not file.filename or not file.filename.lower().endswith(".bin"):
         raise HTTPException(422, "Eine ESP32-S3 App-Binary (.bin) hochladen")
-    info = await service.store_upload(file, 16 * 1024 * 1024)
+    info = await service.store_upload(file, service.FIRMWARE_SLOT_SIZE)
     with service.blob_path(info["sha256"]).open("rb") as stream:
         header = stream.read(24)
     if len(header) < 24 or header[0] != 0xE9 or int.from_bytes(header[12:14], "little") != 9:
         raise HTTPException(422, "Keine ESP32-S3 App-Binary (kein vollständiges Flash-Image hochladen)")
+    if not service.universal_firmware(service.blob_path(info["sha256"])):
+        raise HTTPException(422, "Nur universelle OTA-Firmware mit NVS-Gerätekonfiguration hochladen. "
+                            "Ohne LocalConfig.h oder mit LEAP_PROVISION_DEVICE=0 bauen; "
+                            "Installations-Binaries mit Gerätewerten sind nicht für OTA geeignet.")
     db.add(FirmwareRelease(version=version, channel=channel, notes=notes, **info))
     db.commit()
     return redir("/firmware")
@@ -188,10 +223,45 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
 @router.post("/firmware/{release_id}/promote")
 def promote(release_id: int, db: Session = Depends(get_db)):
     release = db.get(FirmwareRelease, release_id)
-    if not release:
+    if not release or release.deleted:
         raise HTTPException(404)
+    if release.withdrawn:
+        raise HTTPException(409, "Zurückgezogene Firmware zuerst wieder freigeben")
     release.channel = "stable"
     db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/withdraw")
+def withdraw_firmware(release_id: int, db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    release.withdrawn = True
+    db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/restore")
+def restore_firmware(release_id: int, db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    if not service.blob_path(release.sha256).is_file():
+        raise HTTPException(409, "Binary fehlt; Firmware kann nicht wieder freigegeben werden")
+    release.withdrawn = False
+    db.commit()
+    return redir("/firmware")
+
+
+@router.post("/firmware/{release_id}/delete")
+def delete_firmware(release_id: int, confirm: bool = Form(False), db: Session = Depends(get_db)):
+    release = db.get(FirmwareRelease, release_id)
+    if not release or release.deleted:
+        raise HTTPException(404)
+    if not confirm:
+        raise HTTPException(422, "Endgültiges Löschen bitte bestätigen")
+    service.delete_firmware(db, release)
     return redir("/firmware")
 
 

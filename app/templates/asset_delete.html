@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Assetpaket löschen?</h1>
+<p><strong>{{package.name}}</strong> · {{package.id}} · Version {{package.current_version}}</p>
+{% if deletion_block_reason %}
+<p>{{deletion_block_reason}} Es kann nicht gelöscht werden.</p>
+<p><a href="/assets/{{package.id}}">Zurück zum Paket</a></p>
+{% else %}
+<p>Das Paket und alle {{version_count}} Versionen werden endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</p>
+{% if package.catalog_id %}<p>Auch der zugehörige Quizkatalog und alle Fragen werden gelöscht.</p>{% endif %}
+{% if devices %}
+<p>Betroffene Geräte:</p><ul>{% for device in devices %}<li>{{device.name}} ({{device.device_id}})</li>{% endfor %}</ul>
+<p>Das Paket wird aus den Gerätezuordnungen entfernt. Bereits installierte Inhalte werden beim nächsten erfolgreichen Sync zur Bereinigung freigegeben.</p>
+{% endif %}
+{% if package.kind == 'avatar' %}<p>Geräte mit diesem Avatar wechseln auf Drachi.</p>{% endif %}
+<form method="post" action="/assets/{{package.id}}/delete">
+  <input type="hidden" name="expected" value="{{package.current_version}}">
+  <label><input type="checkbox" name="confirmed" value="true" required> Ich möchte dieses Assetpaket mit allen Versionen endgültig löschen.</label>
+  <button class="danger">Assetpaket endgültig löschen</button>
+  <a href="/assets/{{package.id}}">Abbrechen</a>
+</form>
+{% endif %}
+{% endblock %}

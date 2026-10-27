@@ -95,3 +95,20 @@ def test_system_page_uses_retry_time(client, db):
     db.commit()
     page = client.get("/system")
     assert "27.10.2026, 20:00:00" in page.text and "HTTP 429" in page.text
+
+
+@pytest.mark.asyncio
+async def test_success_keeps_aircraft_interval_and_clears_error(db):
+    class Aircraft:
+        async def nearby(self, *args):
+            return {"aircraft": []}
+
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    cache = LocationCache(location_key="50.81370,7.03520", latitude=50.8137, longitude=7.0352,
+                          aircraft_error="HTTP 429", aircraft_next_attempt_at=past)
+    db.add(cache); db.commit()
+    await location_data.refresh_location(db, "Test", cache.latitude, cache.longitude,
+                                         weather_provider=Weather(), aircraft_provider=Aircraft())
+    assert cache.aircraft_error is None
+    assert (cache.aircraft_next_attempt_at - cache.aircraft_fetched_at).total_seconds() == settings.aircraft_cache_seconds
+    assert (cache.weather_next_attempt_at - cache.weather_fetched_at).total_seconds() == settings.weather_cache_minutes * 60

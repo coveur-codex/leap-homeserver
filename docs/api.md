@@ -2,7 +2,7 @@
 
 Die vollständige, ausführbare Spezifikation liegt unter `/docs` und `/openapi.json`. Alle Geräteendpunkte beginnen mit `/api/v1/devices/{device_id}`. Deaktivierte oder unbekannte Geräte erhalten HTTP 404.
 
-`config` enthält Identität, Alter, Avatar-Typ (`avatar`), den frei konfigurierbaren Avatar-Namen (`avatarName`), geordnete Seiten, Spiele und Home-Slots. `news` akzeptiert `limit` (1–100) und einen ISO-8601-Parameter `since`. `weather` und `aircraft` liefern providerunabhängige, standortbezogene Modelle und kennzeichnen einen bei Providerfehler weiter verwendeten Cache mit `stale: true`. `quiz` filtert mit `minAge <= device.age`. `checkin` akzeptiert `firmwareVersion`, `battery`, `wifiRssi` und `freeFlash`.
+`config` enthält Identität, Alter, Avatar-Typ (`avatar`), den frei konfigurierbaren Avatar-Namen (`avatarName`), geordnete Seiten, Spiele und Home-Slots. `news` akzeptiert `limit` (1–100) und einen ISO-8601-Parameter `since`. `weather` und `aircraft` liefern providerunabhängige, standortbezogene Modelle und kennzeichnen einen bei Providerfehler weiter verwendeten Cache mit `stale: true`. `quiz` filtert mit `minAge <= device.age`. `checkin` akzeptiert `firmwareVersion`, `battery`, `wifiRssi` und `freeFlash` sowie optional `memory`.
 
 Bildassets sind stabile URLs und senden `Cache-Control: public, max-age=86400, immutable`.
 
@@ -20,3 +20,379 @@ Dieselben drei Geräteendpunkte stehen passend zur bisherigen API auch unter `/a
 ## Versionierte Assets und OTA
 
 Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.
+
+## Gerätespeicher
+
+Ein Check-in kann die Belegung in Bytes melden:
+
+```json
+{
+  "memory": {
+    "flash": {"used": 2097152, "total": 4194304},
+    "littlefs": {"used": 838861, "total": 2097152},
+    "psram": {"used": 2097152, "total": 8388608}
+  }
+}
+```
+
+`used` und `total` müssen nichtnegative Werte sein; `used <= total`.
+`total: 0` kennzeichnet nicht verfügbaren Speicher. Flash ist die Belegung des
+Firmware-Images im aktiven OTA-Slot; LittleFS ist die Inhalts-/Dateisystempartition.
+`freeFlash` bleibt der freie LittleFS-Platz für bestehende Clients und Downloads.
+Die Geräteübersicht und der Geräteeditor zeigen den Stand des letzten Check-ins
+mit Zeitstempel als belegt / gesamt, mit Dezimalkomma und einer Nachkommastelle
+(MB = 1.048.576 Bytes). Ältere Geräte ohne `memory` zeigen keine Speicherwerte.
+Migration `0008` ergänzt ein optionales JSON-Feld, ohne bestehende Daten zu ändern.
+
+
+## Regenradar für Geräte
+
+`GET /api/v1/devices/{device_id}/weather/radar` liefert `available`, `stale`
+und bei vorhandenem Bild `image`, `updated` (UTC), `source`, `sourceUrl`,
+`latitude`, `longitude`. Ohne konfigurierten Standort: 422; unbekanntes oder
+inaktives Gerät: 404. Provider-Ausfälle liefern 200 mit `available: false` oder
+mit dem letzten Bild und `stale: true`, unabhängig vom normalen Wetterabruf.
+
+RainViewer-Beobachtungen werden auf dem Server auf 112×112 PNG reduziert,
+nordorientiert um den Standort zentriert (Zoom 7), mit Standortpunkt und
+Orientierungsringen. Das ist ein Niederschlags-Layer ohne Straßenkarte,
+keine Vorhersage. Der Server benötigt HTTPS-Zugriff auf
+`api.rainviewer.com` und `tilecache.rainviewer.com`. Metadaten/Bilder werden
+höchstens alle zehn Minuten pro Standort angefordert; der Geräte-Sync erfolgt
+normalerweise alle 15 Minuten. Quellenangabe: RainViewer, https://www.rainviewer.com/.
+
+`image` verweist auf `/api/v1/assets/weather-radar/{sha256}.png` mit fester
+Content-Length und unveränderlicher URL. Ein äußerer Vier-Sekunden-Timeout
+begrenzt den Providerabruf für den ESP32-HTTP-Timeout. Keine Datenbankmigration.
+
+
+## Gerätebilder und Flugzeugpositionen (Firmware beta.5)
+
+Die Flugzeugantwort enthält zusätzlich `center: {latitude, longitude}` aus dem
+konfigurierten Gerätestandort. `radiusNm` legt den Kartenmaßstab fest; Positionen
+und `trackDegrees` der Flugzeuge bleiben unverändert. Die Firmware zeichnet daraus
+eine nordorientierte Positionsansicht, keine Straßenkarte oder Live-Verfolgung.
+
+Alle fünf Standard-Avatarpakete enthalten ein transparentes `preview.png` mit
+80×80 Pixeln und einen entsprechenden Idle-Frame. Unveränderte originale
+SVG-only-Standardpakete werden durch `ensure_packages` idempotent in eine neue,
+unveränderliche Paketversion übernommen. Eigene/hochgeladene Versionen werden
+nicht überschrieben; alte Versionen bleiben für vorhandene Geräte verfügbar.
+Die PNGs sind mit CairoSVG 2.7.1 aus den mitgelieferten SVGs erzeugt; CairoSVG wird
+zur Laufzeit nicht benötigt.
+
+Wissensartikel liefern bereits `image` als lokale JPEG-URL aus dem Originalartikel.
+Die Firmware zeigt dieses Bild rechts mit erhaltenem Seitenverhältnis; fehlt ein
+Bild, bleibt der Text nutzbar. Die Datei wird auch beim späteren Sync nachgeladen,
+falls der erste Download fehlgeschlagen ist.
+
+## Mathe-Quiz und Katalogauswahl
+
+`config.mathQuiz` enthält `{ "operation": "add", "limit": 20 }` pro Gerät.
+Rechenarten: `add`, `subtract`, `multiply`. Bei Addition/Subtraktion liegen
+Operanden und Ergebnis zwischen 0 und `limit` (3–1000). Bei Multiplikation
+liegen beide Faktoren zwischen 1 und `limit` (3–20; 10 für das kleine Einmaleins).
+Die Firmware erzeugt jede Aufgabe offline; es werden keine Mathe-Fragen gespeichert
+oder heruntergeladen. Ohne Einstellung gilt Addition bis 20.
+
+`quiz.catalogs` liefert die aktiven zugewiesenen Kataloge mit `id` und `name`;
+jede Zeile in `quiz.questions` enthält zusätzlich `catalogId`. Das bisherige
+`questions`-Array bleibt für ältere Firmware erhalten. Neue Firmware zeigt zuerst
+die Katalogauswahl und lädt Fragen ausschließlich aus dem gewählten Katalog.
+Versionierte Quiz-Pakete verwenden weiterhin `definition.name` und `questionsFile`.
+Migration `0008` setzt bestehende Geräte auf Addition bis 20 und erhöht ihre
+Konfigurationsversion, damit die Einstellung beim nächsten Sync übertragen wird.
+
+## Flugradar
+
+`GET /api/v1/devices/{device_id}/aircraft` liefert `center` (latitude/longitude),
+`updated` (UTC), `ageSeconds` (Alter des Snapshots), `radiusKm` und `aircraft`.
+Je Flugzeug kommen `typeName`, `distanceKm`, `altitudeMeters`, `groundSpeedKmh`,
+`positionAgeSeconds` (Alter der Position bei Erfassung), `originName` und
+`destinationName` hinzu. Die bisherigen Felder `type`, `distanceNm`,
+`altitudeFeet`, `groundSpeedKnots`, `trackDegrees` und `radiusNm` bleiben erhalten.
+Unbekannte Messwerte und Routen sind `null`; unbekannte Typen heißen
+„Unbekannter Flugzeugtyp“. Der lokale Namenskatalog deckt verbreitete Flugzeuge
+und Flughäfen ab; unbekannte Flughafencodes werden als Fallback angezeigt.
+Start und Ziel werden ausschließlich aus gelieferten `origin`/`destination`
+oder `route.origin`/`route.destination` übernommen. ADS-B-Positionen allein
+enthalten keine Flugroute; die Standardquelle liefert diese Angaben nicht immer.
+Es gibt dafür keine zusätzlichen externen Einzelabfragen.
+
+Der gemeinsame Flugradar-Cache wird standardmäßig alle 15 Sekunden erneuert,
+auch bei mehreren Geräten am selben Standort. Bei Providerfehlern bleiben
+Beobachtung und ursprünglicher Zeitstempel mit `stale: true` erhalten.
+Die Webvorschau holt bei sichtbarer Radarkarte alle 30 Sekunden Daten und
+berechnet alle zwei Sekunden die Position entlang eines Großkreises aus
+Geschwindigkeit, Flugrichtung und Beobachtungsalter. Entfernung und Radar
+verwenden dieselbe geschätzte Position. Nach 120 Sekunden endet die Fortschreibung
+und die Position wird als alt gekennzeichnet. Höhe und Tempo bleiben die zuletzt
+gemeldeten Werte; geschätzte Positionen werden als solche beschriftet.
+
+## Wetter und nächster Tag
+
+`weather` enthält weiterhin `current` und `today`. Neu sind `timezone`,
+`current.isDay` und `tomorrow`. Die beiden Tagesobjekte enthalten `date`
+(ISO-Datum am konfigurierten Standort), `weatherCode` (WMO), `min`, `max` und
+`precipitationProbability`. Open-Meteo wird für zwei Tage in der lokalen
+Standort-Zeitzone abgefragt; „morgen“ ist das zweite Tagesobjekt der Quelle,
+keine Berechnung aus dem UTC-Datum des Servers. Wind wird ausdrücklich in
+km/h angefordert. Fehlende Vorhersage: `tomorrow: null`; fehlende Einzelwerte:
+`null`. Der bestehende Standortcache und die Temperatur-Einheiten C/F bleiben
+unverändert. Nach der Aktualisierung eines bestehenden Caches erscheinen die
+neuen Felder automatisch.
+
+Die Gerätevorschau zeichnet Wetter-Icons als SVG aus geometrischen Formen und
+zeigt aktuelles Wetter sowie eine Morgen-Karte mit Wetterlage, Temperaturspanne,
+Datum und Regenwahrscheinlichkeit. Alle WMO-Codes einschließlich Schnee,
+Nebel, gefrierendem Niederschlag und Gewitter/Hagel sind berücksichtigt;
+klare Nächte erhalten einen Mond. Unbekannte Codes erhalten ein Fragezeichen.
+
+## Kleine Quiz-Antworten für Geräte (Firmware beta.16)
+
+`GET /api/v1/devices/{id}/quiz?metadataOnly=true` liefert Version und alle aktiven
+zugewiesenen Kataloge (`id`, `name`), aber `questions: []`. Die Firmware nutzt
+dies, sobald versionierte Quiz-Pakete installiert sind; Fragen werden aus den
+vollständigen Offline-Paketen gelesen. Der große Katalog wird dadurch nicht
+zusätzlich im Content-Snapshot gespeichert.
+
+Ohne installierte Pakete nutzt die Firmware `?limitPerCatalog=200`: eine zufällige,
+ohne Wiederholung ausgewählte Stichprobe von höchstens 200 altersgerechten Fragen
+je Katalog. Zulässiger Bereich 1–200. Ohne diese Parameter bleibt die bisherige
+vollständige Antwort erhalten. Versionierte Paketdateien bleiben vollständig;
+die Begrenzung betrifft ausschließlich den Legacy-Content-Endpunkt.
+
+## Quiz-Antworten und Antwortzeiten
+
+`POST /api/v1/devices/{device_id}/quiz-attempts` speichert die endgültige
+Antwort als unveränderlichen Snapshot. Beispiel (Indizes sind nullbasiert):
+
+```json
+{
+  "eventId": "5da91f77d02e442b984fc10781aaa546",
+  "kind": "math",
+  "quizSetId": "math",
+  "quizSetName": "Mathe-Quiz",
+  "quizSetVersion": 3,
+  "questionId": null,
+  "questionIndex": 0,
+  "question": "7 + 5 = ?",
+  "answers": ["10", "12", "11", "13"],
+  "selectedIndex": 2,
+  "correctIndex": 1,
+  "elapsedMs": 1234,
+  "answeredAt": "2026-10-06T12:00:00Z",
+  "firmwareVersion": "1.0.0-beta.20",
+  "mathOperation": "add",
+  "mathLimit": 20
+}
+```
+
+Firmware 1.0.3 sendet bei Mathe-Aufgaben freie Zahlenantworten. Statt
+`answers`, `selectedIndex` und `correctIndex` stehen folgende Felder im Snapshot:
+
+```json
+{"answerMode": "numeric", "enteredAnswer": "0012", "correctAnswer": 12}
+```
+
+`enteredAnswer` enthält 1–4 ASCII-Ziffern (0–9), `correctAnswer` eine nicht
+negative Ganzzahl im konfigurierten Ergebnisbereich. `correct` wird durch
+numerischen Vergleich ermittelt, führende Nullen bleiben für die Anzeige erhalten.
+Diese Form ist nur für `kind: "math"` zulässig und darf keine Auswahlfelder
+enthalten. Leere Eingaben sind ungültig. Aufgabe, Rechenart, Grenze, Antwortzeit
+und Versionszuordnung werden weiterhin gespeichert. Die Ergebnisansicht zeigt
+Eingabe und richtiges Ergebnis. Es ist keine Datenbankmigration notwendig.
+Den Homeserver vor Firmware 1.0.3 aktualisieren.
+
+Ohne `answerMode` (oder mit `"choice"`) gilt das bisherige Auswahlformat für
+Kataloge und ältere Mathe-Firmware; alte Snapshots und Offline-Wiederholungen
+bleiben kompatibel.
+
+`answers` enthält genau die angezeigte Reihenfolge; der Server berechnet
+`correct` aus den beiden Indizes. `kind` ist `math` oder `catalog`. Bei
+versionierten Katalogen ist `quizSetId` die Paket-ID und `quizSetVersion` die
+installierte Paketversion. Neue Quiz-Publikationen enthalten Frage-IDs; ältere
+Pakete funktionieren mit `questionId: null`, Aufgabentext und Paketversion.
+`questionIndex` bezeichnet die Position im auf dem Gerät geladenen Fragenpool.
+Beim Mathequiz bezeichnet die Version die Gerätekonfiguration; Rechenart,
+Grenze und die konkrete zufällige Aufgabe werden ebenfalls gespeichert.
+Aktuelle Zuweisungen oder spätere Katalogänderungen überschreiben keine Antworten.
+
+Die Antwort enthält `{"ok": true, "eventId": "…"}`. Erneute Übertragung derselben
+Ereignis-ID und desselben Inhalts ist pro Gerät idempotent. Abweichender Inhalt
+unter derselben ID liefert 409. Unbekannte/deaktivierte Geräte erhalten 404,
+ungültige Snapshots 422. Auch Antworten aus inzwischen entfernten Quizsets werden
+angenommen, damit offline gespeicherte Antworten später übertragen werden können.
+
+`GET /api/v1/devices/{device_id}/quiz-attempts?limit=50&offset=0` liefert
+`attempts` (neueste zuerst, maximal 100), einschließlich `correct` und
+`receivedAt`, sowie `hasMore`. `answeredAt` ist ohne synchronisierte Geräteuhr
+null; Empfangszeit und Gerätezeit werden getrennt angezeigt. `elapsedMs` darf
+bei anderen Clients fehlen/null sein. Migration `0009` ergänzt die Ergebnistabelle.
+
+Im Geräteeditor führt **Quiz-Ergebnisse und Antwortzeiten** zur paginierten
+Ansicht `/devices/{id}/quiz-results` mit Aufgabe, Antworten, Markierungen,
+Antwortzeit und Gesamtzahl richtiger Antworten. Zeitstempel werden in UTC gezeigt.
+Firmware ab beta.20 überträgt neue Antworten automatisch; frühere Antworten
+wurden auf den Geräten nicht aufgezeichnet und lassen sich nicht nachträglich abrufen.
+
+## Spieleauswahl
+
+Im Geräteeditor unter **Spiele auf dem Gerät** wird die Auswahl pro Gerät gespeichert.
+`config.games` enthält `tamagotchi`, `snake`, `hot_potato`, `simon_motion`,
+`tilt_maze`, `connect_four`, `kitchen` und `crab_journey`, jeweils mit einem booleschen `enabled`.
+Die Firmware zeigt und startet ausschließlich freigegebene Spiele auf der aktivierten
+Spieleseite. Alle können abgewählt werden. Die Auswahl erhöht `configVersion` und
+wird beim nächsten Sync übernommen; sie gilt danach auch offline. Neue und
+migrierte Geräte behalten zunächst alle acht Spiele. Die Spielprogramme bleiben
+in der Firmware. Für die vollständige Durchsetzung muss auch die Firmware
+aktualisiert werden; ältere Firmware blendet Küche und Krabbenreise immer ein.
+
+Ab Firmware 1.0.1 ergänzt `/api/v1/devices/{id}/weather/radar` die Metadaten um
+`mapWidthKm: 60`. Das 112×112-PNG zeigt einen standortzentrierten quadratischen
+Mercator-Ausschnitt mit 60 km Seitenlänge am Mittelpunkt. Firmware und Server
+verwenden `R = 6378.137 km` und den Maßstabsfaktor `cos(latitude)`; Flugpositionen
+werden in denselben Ausschnitt projiziert. Der serverseitige Flugzeug-Abrufradius
+ist unabhängig davon. Radar-Bilder werden für den neuen Zuschnitt getrennt von
+alten Zoom-7-Cachebildern gespeichert.
+
+## Kommunikation als Gruppenchat-Relay (1.0.2)
+
+- `POST /api/v1/devices/{id}/communication/messages`: `{eventId, templateId}`.
+  `eventId` ist eine zufällige, höchstens 64 Zeichen lange Kennung aus Buchstaben,
+  Ziffern, `_` und `-`, die auf Wiederholversuchen erhalten bleibt. Der Server
+  ermittelt Namen/Text/Symbol selbst aus Gerät und aktiver Vorlage. Antwort:
+  `{ok:true, eventId, message}`. Dieselbe ID je Gerät liefert dieselbe Nachricht;
+  eine andere Vorlage mit derselben ID ergibt 409. Freitext/Zusatzfelder werden
+  abgelehnt, inaktive oder unbekannte Vorlagen ergeben 422.
+- `GET /api/v1/devices/{id}/communication/messages?since={cursor}`: gemeinsame
+  Folge für alle aktivierten Kommunikationsgeräte. Antwort: `schemaVersion:1`,
+  bis zu acht `messages` in aufsteigender Reihenfolge, `cursor`, `more`, `reset`.
+  Nachrichtenfelder: `id`, `eventId`, `senderId`, `name`, `text`, `symbol`, `sentAt`
+  (UTC). Ohne `since` werden die letzten acht Nachrichten als stille Starthistorie
+  geliefert. Mit `more:true` sofort weiterblättern; sonst etwa alle zwei Sekunden.
+  Ein Cursor über dem Serverstand führt zu `reset:true` und einer neuen Historie.
+  Cursor erst nach vollständiger Verarbeitung speichern; eigene Nachrichten
+  nicht erneut akustisch signalisieren.
+
+Beide Endpunkte beachten die Geräteaktivierung (404) und Kommunikationsfreigabe
+(403). Nachrichtensnapshots bleiben trotz späterer Vorlagen-/Namensänderungen
+unverändert. Sie werden sieben Tage aufbewahrt; die SQLite-Folge verwendet
+AUTOINCREMENT, damit gelöschte IDs nicht erneut verwendet werden. Die
+Sendebestätigung bestätigt die Speicherung im Relay, nicht das Lesen aller Geräte.
+
+Ab Homeserver 1.0.3 darf `templateId` im Kommunikations-POST auch eine feste
+Icon-ID aus `app/defaults/communication-icons.json` sein (z. B. `icon:question`,
+`icon:yes`, `icon:help`). Die bestätigte Nachricht enthält dann `text: ""` und
+das serverseitige Unicode-Symbol. Unbekannte IDs erhalten 422; Wiederverwendung
+einer `eventId` für ein anderes Icon erhält 409. Kommunikationsrechte gelten
+auch für Icons. Text-/Symbol-/Namensinjektion im Request bleibt ausgeschlossen.
+
+
+## WebSocket-Kommunikation (Homeserver 1.0.4 / Firmware 1.0.8)
+
+`ws[s]://host/api/v1/devices/{id}/communication/ws` ersetzt in der Firmware
+HTTP-Polling und HTTP-Senden. Die HTTP-Endpunkte bleiben für ältere Firmware.
+Nach Verbindungsaufbau sendet das Gerät `{"type":"sync"}` für stille Historie,
+bei Wiederverbindung `{"type":"sync","since":cursor}` für verpasste Nachrichten.
+Der Server pusht `{"type":"messages", ...}` mit denselben Feldern wie beim GET.
+Es gibt höchstens eine unbestätigte Seite (acht Nachrichten). Erst nach Aufnahme
+in die Gerätequeue bestätigt `sync` den gelieferten Cursor. Dann folgt bei Bedarf
+die nächste Seite; im Leerlauf gibt es keine leeren Nachrichtenseiten.
+
+Senden: `{"type":"send","eventId":"...","templateId":"..."}`.
+Antwort: `{"type":"ack","ok":true,"eventId":"...","message":{...}}`.
+Fehler: `{"type":"error","eventId":"...","status":422}`. Dieselbe eventId bleibt
+bei verlorener Bestätigung erhalten. Serverbestätigung bedeutet Speicherung,
+nicht Lesen durch andere Geräte. Ungültige Frames/fehlende Berechtigung schließen
+mit Code 1008. Vorlagen, Icons und Berechtigungen werden serverseitig geprüft.
+WSS prüft die konfigurierte TLS-CA; keine unsichere TLS-Ausweichverbindung.
+
+Firmware: Protokoll-Ping alle 30 s, Pong-Timeout 10 s, zwei verpasste Pongs bis
+zum Neuverbinden. Sendebestätigung: Timeout 10 s. Wiederverbindung 2–30 s mit
+exponentiellem Backoff. Queue-Überlauf bestätigt keinen Cursor und führt zum
+Neuverbinden. Cursor und unbestätigte Sendungen bleiben im RAM, nicht über Reboot.
+Der Socket-Task schläft zwischen Service-Schritten 50 ms, bei deaktiviertem Chat
+oder fehlendem WLAN 250 ms. WLAN nutzt Minimum-Modem-Sleep (AP-DTIM-Empfangsfenster),
+keinen Deep Sleep und kein Maximum-Modem-Sleep. Die tatsächliche Funk-Schlafzeit
+bestimmt der Access Point. Stromverbrauch und Latenz müssen am Gerät gemessen werden.
+
+Der Homeserver verteilt Änderungen ereignisgesteuert innerhalb eines Uvicorn-Workers
+(Standard im Dockerfile). Alle 30 s werden zusätzlich Berechtigungen und Änderungen
+anderer Prozesse geprüft. Bei mehreren Workern wären für unmittelbaren Push zwischen
+Workern ein gemeinsamer Broker nötig. Reverse Proxies müssen WebSocket-Upgrades
+weiterleiten; Idle-Timeout mindestens 90 s. Docker begrenzt Frames auf 16 KiB und
+sendet zusätzlich einen Protokoll-Ping alle 60 s (10 s Pong-Timeout).
+
+Gerätekonfiguration enthält `accentColor` als `#RRGGBB`; Standard `#00d7c5`.
+Die Firmware wandelt in RGB565 um und verwendet bei fehlenden/ungültigen Werten
+das bisherige Türkis. Auswahl unter Geräte → Allgemein; wirksam nach Konfig-Sync.
+Beide Radare zeigen 60 × 60 km mit Ringen bei 10, 20 und 30 km und Norden oben mittig.
+
+## Benachrichtigungen ab 1.0.5
+
+`GET /devices/{id}/config` ergänzt `notificationSounds` mit den booleschen
+Schlüsseln `communication`, `news`, `aircraft` (Standard jeweils `true`) und
+`locationAltitudeMeters` (leer → 0). `/aircraft` liefert dieselbe Standorthöhe
+in `center.altitudeMeters`, auch bei gemeinsam genutztem Standort-Cache.
+`/news` ergänzt pro Artikel `fetchedEpoch` (UTC-Unixsekunden des erstmaligen Imports)
+für die Abgrenzung zu Artikeln vor dem Gerätestart. Kommunikationsereignisse
+enthalten `accentColor` als unveränderliche Absenderfarbe zum Sendezeitpunkt.
+Bestehende Ereignisse erhalten durch Migration 0014 die Standardfarbe Türkis.
+
+## Nachtruhe ab 1.0.6
+
+`GET /devices/{id}/config` ergänzt `notificationQuietHours`, standardmäßig `{}`.
+Gespeicherte Einstellungen: `{"enabled":true,"start":"22:00","end":"07:00"}`.
+Uhrzeiten sind lokale Gerätezeit (`HH:MM`), Beginn inklusive, Ende exklusive;
+Mitternacht kann überschritten werden. Beim Duplizieren eines Geräts werden
+Nachtruhe-Einstellungen übernommen. Migration 0015 schaltet Nachtruhe für
+bestehende Geräte nicht automatisch ein.
+
+## Chill-Fotos (1.1.0)
+
+Die Gerätekonfiguration enthält `chill: {keyword: "nature", width: 428, height: 142}`.
+`chill_keyword` ist pro Gerät gespeichert und Teil des bestehenden Config-Version-Syncs.
+Die Maße entsprechen der aktuellen Displaykonfiguration (NV3007 im Querformat).
+
+`GET /api/v1/devices/{device_id}/chill/photo` liefert einen frischen Foto-Deskriptor:
+`{width,height,size,sha256,url}`. Die URL verweist auf
+`/api/v1/devices/{device_id}/chill/photos/{sha256}.jpg`, ein vollständig decodierbares
+Baseline-JPEG mit passender Zielauflösung und ohne Verzerrung. Die Firmware prüft
+Länge und SHA-256 vor dem Decodieren. Deskriptoren sind `no-store`; wiederholte
+Abrufe innerhalb von 20 Sekunden nach Fertigstellung verwenden dieselbe erfolgreiche Antwort.
+Fehler werden für dieses Zeitfenster ebenfalls zurückgehalten und als 503 geliefert.
+
+Beide Routen verwenden die bestehende Gerätefreigabe: nur aktivierte Geräte mit
+`chill-loremflickr` in ihrer Inhaltsauswahl können zugreifen. Fehlende/ausgeschaltete
+Geräte ergeben 404, eine nicht freigegebene Szene 403, ungültige Bild-IDs 404.
+Die Web-Gerätevorschau verwendet `/devices/{id}/chill/preview.jpg` mit derselben
+Geräte-/Szenenprüfung. Alle Zugriffe bleiben im vorhandenen Homeserver-Zugriffsmodell.
+
+Keywords: 1–80 Buchstaben/Ziffern/Unterstriche, Leerzeichen, Bindestriche und optional
+kommagetrennte Begriffe; URL-Encoding erfolgt ausschließlich im Proxy. Es lassen
+sich keine Quell-URLs konfigurieren. Zufallsbilder sind nicht garantiert kindgerecht;
+die Themenwahl stellt keinen Inhaltsfilter dar.
+
+Bilddienste werden im Hintergrund abgefragt (8 Sekunden Abrufbudget für
+LoremFlickr, zusätzlich bis zu 20 Sekunden für Picsum bei einem Fehler). Der Geräteaufruf wartet höchstens eine Sekunde und
+liefert während der Vorbereitung `503`, `Retry-After: 10` und `Cache-Control: no-store`.
+Wiederholungen verwenden denselben laufenden Abruf; ein abgebrochener Geräteaufruf
+bricht ihn nicht ab. Nach Fertigstellung wird der Deskriptor beim nächsten Aufruf
+zurückgegeben. Pro Gerät läuft höchstens ein Abruf; beim Serverstopp wird dieser
+abgebrochen. Die Browservorschau kann bis zu 33 Sekunden auf das Ergebnis warten.
+
+Der Deskriptor enthält zusätzlich `source` (`loremflickr` oder `picsum`) und
+`keywordApplied` (nur bei LoremFlickr `true`). Dies sind optionale Metadaten für
+bestehende Firmware. Der JPEG-Dateivertrag und die Geräteberechtigungen bleiben
+unverändert. Nach einem LoremFlickr-Fehler wird fünf Minuten direkt Picsum verwendet;
+danach wird die primäre Quelle erneut geprüft. Picsum unterstützt keine Keywords.
+Weiterleitungen sind je Quelle getrennt auf deren bekannte HTTPS-Bildhosts begrenzt:
+LoremFlickr/Flickr beziehungsweise `picsum.photos` und `fastly.picsum.photos`.
+
+### Mathe-Labor (1.1.1)
+
+Die bestehende `games`-Liste enthält zusätzlich `math_lab` / „Mathe-Labor“.
+Aktivierung, Duplizieren, Konfigurationsversion und Offline-Snapshot verwenden
+unverändert `enabled_games`; vier Unteraktivitäten werden nur in der Firmware
+angeboten. Mindestens Firmware 1.1.1 erforderlich; ältere Firmware ignoriert die ID.

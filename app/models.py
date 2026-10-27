@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .core.database import Base
+from .core.games import DEFAULT_GAMES
 
 def now(): return datetime.now(timezone.utc)
 
@@ -12,6 +13,13 @@ device_quiz_catalogs = Table("device_quiz_catalogs", Base.metadata,
     Column("device_id", ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
     Column("catalog_id", ForeignKey("quiz_catalogs.id", ondelete="CASCADE"), primary_key=True))
 
+class ChillPhoto(Base):
+    __tablename__ = "chill_photos"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    size: Mapped[int] = mapped_column(Integer)
+
+
 class Device(Base):
     __tablename__="devices"
     id: Mapped[int]=mapped_column(primary_key=True)
@@ -19,20 +27,32 @@ class Device(Base):
     name: Mapped[str]=mapped_column(String(100)); child_name: Mapped[str]=mapped_column(String(100), default="")
     age: Mapped[int]=mapped_column(Integer, default=8); avatar: Mapped[str]=mapped_column(String(100), default="dragon")
     avatar_name: Mapped[str]=mapped_column(String(100), default="")
+    accent_color: Mapped[str] = mapped_column(String(7), default="#00d7c5", server_default="#00d7c5")
     communication_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    network_config: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    math_lab: Mapped[dict] = mapped_column(JSON, default=lambda:{"targets":[10]}, server_default='{"targets":[10]}')
+    math_quiz: Mapped[dict] = mapped_column(JSON, default=lambda:{"operation":"add", "limit":20}, server_default='{"operation":"add","limit":20}')
     avatar_config: Mapped[dict]=mapped_column(JSON, default=dict); enabled: Mapped[bool]=mapped_column(Boolean, default=True)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     config_version: Mapped[int]=mapped_column(Integer, default=1); news_version: Mapped[int]=mapped_column(Integer, default=1)
     weather_version: Mapped[int]=mapped_column(Integer, default=1); aircraft_version: Mapped[int]=mapped_column(Integer, default=1); quiz_version: Mapped[int]=mapped_column(Integer, default=1)
     last_seen: Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); firmware_version: Mapped[str|None]=mapped_column(String(40))
+    chill_album_id: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    chill_photos: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    chill_keyword: Mapped[str] = mapped_column(String(80), default="nature", server_default="nature")
     firmware_channel: Mapped[str] = mapped_column(String(10), default="stable")
     confirmed_firmware: Mapped[str|None] = mapped_column(String(40))
     last_sync: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
     installed_assets: Mapped[dict] = mapped_column(JSON, default=dict)
+    enabled_games: Mapped[list] = mapped_column(JSON, default=lambda: list(DEFAULT_GAMES))
     content_selection: Mapped[list] = mapped_column(JSON, default=list)
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
+    memory_usage: Mapped[dict|None] = mapped_column(JSON)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
+    location_altitude_meters: Mapped[float|None] = mapped_column(Float)
+    notification_quiet_hours: Mapped[dict] = mapped_column(JSON, default=dict)
+    notification_sounds: Mapped[dict] = mapped_column(JSON, default=lambda: {"communication": True, "news": True, "aircraft": True, "time": True})
     weather_location: Mapped[str]=mapped_column(String(120), default=""); latitude: Mapped[float|None]=mapped_column(Float); longitude: Mapped[float|None]=mapped_column(Float)
     temperature_unit: Mapped[str]=mapped_column(String(2), default="C"); weather_fields: Mapped[list]=mapped_column(JSON, default=lambda:["temperature","rain","wind"])
     knowledge_source: Mapped[str]=mapped_column(String(20), default="klexikon")
@@ -99,6 +119,8 @@ class FirmwareRelease(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     version: Mapped[str] = mapped_column(String(40), unique=True)
     channel: Mapped[str] = mapped_column(String(10))
+    withdrawn: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     notes: Mapped[str] = mapped_column(Text, default="")
     sha256: Mapped[str] = mapped_column(String(64))
     size: Mapped[int] = mapped_column(Integer)
@@ -129,3 +151,43 @@ class CommunicationMessage(Base):
     symbol: Mapped[str] = mapped_column(String(16), default="")
     position: Mapped[int] = mapped_column(Integer, default=1)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+    __table_args__ = (UniqueConstraint("device_id", "event_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str] = mapped_column(String(64))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    correct: Mapped[bool] = mapped_column(Boolean)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CommunicationRelayEvent(Base):
+    """Server-owned snapshots, shared by all enabled communication participants."""
+    __tablename__ = "communication_relay_events"
+    __table_args__ = (UniqueConstraint("sender_id", "event_id"), {"sqlite_autoincrement": True})
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    avatar_image: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    sender_id: Mapped[str] = mapped_column(String(80))
+    accent_color: Mapped[str] = mapped_column(String(7), default="#00d7c5", server_default="#00d7c5")
+    event_id: Mapped[str] = mapped_column(String(64))
+    template_id: Mapped[str] = mapped_column(String(36))
+    name: Mapped[str] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(String(120))
+    symbol: Mapped[str] = mapped_column(String(16))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+
+
+class FinanceCache(Base):
+    __tablename__ = "finance_cache"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    symbol: Mapped[str] = mapped_column(String(32))
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_fetch: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    news_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    news_error: Mapped[str | None] = mapped_column(Text)

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/v1")
 class BootReport(BaseModel):
     firmwareVersion: str = Field(min_length=1, max_length=40)
     firmwareChannel: Literal["stable", "beta"] | None = None
+    deviceConfigSchema: int = Field(0, ge=0, le=1)
     installedAssets: dict[str, int] = Field(default_factory=dict, max_length=500)
     freeFlash: int | None = Field(None, ge=0)
 
@@ -54,11 +55,11 @@ def asset_file(package_id: str, version: int, path: str, db: Session = Depends(g
 @router.get("/firmware/{release_id}/binary")
 def firmware_binary(release_id: int, db: Session = Depends(get_db)):
     release = db.get(FirmwareRelease, release_id)
-    if not release or not service.blob_path(release.sha256).is_file():
+    if not release or release.withdrawn or release.deleted or not service.blob_path(release.sha256).is_file():
         raise HTTPException(404)
     return FileResponse(service.blob_path(release.sha256), media_type="application/octet-stream",
                         filename=f"leap-{release.version}.bin", headers={"ETag": '"' + release.sha256 + '"',
-                        "Cache-Control": "public, max-age=31536000, immutable"})
+                        "Cache-Control": "no-store"})
 
 @router.post("/devices/{device_id}/sync")
 def boot_sync(device_id: str, report: BootReport, db: Session = Depends(get_db)):
@@ -88,7 +89,8 @@ def boot_sync(device_id: str, report: BootReport, db: Session = Depends(get_db))
                             "manifestUrl": f"/api/v1/packages/{package.id}/versions/{package.current_version}/manifest",
                             "downloadBytes": sum(f["size"] for f in row.manifest["files"])})
     plan = {"configVersion": device.config_version, "configUrl": f"/api/v1/devices/{device_id}/config",
-            "firmwareChannel": device.firmware_channel, "firmware": service.firmware_offer(db, device, report.firmwareVersion),
+            "firmwareChannel": device.firmware_channel, "firmware": (service.firmware_offer(db, device, report.firmwareVersion)
+                         if report.deviceConfigSchema == 1 else None),
             "initialFirmware": report.firmwareVersion, "desiredAssets": desired, "assetUpdates": updates,
             "blockedAssets": blocked, "previousAssets": report.installedAssets,
             "cleanupAllowed": False, "cleanupAfter": "boot_success", "strategy": "stage-verify-activate-confirm-cleanup"}

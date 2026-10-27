@@ -22,7 +22,7 @@ def create(client, key, kind="chill"):
 
 
 def sync(client, assets=None, firmware="0.8.0"):
-    response = client.post("/api/v1/devices/leap-test/sync", json={"firmwareVersion": firmware, "installedAssets": assets or {}})
+    response = client.post("/api/v1/devices/leap-test/sync", json={"firmwareVersion": firmware, "deviceConfigSchema": 1, "installedAssets": assets or {}})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -34,7 +34,7 @@ def event(client, plan, **data):
 def binary():
     data = bytearray(256)
     data[0], data[1], data[12] = 0xE9, 1, 9
-    return bytes(data)
+    return bytes(data) + service.UNIVERSAL_CONFIG_MARKER
 
 
 def upload_firmware(client, version, channel):
@@ -96,7 +96,7 @@ def test_config_drives_assets_and_delayed_cleanup(client, db):
     assert response.status_code == 303
     plan = sync(client, {"avatar-dragon": 1})
     assert plan["firmwareChannel"] == "beta"
-    assert plan["desiredAssets"] == {"avatar-jellyfish": 1, "chill-sea": 1}
+    assert plan["desiredAssets"] == {"avatar-jellyfish": 1, "chill-sea": 1, "communication-avatars": 1, "game-avatars": 1}
     assert not plan["cleanupAllowed"]
     assert event(client, plan, event="boot_success", firmwareVersion="0.8.0", installedAssets={"avatar-dragon": 1}).status_code == 409
     assert event(client, plan, event="asset_installed", packageId="avatar-jellyfish", version=1).json()["cleanupAllowed"] is False
@@ -183,7 +183,7 @@ def test_migrations_fresh_and_existing_preserve_quiz(tmp_path):
     migrate("upgrade", "head")
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT question,min_age FROM quiz_questions").fetchall() == [("Bleibt erhalten?",7)]
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
     code = '''from app.core.database import SessionLocal
 from app.services.distribution import ensure_packages
 from app.models import AssetPackage,QuizQuestion
@@ -296,3 +296,123 @@ def test_zip_crc_and_duplicate_paths_are_rejected_atomically(client, db):
     assert client.post("/assets/chill-crc/files", data={"expected": 1}, files={"files": ("duplicate.zip", duplicate)}).status_code == 422
     assert db.get(AssetPackage, "chill-crc").current_version == 1
     assert len(db.scalars(select(AssetVersion).where(AssetVersion.package_id == "chill-crc")).all()) == 1
+
+
+def test_builtin_avatars_have_device_pngs(client, db):
+    from PIL import Image
+    from io import BytesIO
+    from app.services.distribution import BUILTINS, blob_path, current, ensure_packages
+    for key in BUILTINS:
+        package = db.get(AssetPackage, "avatar-" + key)
+        manifest = current(db, package).manifest
+        assert manifest["definition"]["preview"] == "preview.png"
+        assert manifest["definition"]["animations"]["idle"]["frames"] == ["preview.png"]
+        image = next(f for f in manifest["files"] if f["path"] == "preview.png")
+        response = client.get(image["url"])
+        assert response.status_code == 200
+        with Image.open(BytesIO(response.content)) as png:
+            assert png.size == (80, 80) and png.format == "PNG"
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 1
+
+
+def test_only_original_svg_builtins_are_upgraded(db):
+    from pathlib import Path
+    from app.services.distribution import publish, store_bytes, ensure_packages, current
+    for key, data in [("dragon", Path("app/static/avatars/dragon.svg").read_bytes()),
+                      ("frog", b'<svg xmlns="http://www.w3.org/2000/svg"><text>Custom</text></svg>')]:
+        package = AssetPackage(id="avatar-" + key, kind="avatar", name=key, current_version=0)
+        db.add(package)
+        db.flush()
+        publish(db, package, {"preview.svg": store_bytes(data)},
+                {"preview": "preview.svg", "format": "svg", "animations": {}}, 0)
+    db.commit()
+    old = db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-dragon", AssetVersion.version == 1)).manifest
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 2
+    assert db.get(AssetPackage, "avatar-frog").current_version == 1
+    assert current(db, db.get(AssetPackage, "avatar-frog")).manifest["definition"]["preview"] == "preview.svg"
+    assert db.scalar(select(AssetVersion).where(AssetVersion.package_id == "avatar-dragon", AssetVersion.version == 1)).manifest == old
+    ensure_packages(db)
+    assert db.get(AssetPackage, "avatar-dragon").current_version == 2
+
+
+def test_zip_generated_definition_is_ignored_but_direct_upload_is_rejected(client, db):
+    create(client, 'chill-generated')
+    archive = zip_bytes([('definition.json', b'old generated metadata'), ('fish.png', b'frame'),
+                         ('nested/definition.json', b'content metadata')])
+    response = client.post('/assets/chill-generated/files', data={'expected': 1},
+        files={'files': ('assets.zip', archive)}, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    manifest = client.get('/api/v1/packages/chill-generated/versions/2/manifest').json()
+    mapping = {f['path']: f for f in manifest['files']}
+    assert set(mapping) == {'definition.json', 'fish.png', 'nested/definition.json'}
+    assert client.get(mapping['definition.json']['url']).json() == manifest['definition']
+    assert client.get(mapping['nested/definition.json']['url']).content == b'content metadata'
+    for filename, content in [('definition.json', b'old generated metadata'),
+                              ('only-definition.zip', zip_bytes([('definition.json', b'old generated metadata')]))]:
+        response = client.post('/assets/chill-generated/files', data={'expected': 2},
+            files={'files': (filename, content)}, follow_redirects=False)
+        assert response.status_code == 422, response.text
+        assert db.get(AssetPackage, 'chill-generated').current_version == 2
+
+
+def test_zip_ignored_definition_still_validates_archive(client, db):
+    import stat
+    from zipfile import ZipInfo, ZipFile, ZIP_STORED
+    from io import BytesIO
+    create(client, 'chill-generated-invalid')
+    link = ZipInfo('definition.json')
+    link.create_system = 3
+    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+    stream = BytesIO()
+    with ZipFile(stream, 'w', compression=ZIP_STORED) as archive:
+        archive.writestr('definition.json', b'original payload')
+        archive.writestr('fish.png', b'frame')
+    damaged = stream.getvalue().replace(b'original payload', b'tampered payload')
+    archives = [zip_bytes([(link, b'/etc/passwd'), ('fish.png', b'frame')]), damaged,
+                zip_bytes([('definition.json', b'ignored'), ('../escape.txt', b'bad')]),
+                zip_bytes([('definition.json/', b''), ('fish.png', b'frame')])]
+    for archive in archives:
+        response = client.post('/assets/chill-generated-invalid/files', data={'expected': 1},
+            files={'files': ('bad.zip', archive)}, follow_redirects=False)
+        assert response.status_code == 422, response.text
+        assert db.get(AssetPackage, 'chill-generated-invalid').current_version == 1
+
+
+def test_ota_rejects_provisioning_and_legacy_images(client, db):
+    device(db)
+    def upload(data, version):
+        return client.post("/firmware", data={"version": version, "channel": "stable"},
+                           files={"file": ("leap.bin", data)}, follow_redirects=False)
+    assert upload(binary() + service.PROVISIONING_CONFIG_MARKER, "1.0.1").status_code == 422
+    legacy = binary().replace(service.UNIVERSAL_CONFIG_MARKER, b"")
+    assert upload(legacy, "1.0.2").status_code == 422
+    assert upload(binary() + b"x" * service.FIRMWARE_SLOT_SIZE, "1.0.3").status_code == 413
+    # Pre-existing legacy releases remain downloadable, but must never be offered.
+    digest = hashlib.sha256(legacy).hexdigest()
+    path = service.blob_path(digest)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(legacy)
+    db.add(FirmwareRelease(version="9.0.0", channel="stable", notes="Legacy",
+                           sha256=digest, size=len(legacy)))
+    db.commit()
+    assert sync(client)["firmware"] is None
+    assert upload_firmware(client, "1.0.0", "stable").status_code == 303
+    # The exact same binary is offered to two independently provisioned devices.
+    other = Device(device_id="leap-other", name="Other", firmware_channel="stable")
+    initialize_pages(other); db.add(other); db.commit()
+    a = sync(client)["firmware"]
+    b = client.post("/api/v1/devices/leap-other/sync",
+                    json={"firmwareVersion": "0.8.0", "deviceConfigSchema": 1, "installedAssets": {}}).json()["firmware"]
+    assert a == b and a["version"] == "1.0.0"
+
+
+def test_legacy_devices_need_usb_provisioning_before_ota(client, db):
+    device(db)
+    assert upload_firmware(client, "1.0.0", "stable").status_code == 303
+    for report in ({"firmwareVersion": "0.8.0"},
+                   {"firmwareVersion": "0.8.0", "deviceConfigSchema": 0}):
+        response = client.post("/api/v1/devices/leap-test/sync", json=report)
+        assert response.status_code == 200 and response.json()["firmware"] is None
+    assert sync(client)["firmware"]["version"] == "1.0.0"

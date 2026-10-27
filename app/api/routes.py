@@ -1,12 +1,15 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import random
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.games import GAME_REGISTRY
 from app.models import Device, QuizQuestion
 from app.services.devices import page_enabled
 from app.services.news import articles_for_device
@@ -19,12 +22,28 @@ def device_or_404(device_id:str,db:Session)->Device:
     d=db.scalar(select(Device).where(Device.device_id==device_id,Device.enabled==True))
     if not d: raise HTTPException(404,"Gerät nicht gefunden")
     return d
+class MemoryUsage(BaseModel):
+    used: int = Field(ge=0, le=4294967295)
+    total: int = Field(ge=0, le=4294967295)
+
+    @model_validator(mode="after")
+    def check_capacity(self):
+        if self.used > self.total:
+            raise ValueError("Used memory exceeds capacity")
+        return self
+
+class MemorySnapshot(BaseModel):
+    flash: MemoryUsage
+    littlefs: MemoryUsage
+    psram: MemoryUsage
+
 class Checkin(BaseModel):
     firmwareVersion:str|None=None; battery:int|None=Field(None,ge=0,le=100); wifiRssi:int|None=None; freeFlash:int|None=None
+    memory: MemorySnapshot|None = None
 @router.get("/devices/{device_id}/config")
 def config(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
-    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"knowledgeSource":d.knowledge_source,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":True} for x in ("hot_potato","simon_motion","tilt_maze")],"homeSlots":d.home_slots}
+    return {"deviceId":d.device_id,"configVersion":d.config_version,"name":d.name,"childName":d.child_name,"age":d.age,"avatar":d.avatar,"avatarName":d.avatar_name,"avatarConfig":d.avatar_config,"firmwareChannel":d.firmware_channel,"contentSelection":d.content_selection,"quizCatalogs":[c.id for c in d.quiz_catalogs if c.enabled],"mathQuiz":d.math_quiz,"mathLab":d.math_lab,"chill":{"keyword":d.chill_keyword,"width":428,"height":142},"knowledgeSource":d.knowledge_source,"notificationQuietHours":d.notification_quiet_hours,"notificationSounds":d.notification_sounds,"locationAltitudeMeters":d.location_altitude_meters or 0,"accentColor":d.accent_color,"communicationEnabled":d.communication_enabled,"pages":[{"id":p.page_id,"title":p.title,"enabled":page_enabled(d,p),"order":p.position,"settings":p.settings} for p in d.pages],"games":[{"id":x,"enabled":x in d.enabled_games} for x, _ in GAME_REGISTRY],"homeSlots":d.home_slots}
 @router.get("/devices/{device_id}/version")
 def version(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"contentVersion":max(d.news_version,d.weather_version,d.aircraft_version,d.quiz_version,d.knowledge_version)}
@@ -33,30 +52,63 @@ def sync(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); return {"configVersion":d.config_version,"newsVersion":d.news_version,"weatherVersion":d.weather_version,"aircraftVersion":d.aircraft_version,"quizVersion":d.quiz_version,"knowledgeVersion":d.knowledge_version}
 @router.post("/devices/{device_id}/checkin")
 def checkin(device_id:str,data:Checkin,db:Session=Depends(get_db)):
-    d=device_or_404(device_id,db); d.last_seen=datetime.now(timezone.utc); d.firmware_version=data.firmwareVersion; d.battery=data.battery; d.wifi_rssi=data.wifiRssi; d.free_flash=data.freeFlash; db.commit(); return {"ok":True,"serverTime":d.last_seen}
+    d = device_or_404(device_id, db)
+    d.last_seen = datetime.now(timezone.utc)
+    d.firmware_version = data.firmwareVersion
+    d.battery = data.battery
+    d.wifi_rssi = data.wifiRssi
+    d.free_flash = data.freeFlash
+    d.memory_usage = data.memory.model_dump() if data.memory else None
+    db.commit()
+    return {"ok": True, "serverTime": d.last_seen}
 @router.get("/devices/{device_id}/news")
 def news(device_id:str,limit:int|None=Query(None,ge=1,le=100),since:datetime|None=None,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db); rows=articles_for_device(d,db,limit=limit,since=since)
-    return {"version":d.news_version,"articles":[{"id":f"news_{a.id}","category":a.category,"title":a.title,"summary":a.summary,"source":a.source,"published":a.published_at,"image":f"/api/v1/assets/news/{a.id}/thumb.jpg" if a.image_leap else None} for a in rows]}
+    return {"version":d.news_version,"articles":[{"id":f"news_{a.id}","category":a.category,"title":a.title,"summary":a.summary,"source":a.source,"published":a.published_at,"fetchedEpoch":int(a.fetched_at.replace(tzinfo=timezone.utc).timestamp()),"image":f"/api/v1/assets/news/{a.id}/thumb.jpg" if a.image_leap else None} for a in rows]}
 @router.get("/devices/{device_id}/weather")
 async def weather(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
     try:return await data_for_device(d,db,"weather")
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception as e: raise HTTPException(503,"Wetterdienst derzeit nicht verfügbar")
+@router.get("/devices/{device_id}/weather/radar")
+async def weather_radar(device_id:str,db:Session=Depends(get_db)):
+    from app.services.radar import radar_for_location
+    d=device_or_404(device_id,db)
+    if d.latitude is None or d.longitude is None:
+        raise HTTPException(422,"Standort ist nicht konfiguriert")
+    try: return await radar_for_location(d.latitude,d.longitude)
+    except ValueError as e: raise HTTPException(422,str(e))
+
+@router.get("/assets/weather-radar/{image_id}.png")
+def weather_radar_image(image_id:str):
+    if not re.fullmatch(r"[a-f0-9]{64}",image_id): raise HTTPException(404)
+    from app.core.config import settings
+    path=settings.data_dir/"images"/"weather-radar"/f"{image_id}.png"
+    if not path.is_file(): raise HTTPException(404)
+    return FileResponse(path,media_type="image/png",headers={"Cache-Control":"public, max-age=86400, immutable"})
+
 @router.get("/devices/{device_id}/aircraft")
 async def aircraft(device_id:str,db:Session=Depends(get_db)):
     d=device_or_404(device_id,db)
     try:
         data=await data_for_device(d,db,"aircraft")
-        return {"version":d.aircraft_version,**data}
+        return {"version":d.aircraft_version,**data,
+                "center":{"latitude":d.latitude,"longitude":d.longitude,"altitudeMeters":d.location_altitude_meters or 0}}
     except ValueError as e: raise HTTPException(422,str(e))
     except Exception: raise HTTPException(503,"Flugradar derzeit nicht verfügbar")
 @router.get("/devices/{device_id}/quiz")
-def quiz(device_id:str,db:Session=Depends(get_db)):
+def quiz(device_id:str,db:Session=Depends(get_db),limitPerCatalog:int|None=Query(None,ge=1,le=200),metadataOnly:bool=False):
     d=device_or_404(device_id,db); catalog_ids=[c.id for c in d.quiz_catalogs if c.enabled]
-    rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all() if catalog_ids else []
-    return {"version":d.quiz_version,"questions":[{"id":q.id,"q":q.question,"a":q.answers,"explanation":q.explanation,"minAge":q.min_age,"difficulty":q.difficulty,"tags":q.tags} for q in rows]}
+    rows=[]
+    if not metadataOnly and catalog_ids:
+        rows=db.scalars(select(QuizQuestion).where(QuizQuestion.catalog_id.in_(catalog_ids),QuizQuestion.min_age<=d.age)).all()
+        if limitPerCatalog is not None:
+            # Preserve every assigned catalog; only the legacy device fallback is sampled.
+            rows=[q for catalog_id in catalog_ids for q in random.sample(
+                [q for q in rows if q.catalog_id==catalog_id],
+                min(limitPerCatalog,sum(q.catalog_id==catalog_id for q in rows)))]
+    return {"version":d.quiz_version,"catalogs":[{"id":c.id,"name":c.name} for c in d.quiz_catalogs if c.enabled],"questions":[{"id":q.id,"catalogId":q.catalog_id,"q":q.question,"a":q.answers,"explanation":q.explanation,"minAge":q.min_age,"difficulty":q.difficulty,"tags":q.tags} for q in rows]}
 @router.get("/assets/news/{article_id}/{variant}.jpg")
 def asset(article_id:int,variant:str):
     if variant not in {"thumb","hero"}: raise HTTPException(404)
@@ -107,3 +159,45 @@ def knowledge_image(source:str,image_id:str):
     path=settings.data_dir/"images"/"knowledge"/source/f"{image_id}.jpg"
     if not path.is_file(): raise HTTPException(404,"Wissensbild nicht gefunden")
     return FileResponse(path,media_type="image/jpeg",headers={"Cache-Control":"public, max-age=604800, immutable"})
+
+
+def chill_device(device_id: str, db: Session) -> Device:
+    from app.services.chill import PACKAGE_ID
+    device = device_or_404(device_id, db)
+    if PACKAGE_ID not in (device.content_selection or []):
+        raise HTTPException(403, "LoremFlickr ist für dieses Gerät nicht aktiviert")
+    return device
+
+
+@router.get("/devices/{device_id}/chill/photo")
+async def chill_photo(device_id: str, db: Session = Depends(get_db)):
+    from app.services.chill import photo, PhotoPending
+    from fastapi.responses import JSONResponse
+    device = chill_device(device_id, db)
+    try:
+        return JSONResponse(await photo(device), headers={"Cache-Control": "no-store"})
+    except PhotoPending as error:
+        raise HTTPException(503, "Bild wird vorbereitet; später erneut versuchen",
+                            headers={"Retry-After":"10", "Cache-Control":"no-store"}) from error
+    except (ValueError, TimeoutError, OSError) as error:
+        raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+    except httpx.HTTPError as error:
+        raise HTTPException(503, "Bilddienst derzeit nicht verfügbar") from error
+
+
+@router.get("/devices/{device_id}/chill/photos/{digest}.jpg")
+def chill_image(device_id: str, digest: str, db: Session = Depends(get_db)):
+    from app.services.chill import photo_path
+    device = chill_device(device_id, db)
+    try: path = photo_path(device.id, digest)
+    except ValueError: raise HTTPException(404)
+    if not path.is_file(): raise HTTPException(404)
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
+
+@router.get("/devices/{device_id}/finance")
+def finance(device_id: str, db: Session = Depends(get_db)):
+    from app.services.finance import data_for_device
+    device = device_or_404(device_id, db)
+    if not any(p.page_id == "finance" and p.enabled for p in device.pages):
+        raise HTTPException(403, "Finanzen ist für dieses Gerät nicht aktiviert")
+    return data_for_device(device, db)

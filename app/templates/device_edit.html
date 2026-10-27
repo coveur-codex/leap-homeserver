@@ -1,26 +1,70 @@
 {% extends 'base.html' %}
+{% from 'device_memory.html' import memory_status %}
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
+<p><a href="#network">WLAN und Server</a> · <a href="#math-lab">Zahlenzerlegung</a></p>
 <form method="post">
-  <div class="tabs">
-    <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
-    <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
-    <div class="device-settings-stack">
-    <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
-    <section><h2>Quiz</h2>
-  <fieldset><legend>Quiz-Themen</legend>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}</fieldset>
-    </section>
-    </div>
-    <div class="device-settings-stack">
-    <section><h2>Standort</h2><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
+  <div class="device-settings">
+    <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Akzentfarbe<input type="color" name="accent_color" value="{{device.accent_color}}" data-accent-color></label><small>Farbe für Überschriften und Markierungen auf diesem Gerät. Standard: Türkis.</small><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
     <section><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
-    <button>Speichern & Version erhöhen</button>
-    </div>
+    <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
+    <section><h2>Chill</h2>
+    <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' and (not p.id.startswith('chill-album-') or p.id==device.chill_album_id) %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+    <p><a href="/devices/{{device.id}}/chill/album">Eigene Bilder auswählen / hochladen</a></p>
+    <fieldset id="loremflickr-settings" {% if 'chill-loremflickr' not in device.content_selection %}hidden{% endif %}><legend>LoremFlickr – Themenwahl</legend>
+      <label>Thema <input name="chill_keyword" value="{{device.chill_keyword}}" maxlength="80" required placeholder="nature"></label>
+      <small>Zum Beispiel nature, forest, ocean oder animals. Mehrere Begriffe mit Komma trennen. Bei Ausfall von LoremFlickr werden zufällige Fotos von Picsum ohne Themenfilter verwendet. Zufallsbilder sind nicht garantiert kindgerecht; Keywords sind kein Inhaltsfilter.</small>
+    </fieldset>
+    <script>document.addEventListener('DOMContentLoaded',()=>{const select=document.querySelector('[name="chill_id"]');const box=document.getElementById('loremflickr-settings');const update=()=>{box.hidden=select.value!=='chill-loremflickr';box.querySelector('input').disabled=box.hidden;};select.addEventListener('change',update);update();});</script>
+    </section>
+    <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
+    <section><h2>Spiele auf dem Gerät</h2>
+    <small>Zum Spielen die Seite „Spiele“ aktivieren.</small>
+    <input type="hidden" name="game_settings" value="true">
+    {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
+  </section>
+    <section><h2>Quiz</h2>
+  <h3>Mathe-Quiz</h3>
+    <input type="hidden" name="math_settings" value="true">
+    <label>Rechenart<select name="math_operation">
+      <option value="add" {% if device.math_quiz.operation == 'add' %}selected{% endif %}>Addition (+)</option>
+      <option value="subtract" {% if device.math_quiz.operation == 'subtract' %}selected{% endif %}>Subtraktion (−)</option>
+      <option value="multiply" {% if device.math_quiz.operation == 'multiply' %}selected{% endif %}>Multiplikation (×)</option>
+    </select></label>
+    <label>Zahlenbereich / größte Malreihe<input type="number" name="math_limit" value="{{device.math_quiz.limit}}" min="3" max="1000" required></label>
+    <details><summary>Hinweise zum Mathe-Quiz</summary><p>Zum Beispiel: + bis 20, − bis 100 oder Multiplikation bis 10 für das kleine Einmaleins. Bei + und − bleiben Zahlen und Ergebnis im gewählten Bereich; bei × sind beide Faktoren 1 bis zur Grenze (maximal 20). Aufgaben entstehen zufällig auf dem Gerät, auch offline.</p></details>
+
+  <h3>Quiz-Themen</h3>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}
+    </section>
+    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch"), ("time", "Timer · Warnton")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
+    <input type="hidden" name="quiet_hours_settings" value="true">
+    <label><input type="checkbox" name="quiet_hours_enabled" {% if device.notification_quiet_hours.get('enabled', false) %}checked{% endif %}>Nachtruhe für Benachrichtigungstöne</label>
+    <label>Von<input type="time" name="quiet_hours_start" value="{{device.notification_quiet_hours.get('start') or '22:00'}}"></label>
+    <label>Bis<input type="time" name="quiet_hours_end" value="{{device.notification_quiet_hours.get('end') or '07:00'}}"></label>
+    <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small></section>
+    <section><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
+<section id="finance"><h2>Finanzen</h2>
+<p>Symbole werden sofort gespeichert. Aktivierung unter „Seiten“.</p>
+<details><summary>Datenquelle & Hinweise</summary><p>Bis zu 48 Symbole pro Gerät. Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p></details>
+{% for quote in preview_finance.securities %}
+<div class="finance-symbol-row">
+<input type="hidden" name="symbol" value="{{quote.symbol}}" form="finance-change-{{loop.index}}"><strong>{{quote.symbol}}</strong>
+<span>{{quote.name or ''}}{% if quote.error %} · {{quote.error}}{% elif quote.stale %} · Kursdaten veraltet{% elif quote.available %} · {{quote.quoteTime}}{% endif %}</span>
+<button form="finance-change-{{loop.index}}" name="action" value="up" aria-label="{{quote.symbol}} nach oben"{% if loop.first %} disabled{% endif %}>↑</button>
+<button form="finance-change-{{loop.index}}" name="action" value="down" aria-label="{{quote.symbol}} nach unten"{% if loop.last %} disabled{% endif %}>↓</button>
+<button form="finance-change-{{loop.index}}" name="action" value="retry">Erneut prüfen</button>
+<button form="finance-change-{{loop.index}}" name="action" value="delete">Entfernen</button>
+</div>{% else %}<p>Noch keine Wertpapiere konfiguriert.</p>{% endfor %}
+<p>Deutsche EUR-Kurse (Frankfurt, kostenlose optionale Yahoo-Quelle):</p>
+<p><button form="finance-german-cameco">Cameco · 882017 hinzufügen</button> <button form="finance-german-rocket">Rocket Lab · A419CG hinzufügen</button></p>
+<small>Yahoo nutzt eine inoffizielle Schnittstelle ohne Verfügbarkeits- oder Verzögerungsgarantie. Kurse werden als verzögert markiert. Vorhandene US-/Toronto-Symbole bei Bedarf separat entfernen.</small>
+<div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>
+</section>
   </div>
+  <button class="device-settings-save">Speichern & Version erhöhen</button>
 
 <h2 class="preview-heading">Display-Vorschau</h2>
-{% if preview_chill %}<p>Ausgewählte Chill-Inhalte: {% for c in preview_chill %}{{c.name}}{% if c.preview %} <img src="{{c.preview}}" alt="{{c.name}}" style="max-width:100px;max-height:70px">{% endif %} {% endfor %}</p>{% endif %}
-<div class="leap-preview" aria-label="Vorschau des LEAP-Displays">
+<div class="leap-preview" style="--device-accent: {{device.accent_color}}" aria-label="Vorschau des LEAP-Displays">
   <aside class="leap-sidebar">
     <div class="device-signals" aria-label="WLAN, Bluetooth und Akku">
       <svg viewBox="0 0 24 24"><path d="M3 9c5-4 13-4 18 0M6 13c3.5-3 8.5-3 12 0M9.5 17c1.5-1.3 3.5-1.3 5 0"/></svg>
@@ -44,6 +88,11 @@
         <div><span aria-hidden="true">?</span><b>{% if preview_question %}1{% else %}0{% endif %}</b><small>QUIZ</small></div>
       </div>
     </article>
+    {% elif page_id == 'time' %}
+    <article class="leap-card time-card" data-preview-card="ZEIT"{% if not loop.first %} hidden{% endif %}>
+      <div class="time-preview-ring"><svg viewBox="0 0 120 120" role="img" aria-label="Timer: noch drei Viertel der Zeit"><circle cx="60" cy="60" r="50" class="time-ring-track"/><circle cx="60" cy="60" r="50" class="time-ring-fill"/></svg><strong>03:00</strong></div>
+      <div><h3>Timer & Stoppuhr</h3><p>1 · 3 · 10 · 60 Minuten<br>oder eigene Zeit bis 99:59.</p><p>Zwischenzeiten auf Knopfdruck.</p><small>Läuft auf dem Gerät auch im Hintergrund.<br>Bei Ablauf: Hinweis und Warnton.<br>Lautstärke, Tonfreigabe und Nachtruhe gelten.</small></div>
+    </article>
     {% elif page_id == 'news' %}
     <article class="leap-card news-card" data-preview-card="NEWS" data-news-carousel{% if not loop.first %} hidden{% endif %}>
       {% for article in preview_articles %}
@@ -58,20 +107,46 @@
     </article>
     {% elif page_id == 'weather' %}
     <article class="leap-card weather-card" data-preview-card="WETTER"{% if not loop.first %} hidden{% endif %}>
-      <div class="weather-copy">{% if preview_weather %}<div class="weather-main"><div class="weather-icon" aria-hidden="true">{% if preview_weather.current.weatherCode < 3 %}☀{% elif preview_weather.current.weatherCode < 60 %}☁{% else %}☂{% endif %}</div><div><strong>{{preview_weather.current.temperature|round|int}}°</strong><span>{{preview_weather.location}}</span></div></div><div class="weather-details"><div><b>{{preview_weather.today.min|round|int}}°</b><span>MIN</span></div><div><b>{{preview_weather.today.max|round|int}}°</b><span>MAX</span></div><div><b>{{preview_weather.today.precipitationProbability|round|int}}%</b><span>REGEN</span></div><div><b>{{preview_weather.current.windSpeed|round|int}}</b><span>WIND</span></div></div>{% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}</div>
+      <div class="weather-copy">{% if preview_weather and preview_weather.current %}
+        {% set current = preview_weather.current %}{% set tomorrow = preview_weather.tomorrow %}{% set day = current.isDay is not sameas false %}
+        <div class="weather-heading">JETZT · {{preview_weather.location}}</div>
+        <div class="weather-main"><div class="weather-icon">{{weather_icon(current.weatherCode, day)}}</div><div><strong>{% if current.temperature is number %}{{current.temperature|round|int}}° {{preview_weather.unit or 'C'}}{% else %}–{% endif %}</strong><span>{{weather_label(current.weatherCode, day)}}</span></div></div>
+        <div class="weather-current-details"><span>Wind {% if current.windSpeed is number %}{{current.windSpeed|round|int}} km/h{% else %}unbekannt{% endif %}</span><span>Regen {% if preview_weather.today and preview_weather.today.precipitationProbability is number %}{{preview_weather.today.precipitationProbability|round|int}}%{% else %}unbekannt{% endif %}</span></div>
+        <div class="weather-tomorrow"><div class="weather-icon">{{weather_icon(tomorrow.weatherCode if tomorrow else -1)}}</div><div><small>MORGEN{% if tomorrow and tomorrow.date %} · {{tomorrow.date[8:10]}}.{{tomorrow.date[5:7]}}.{% endif %}</small>{% if tomorrow %}<b>{{weather_label(tomorrow.weatherCode)}}</b><span>{% if tomorrow.min is number %}{{tomorrow.min|round|int}}{% else %}–{% endif %} bis {% if tomorrow.max is number %}{{tomorrow.max|round|int}}{% else %}–{% endif %}° {{preview_weather.unit or 'C'}}</span><span>Regen {% if tomorrow.precipitationProbability is number %}{{tomorrow.precipitationProbability|round|int}}%{% else %}unbekannt{% endif %}</span>{% else %}<span>Vorhersage fehlt</span>{% endif %}</div></div>
+      {% else %}<div class="empty-preview"><strong>Wetter wird geladen</strong><span>Nach dem nächsten Abruf erscheint hier der aktuelle Stand.</span></div>{% endif %}</div>
       <div class="weather-radar" data-latitude="{{device.latitude if device.latitude is not none else ''}}" data-longitude="{{device.longitude if device.longitude is not none else ''}}" aria-label="Radarbild; gewählter Standort im Zentrum"><div class="radar-rings"></div><i class="radar-center" aria-hidden="true"></i><span>{{'%.3f'|format(device.latitude) if device.latitude is not none else '–'}}<br>{{'%.3f'|format(device.longitude) if device.longitude is not none else '–'}}</span></div>
     </article>
     {% elif page_id == 'quiz' %}
     <article class="leap-card quiz-card" data-preview-card="QUIZ"{% if not loop.first %} hidden{% endif %}>
-      <div class="quiz-question"><small>FRAGE DES TAGES</small><strong>{% if preview_question %}{{preview_question.question}}{% else %}Noch keine Quizfrage ausgewählt.{% endif %}</strong><span>{% if preview_question %}Wähle die richtige Antwort!{% else %}Ordne dem Gerät einen Quiz-Katalog zu.{% endif %}</span></div>
-      <ol class="quiz-answers">{% if preview_question %}{% for answer in preview_question.answers %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% else %}{% for answer in ['Antwort A','Antwort B','Antwort C','Antwort D'] %}<li><b>{{['A','B','C','D'][loop.index0]}}</b><span>{{answer}}</span></li>{% endfor %}{% endif %}</ol>
+      <div class="quiz-question"><small>QUIZ</small><strong>Katalog auswählen</strong><span>Wähle ein Thema und beantworte seine Fragen.</span></div>
+      <ol class="quiz-answers">{% for catalog in device.quiz_catalogs if catalog.enabled %}<li><span>{{catalog.name}}</span></li>{% endfor %}<li><span>Mathe-Quiz</span></li></ol>
     </article>
     {% elif page_id == 'aircraft' %}
     <article class="leap-card aircraft-card" data-preview-card="FLUGRADAR"{% if not loop.first %} hidden{% endif %}>
-      <div class="aircraft-list"><div class="news-meta"><strong>IN DER NÄHE</strong><span>{{preview_aircraft.aircraft|length if preview_aircraft else 0}}</span></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:4] %}<div class="aircraft-row"><b>{{plane.callsign or plane.registration or plane.hex}}</b><span>{{plane.distanceNm}} NM · {{plane.altitudeFeet or '–'}} FT</span></div>{% endfor %}{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong><span>Der nächste Abruf prüft den Umkreis.</span></div>{% endif %}</div>
-      <div class="radar-panel"><div class="radar-scope" aria-hidden="true"><i></i>{% if preview_aircraft and preview_aircraft.aircraft %}{% for plane in preview_aircraft.aircraft[:6] %}<b style="--x:{{19 + ((plane.trackDegrees or loop.index * 53) % 62)}}%;--y:{{17 + ((plane.distanceNm * 7) % 66)}}%">✈</b>{% endfor %}{% endif %}</div></div>
+      <script type="application/json" data-aircraft-snapshot>{{ (preview_aircraft or {})|tojson }}</script>
+      <div class="aircraft-list" data-aircraft-list><div class="news-meta"><strong>IN DER NÄHE</strong></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% set plane = preview_aircraft.aircraft[0] %}<b>{{plane.callsign or plane.registration or plane.hex}}</b><p>{{plane.typeName or 'Unbekannter Flugzeugtyp'}}</p><p>{{(plane.distanceNm * 1.852)|round(1)}} km · {% if plane.altitudeFeet is not none %}{{(plane.altitudeFeet * 0.3048)|round|int}} m{% else %}Höhe unbekannt{% endif %}</p>{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong></div>{% endif %}</div>
+      <div class="radar-panel"><div class="radar-scope" data-aircraft-scope aria-label="Flugzeuge im Umkreis"></div><small data-aircraft-status></small></div>
     </article>
-    {% elif page_id == 'communication' %}
+    {% elif page_id == 'games' %}
+    <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>
+      <div class="games-preview-menu" data-games-menu>
+        <strong>Spiele</strong>
+        {% for game_id, title in game_registry if game_id in device.enabled_games %}
+          {% if game_id in ['tamagotchi', 'snake', 'dragon_run'] %}<button type="button" data-game-open="{{'pet' if game_id == 'tamagotchi' else 'dragon' if game_id == 'dragon_run' else 'snake'}}">{{title}}</button>{% else %}<span>{{title}}</span>{% endif %}
+        {% else %}<span>Keine Spiele freigegeben.</span>{% endfor %}
+      </div>
+      <div class="pet-preview" data-pet-preview hidden>
+        <div class="pet-scene" data-pet-scene><img data-pet-image alt="Haustier" hidden><span data-pet-fallback>♥</span></div>
+        <div class="pet-actions">{% for action in ['Füttern', 'Spielen', 'Waschen', 'Schlafen'] %}<button type="button" data-pet-action="{{loop.index0}}">{{action}}</button>{% endfor %}<button type="button" data-game-back>Zurück</button></div>
+      </div>
+      <div class="snake-preview" data-snake-preview hidden><strong>Snake · Punkte 0 · Rekord 0</strong><div class="snake-example"><i></i><b></b></div><span>Rechter Schalter: Richtungen · Linke Mitte: zurück</span><button type="button" data-game-back>Zurück</button></div>
+      <div class="dragon-preview" data-dragon-preview hidden>
+        <canvas width="342" height="142" data-dragon-canvas aria-label="Drachenrennen: animierte Grafik- und Steuerungsvorschau"></canvas>
+        <div class="dragon-controls"><button type="button" data-dragon-jump>↑ Springen</button><button type="button" data-dragon-duck>↓ Ducken (halten)</button><button type="button" data-dragon-fire>● Feuer</button><button type="button" data-game-back>Zurück</button><small>Grafikvorschau · Spielstand bleibt auf dem Gerät</small></div>
+      </div>
+      <script type="application/json" data-pet-assets>{{pet_preview|tojson}}</script>
+    </article>
+  {% elif page_id == 'communication' %}
     <article class="leap-card communication-card" data-preview-card="KOMMUNIKATION"{% if not loop.first %} hidden{% endif %}>
       <div class="communication-received"><small>GRUPPENCHAT · BEISPIEL</small>
         <strong>{{device.child_name or device.name}}</strong>
@@ -79,6 +154,11 @@
         <p data-communication-message>{% if preview_messages %}{{preview_messages[0].symbol}} {{preview_messages[0].text}}{% else %}Noch keine aktiven Nachrichten.{% endif %}</p>
       </div>
       <div class="communication-options"><small>NACHRICHT AUSWÄHLEN</small>{% for message in preview_messages %}<button type="button" data-message-choice>{{message.symbol}} {{message.text}}</button>{% else %}<span>Vorlagen unter Kommunikation anlegen.</span>{% endfor %}</div>
+    </article>
+    {% elif page_id == 'finance' %}
+    <article class="leap-card finance-card" data-preview-card="FINANZEN"{% if not loop.first %} hidden{% endif %}>
+      <canvas width="342" height="142" data-finance-preview tabindex="0" aria-label="Finanzen: Pfeiltasten zur Auswahl, Enter für Details, Escape zurück"></canvas>
+      <script type="application/json" data-finance-data>{{preview_finance|tojson}}</script>
     </article>
     {% elif page_id == 'knowledge' %}
     <article class="leap-card knowledge-card{% if not preview_knowledge.image %} no-knowledge-image{% endif %}" data-preview-card="WISSEN"{% if not loop.first %} hidden{% endif %}>
@@ -89,15 +169,50 @@
   {% else %}
     <article class="leap-card"><div class="empty-preview"><strong>Keine Vorschau-Seite aktiv</strong><span>Aktiviere Home, News, Wetter, Wissen, Quiz, Flugzeuge oder Kommunikation.</span></div></article>
   {% endfor %}
-  {% if preview_page_ids|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
+  {% for c in preview_chill %}<article class="leap-card chill-card" data-preview-card="RUHEZEIT" data-scene="{{c.scene}}" hidden>
+    {% if c.scene=='album' %}<img src="{{c.preview}}" alt="Eigene Chill-Bilder" width="428" height="142" style="max-width:100%;object-fit:cover">{% elif c.scene=='loremflickr' %}<img data-chill-photo-preview data-src="/devices/{{device.id}}/chill/preview.jpg" alt="Fotovorschau (LoremFlickr mit Picsum-Fallback)" width="428" height="142" style="max-width:100%;object-fit:cover;background:black">{% else %}
+    <canvas data-chill-preview data-scene="{{c.scene}}" width="428" height="142" aria-label="{{c.name}}"></canvas>
+    {% for s in c.sprites %}<img hidden data-chill-sprite data-role="{{s.role}}" data-x="{{s.x|default(0)}}" data-y="{{s.y|default(0)}}" data-width="{{s.size[0]}}" data-height="{{s.size[1]}}" src="{{s.url}}" alt="">{% endfor %}
+    {% endif %}<input type="range" min="0" max="{{300 if c.scene in ['loremflickr','album'] else 100}}" value="{{c.slider}}" data-chill-slider aria-label="Chill-Intensität">
+  </article>{% endfor %}
+  {% if preview_page_ids|length + preview_chill|length > 1 %}<div class="preview-nav"><button type="button" data-card-prev aria-label="Vorherige Karte">‹</button><span data-card-count>1 / {{preview_page_ids|length}}</span><button type="button" data-card-next aria-label="Nächste Karte">›</button></div>{% endif %}
 </div>
+<div data-finance-controls><span>Finanzvorschau:</span>
+<button type="button" data-finance-key="ArrowLeft">←</button><button type="button" data-finance-key="ArrowRight">→</button>
+<button type="button" data-finance-key="Enter">Details / Zurück</button>
+<button type="button" data-finance-key="ArrowUp">↑</button><button type="button" data-finance-key="ArrowDown">↓</button>
+</div><small>Vorschau nutzt konfigurierte Cache-Daten. Ein fehlender Kurs wird als fehlend angezeigt. Intraday-Zeiten gelten in der Börsenzeitzone.</small>
+
+<p><a href="/devices/{{device.id}}/quiz-results">Quiz-Ergebnisse und Antwortzeiten</a></p>
+{{memory_status(device)}}
+
   <input type="hidden" name="distribution_settings" value="true">
   <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
-  {% for kind in ['chill','sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
+  {% for kind in ['sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
   <button>Speichern & Version erhöhen</button>
 </form>
 
+{# External form owners keep finance actions independent of unsaved device settings. #}
+<form id="finance-german-cameco" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:CJ6.F"></form>
+<form id="finance-german-rocket" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:6RJ0.F"></form>
+<form id="finance-add" hidden method="post" action="/devices/{{device.id}}/finance/add"></form>
+{% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
 {% include 'device_distribution.html' %}
+
+<section id="network"><h2>WLAN und Server · {{device.name}}</h2>
+<p>Serverprofile werden beim nächsten Sync übertragen. Direkt am Gerät gespeicherte WLANs bleiben erhalten. Reihenfolge: zuletzt gespeichertes Profil zuerst.</p>
+<form method="post" action="/devices/{{device.id}}/network"><label>Serveradresse<input name="server" maxlength="256" value="{{device.network_config.get('serverUrl', 'http://ndk.tstromi.de:8080')}}" required></label><button>Serveradresse speichern</button></form>
+{% for profile in device.network_config.get('wifiProfiles', []) %}
+<form method="post" action="/devices/{{device.id}}/network/remove"><span>{{loop.index}}. {{profile.ssid}}</span><input type="hidden" name="ssid" value="{{profile.ssid}}"><button>Entfernen</button></form>
+{% endfor %}
+<form method="post" action="/devices/{{device.id}}/network/wifi" autocomplete="off"><label>WLAN-Name (SSID)<input name="ssid" required maxlength="32"></label><label>Passwort<input type="password" name="password" maxlength="64" autocomplete="new-password"></label><small>Leer für offene Netze. Vorhandenen WLAN-Namen erneut speichern, um sein Passwort zu ändern. Maximal vier Serverprofile.</small><button>WLAN speichern</button></form>
+<p><small>Bei HTTP werden Zugangsdaten unverschlüsselt übertragen. WLAN-Profile im vertrauten Heimnetz synchronisieren. Unterstützt werden 2,4-GHz-Netze ohne Anmeldeseite.</small></p></section>
+<section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
+<form method="post" action="/devices/{{device.id}}/math-lab"><label>Zielzahlen<input name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button>Zielzahlen speichern</button></form></section>
+
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-preview.js?v=4" defer></script>
+<script src="/static/device-settings.js?v=1" defer></script>
+<script src="/static/device-preview.js?v=5" defer></script>
+<script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
+<script src="/static/finance-preview.js?v=1" defer></script>
 {% endblock %}
