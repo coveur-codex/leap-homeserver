@@ -157,6 +157,8 @@ def current(db, package):
 
 
 def deletion_block_reason(package):
+    if package.id == "game-avatars":
+        return "Das gemeinsame Spieleavatarpaket wird automatisch aus den Seitenbildern erzeugt."
     if package.kind == "communication" or package.id == "communication-avatars":
         return "Das gemeinsame Kommunikationspaket wird vom Server verwaltet."
     defaults = {"avatar-" + key for key in BUILTINS}
@@ -506,6 +508,8 @@ def ensure_packages(db):
             changed = True
     from app.services.communication_avatars import ensure_package as ensure_avatars
     changed = ensure_avatars(db) or changed
+    from app.services.game_avatars import ensure_package as ensure_game_avatars
+    changed = ensure_game_avatars(db) or changed
     if changed:
         db.commit()
 
