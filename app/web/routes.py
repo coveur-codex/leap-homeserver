@@ -16,6 +16,7 @@ from app.core.games import GAME_REGISTRY
 from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,QuizQuestion
 from app.services.devices import initialize_pages, page_enabled
 from app.services import finance as finance_service
+from app.services import room
 from app.services import communication
 from app.services.backup import backup_database
 from app.services.feeds import fetch_feed
@@ -59,7 +60,7 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
     preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),**distribution_service.device_context(db,d)})
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
 def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
     d=db.get(Device,id)
@@ -277,3 +278,26 @@ def chill_library_photo(digest: str, db: Session = Depends(get_db)):
     if not db.get(ChillPhoto, digest): raise HTTPException(404)
     return FileResponse(distribution_service.blob_path(digest), media_type="image/jpeg",
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@router.post("/devices/{id}/room")
+def update_room(id: int, climate: str = Form(""), light0: str = Form(""), light1: str = Form(""),
+                minimum: int = Form(10), maximum: int = Form(30), enabled: bool = Form(False),
+                db: Session = Depends(get_db)):
+    from app.models import DevicePage
+    d = db.get(Device, id)
+    if not d: raise HTTPException(404)
+    try:
+        cfg = room.RoomConfig(climate=climate.strip(), lights=[x.strip() for x in (light0, light1) if x.strip()],
+                              minimum=minimum, maximum=maximum)
+    except ValueError:
+        raise HTTPException(422, "Ungültige Zimmerzuordnung oder Temperaturgrenzen (10–30 °C)") from None
+    page = next((p for p in d.pages if p.page_id == "room"), None)
+    if not page:
+        page = DevicePage(page_id="room", title="Mein Zimmer", position=max((p.position for p in d.pages), default=0)+1)
+        d.pages.append(page)
+    page.settings = cfg.model_dump()
+    page.enabled = enabled
+    d.config_version += 1
+    db.commit()
+    return redir(f"/devices/{id}")

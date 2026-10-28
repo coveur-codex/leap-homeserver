@@ -197,6 +197,18 @@
 <form id="finance-german-rocket" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:6RJ0.F"></form>
 <form id="finance-add" hidden method="post" action="/devices/{{device.id}}/finance/add"></form>
 {% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
+<section><h2>Mein Zimmer · Home Assistant</h2>
+<p>Eine Heizung und bis zu zwei Lampen. Serveradresse und Token werden lokal in der .env konfiguriert.</p>
+{% set rc = room_page.settings if room_page else {} %}
+<form method="post" action="/devices/{{device.id}}/room">
+<label><input type="checkbox" name="enabled" {% if room_page and room_page.enabled %}checked{% endif %}>Mein Zimmer aktiv</label>
+<label>Heizung (climate.…, optional)<input name="climate" value="{{rc.get('climate','')}}"></label>
+{% for i in range(2) %}<label>Lampe {{i+1}} (light.…, optional)<input name="light{{i}}" value="{{rc.get('lights',[])[i] if rc.get('lights',[])|length > i else ''}}"></label>{% endfor %}
+<label>Minimum °C<input type="number" name="minimum" min="10" max="30" value="{{rc.get('minimum',10)}}" required></label>
+<label>Maximum °C<input type="number" name="maximum" min="10" max="30" value="{{rc.get('maximum',30)}}" required></label>
+<p>Erik und Lars teilen sich climate.heizung_lars_erik. Beide bedienen dieselbe Zieltemperatur.</p>
+<button>Zimmerzuordnung speichern</button>
+</form></section>
 {% include 'device_distribution.html' %}
 
 <section id="network"><h2>WLAN und Server · {{device.name}}</h2>

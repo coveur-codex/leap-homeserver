@@ -1,4 +1,4 @@
-# LEAP Home Server 1.4.1
+# LEAP Home Server 1.5.0-beta.1
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -351,3 +351,8 @@ und Journalaktivierung. Eine ausstehende Startbestätigung wird bei Abweichung
 zwischen Ziel- und Laufversion verweigert; ein bereits gültiges Fallback bleibt
 weiter nutzbar. Bestätigung erfolgt weiterhin nach lokalen Selbsttests auch ohne
 WLAN. `SSID not found` betrifft die WLAN-Profilsuche und ist kein Versionsnachweis.
+
+## Home Assistant · Mein Zimmer
+
+Heizung in 1-°C-Schritten (10–30 °C), bis zu zwei Lampen pro Gerät mit An/Aus
+und RGB-Farbauswahl: [Einrichtung und Beispiele](docs/home-assistant.md).

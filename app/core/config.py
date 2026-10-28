@@ -1,5 +1,5 @@
 from pathlib import Path
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     aircraft_radius_nm: int = 25
     aircraft_limit: int = 20
     aircraft_provider_url: str = "https://api.adsb.lol/v2/lat/{latitude}/lon/{longitude}/dist/{radius}"
+    home_assistant_url: str = "http://homeassistant.local:8123"
+    home_assistant_token: SecretStr = SecretStr("")
     request_timeout: float = 10.0
     max_download_bytes: int = 8_000_000
     finance_provider: str = "finnhub"
