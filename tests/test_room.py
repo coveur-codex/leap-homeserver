@@ -187,3 +187,62 @@ def test_migration_preserves_existing_device_pages(tmp_path):
         assert page.enabled and page.settings == room.default_config("leap-erik")
         assert d.config_version == version+1
         assert len([p for p in d.pages if p.page_id == "room"]) == 1
+
+
+def test_absolute_temperature_is_single_write_and_validated(client, db, ha):
+    states, calls, options = ha
+    device(db)
+    path = "/api/v1/devices/leap-erik/room"
+    response = client.post(path, json={"target": "climate", "action": "set_temperature", "temperature": 24})
+    assert response.status_code == 200 and response.json()["climate"]["target"] == 24
+    assert response.json()["temperatureSetSupported"]
+    assert len(calls) == 1 and calls[0][1] == {"entity_id": "climate.heizung_lars_erik", "temperature": 24}
+    for value in (10, 30, 20.5):
+        assert client.post(path, json={"target": "climate", "action": "set_temperature", "temperature": value}).status_code == 200
+    for value in (9, 31, "NaN", "Infinity"):
+        assert client.post(path, json={"target": "climate", "action": "set_temperature", "temperature": value}).status_code == 422
+    before = len(calls)
+    states["climate.heizung_lars_erik"]["attributes"]["max_temp"] = 25
+    assert client.post(path, json={"target": "climate", "action": "set_temperature", "temperature": 26}).status_code == 409
+    for body in [dict(target="climate", action="set_temperature"),
+                 dict(target="climate", action="warmer", temperature=23),
+                 dict(target="light0", action="set_temperature", temperature=23),
+                 dict(target="light0", action="on", temperature=23)]:
+        assert client.post(path, json=body).status_code == 422
+    assert len(calls) == before
+
+
+def test_absolute_replaces_unconfirmed_target_and_shared_state(client, db, ha):
+    states, calls, options = ha
+    device(db)
+    device(db, "leap-lars")
+    options["confirm"] = False
+    erik = "/api/v1/devices/leap-erik/room"
+    lars = "/api/v1/devices/leap-lars/room"
+    assert client.post(erik, json={"target": "climate", "action": "set_temperature", "temperature": 24}).status_code == 200
+    assert client.post(lars, json={"target": "climate", "action": "set_temperature", "temperature": 20}).status_code == 200
+    assert [c[1]["temperature"] for c in calls] == [24, 20]
+    options["confirm"] = True
+    assert client.post(erik, json={"target": "climate", "action": "set_temperature", "temperature": 23}).status_code == 200
+    assert client.get(lars).json()["climate"]["target"] == 23
+
+
+def test_ten_colors_and_current_palette_color(client, db, ha):
+    states, calls, _ = ha
+    device(db)
+    path = "/api/v1/devices/leap-erik/room"
+    assert len(client.get(path).json()["colors"]) == 10
+    for color in ("orange", "rosa", "tuerkis", "hellblau"):
+        assert client.post(path, json={"target": "light0", "action": "color", "color": color}).status_code == 200
+        assert calls[-1][1]["rgb_color"] == room.COLORS[color]
+        attrs = states["light.einfahrt_garage"]["attributes"]
+        attrs["rgb_color"] = room.COLORS[color]
+        assert client.get(path).json()["lights"][0]["color"] == color
+        attrs["rgb_color"] = [value/2 for value in room.COLORS[color]]
+        assert client.get(path).json()["lights"][0]["color"] == color
+    states["light.einfahrt_garage"]["state"] = "off"
+    assert client.get(path).json()["lights"][0]["color"] == "aus"
+    states["light.einfahrt_garage"]["state"] = "on"
+    for invalid in (None, [1], ["red", 1, 1], [0, 0, 0]):
+        states["light.einfahrt_garage"]["attributes"]["rgb_color"] = invalid
+        assert client.get(path).json()["lights"][0]["color"] is None

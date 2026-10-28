@@ -19,7 +19,9 @@ DEFAULT_ROOMS = {
     "leap-anna": ("climate.trv_z01_80_7", ["light.lichterkette_anna"]),
 }
 COLORS = {"weiss": [255, 235, 200], "rot": [255, 0, 0], "gruen": [0, 255, 0],
-          "blau": [0, 0, 255], "lila": [180, 0, 255], "gelb": [255, 200, 0]}
+          "blau": [0, 0, 255], "lila": [180, 0, 255], "gelb": [255, 200, 0],
+          "orange": [255, 100, 0], "rosa": [255, 80, 160],
+          "tuerkis": [0, 255, 200], "hellblau": [80, 180, 255]}
 COLOR_MODES = {"hs", "xy", "rgb", "rgbw", "rgbww"}
 # One server worker: shared thermostats are serialized across device IDs.
 _locks = defaultdict(asyncio.Lock)
@@ -63,15 +65,19 @@ def configuration(device):
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target: Literal["climate", "light0", "light1"]
-    action: Literal["warmer", "colder", "on", "off", "color"]
-    color: Literal["weiss", "rot", "gruen", "blau", "lila", "gelb"] | None = None
+    action: Literal["warmer", "colder", "set_temperature", "on", "off", "color"]
+    color: Literal["weiss", "rot", "gruen", "blau", "lila", "gelb", "orange", "rosa", "tuerkis", "hellblau"] | None = None
+
+    temperature: float | None = Field(None, ge=10, le=30, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def valid(self):
         if self.target == "climate":
-            if self.action not in {"warmer", "colder"} or self.color is not None:
+            if self.action not in {"warmer", "colder", "set_temperature"} or self.color is not None:
                 raise ValueError("Ungültiger Heizungsbefehl")
-        elif self.action not in {"on", "off", "color"} or (self.action == "color") != (self.color is not None):
+            if (self.action == "set_temperature") != (self.temperature is not None):
+                raise ValueError("Zieltemperatur ist nur für set_temperature erforderlich")
+        elif self.action not in {"on", "off", "color"} or (self.action == "color") != (self.color is not None) or self.temperature is not None:
             raise ValueError("Ungültiger Lichtbefehl")
         return self
 
@@ -119,6 +125,18 @@ class HomeAssistant:
         await self.request("POST", f"services/{domain}/{service}", json=data)
 
 
+def light_color(state):
+    if state["state"] == "off":
+        return "aus"
+    rgb = state["attributes"].get("rgb_color")
+    if not isinstance(rgb, (list, tuple)) or len(rgb) != 3 or any(number(x) is None or not 0 <= x <= 255 for x in rgb) or max(rgb) == 0:
+        return None
+    # Brightness-independent nearest palette entry, including HA's RGB conversion
+    # for lights whose native mode is HS or XY.
+    scaled = [x * 255 / max(rgb) for x in rgb]
+    return min(COLORS, key=lambda key: sum((a-b)**2 for a,b in zip(scaled, COLORS[key])))
+
+
 def normalize(entity, state, cfg, unit):
     attrs = state["attributes"]
     available = state["state"] not in {"unknown", "unavailable"}
@@ -133,7 +151,8 @@ def normalize(entity, state, cfg, unit):
                       controllable=available and unit == "°C" and target is not None and minimum <= maximum)
     else:
         modes = attrs.get("supported_color_modes") or []
-        result.update(on=state["state"] == "on", colorSupported=bool(COLOR_MODES.intersection(modes)) if isinstance(modes, list) else False)
+        result.update(on=state["state"] == "on", colorSupported=bool(COLOR_MODES.intersection(modes)) if isinstance(modes, list) else False,
+                      color=light_color(state))
     return result
 
 
@@ -145,7 +164,7 @@ async def snapshot(cfg, ha, unit):
         except HTTPException:
             return {"name": entity, "available": False, "controllable": False, "colorSupported": False}
     values = await asyncio.gather(*(read(entity) for entity in entities))
-    return {"schemaVersion": 1, "climate": values[0] if cfg.climate else None,
+    return {"schemaVersion": 1, "temperatureSetSupported": True, "climate": values[0] if cfg.climate else None,
             "lights": values[1:] if cfg.climate else values, "colors": list(COLORS)}
 
 
@@ -174,20 +193,20 @@ async def command(device, cmd):
             if not normalized["controllable"]:
                 raise HTTPException(409, "Heizung benötigt eine einzelne Zieltemperatur in °C")
             current = normalized["target"]
-            # A late thermostat must confirm the previous write before another +/-.
-            if entity in _pending:
+            # Relative steps wait for the previous write; absolute selections may
+            # replace an unconfirmed target without computing from stale state.
+            if entity in _pending and cmd.action != "set_temperature":
                 previous, sent_at = _pending[entity]
                 if abs(current - previous) > .01 and time.monotonic() - sent_at < 15:
                     raise HTTPException(409, "Vorherige Zieltemperatur noch nicht bestätigt")
                 _pending.pop(entity)
-            delta = 1 if cmd.action == "warmer" else -1
-            target = current + delta
+            target = cmd.temperature if cmd.action == "set_temperature" else current + (1 if cmd.action == "warmer" else -1)
             if not normalized["minimum"] <= target <= normalized["maximum"]:
                 raise HTTPException(409, "Temperaturgrenze erreicht")
             _pending[entity] = (target, time.monotonic())  # Retain on ambiguous network failure; never blindly resend.
             await ha.service("climate", "set_temperature", {"entity_id": entity, "temperature": target})
             # Home Assistant normally updates its state during the blocking service call.
-            # Further presses stay blocked until confirmation, even across the two children.
+            # Only legacy relative steps stay blocked until confirmation.
         elif cmd.action == "color":
             if not normalized["colorSupported"]:
                 raise HTTPException(409, "Diese Lampe unterstützt keine Farben")

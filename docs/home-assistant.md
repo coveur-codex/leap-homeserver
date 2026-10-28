@@ -1,6 +1,6 @@
 # LEAP-Zimmersteuerung mit Home Assistant
 
-Ab Homeserver **1.5.0-beta.1** und Firmware **1.5.0-beta.1**.
+Ab Homeserver **1.5.0-beta.2** und Firmware **1.5.0-beta.2**.
 
 Die neue Firmwareseite **Mein Zimmer** steuert eine Heizung und null bis zwei
 Lampen über den LEAP-Homeserver. Home Assistant benötigt dafür keine zusätzliche
@@ -31,7 +31,7 @@ vorhandene Zeitpläne und Automationen können sie später wieder überschreiben
    genannten Zuordnungen bei der Migration automatisch angelegt; neue Geräte mit
    diesen IDs erhalten dieselben Startwerte. Andere Geräte starten mit deaktivierter
    Zimmerseite. Das Duplizieren übernimmt keine Zimmerzuordnung.
-5. Firmware **1.5.0-beta.1** mit dem bestehenden Arduino-/CI-Verfahren bauen und
+5. Firmware **1.5.0-beta.2** mit dem bestehenden Arduino-/CI-Verfahren bauen und
    zunächst auf `leap-papa` testen. Erst den Homeserver, dann die Firmware aktualisieren.
    Die Beta-Dateiversion muss beim Firmware-Upload exakt übereinstimmen. Nach dem
    Gerätesync erscheint **Mein Zimmer**. Kein Home-Assistant-Token im Sketch nötig.
@@ -61,29 +61,34 @@ Felder im Geräteeditor, keine automatisch eingelesene Konfigurationsdatei.
 Alle folgenden Tasten sind am **rechten** Richtungsschalter:
 
 - Hoch/runter: Heizung oder Lampe auswählen.
-- Heizung links/rechts: Zieltemperatur −1 / +1 °C.
-- Lampe links/rechts: aus / an.
-- Bei einer farbfähigen Lampe Mitte: Farbauswahl öffnen.
-- In der Farbauswahl links/rechts: Weiß, Rot, Grün, Blau, Lila, Gelb wählen;
-  Mitte sendet die Farbe und schaltet die Lampe ein. Hoch/runter verlässt die Auswahl.
+- Heizung links/rechts: Zieltemperatur lokal −1 / +1 °C vorwählen.
+- Lampe links/rechts: direkte Farbkachel wechseln; Schwarz bedeutet Aus.
+- Farben: Weiß, Gelb, Orange, Rot, Rosa, Lila, Blau, Hellblau, Türkis und Grün.
+- Nach **einer Sekunde ohne weitere Wertänderung** werden die gewählten Endwerte
+  automatisch übertragen. Mehrere Schritte verursachen einen Sollwertaufruf,
+  keine Folge einzelner Gradänderungen. Mitte ist nicht erforderlich.
 
 Der linke Schalter navigiert wie bisher zwischen Seiten und zum Menü.
+Die bereits gewählte Übernahme läuft auch beim Verlassen der Seite weiter.
 „Weiß“ ist ein warm wirkender RGB-Wert, keine Kelvin-Einstellung.
-Die Farbeinstellung erscheint nur bei `hs`, `xy`, `rgb`, `rgbw` oder `rgbww` als
-unterstütztem Farbmodus. Reine Dimmer erhalten nur An/Aus.
+Farben sind bei `hs`, `xy`, `rgb`, `rgbw` oder `rgbww` verfügbar; reine Dimmer
+wechseln zwischen Schwarz/Aus und Weiß/An. Andere HA-Farben werden anhand des
+RGB-Werts der nächstliegenden Kachelfarbe zugeordnet.
 
 ## Rückmeldungen und Grenzen
 
 - Anzeigen basieren auf gelesenen HA-Zuständen, nicht auf erfundenen Erfolgsmeldungen.
   „Gesendet“ bedeutet angenommener Serviceaufruf, keine physische Lampenbestätigung.
-- Ein Gerät verarbeitet jeweils einen Befehl. Währenddessen weitere Tastendrücke
-  erneut nach Abschluss ausführen; es gibt keine Offline-Warteschlange und keine
-  automatische Wiederholung eines möglicherweise bereits ausgeführten Befehls.
+- Das Gerät sammelt Eingaben bis zur einsekündigen Pause. Lokale Vorschauen mit
+  Stern bleiben bei Abfragen und während eines Requests erhalten. Neuere Eingaben
+  werden anschließend als neuer Endwert übertragen. Betroffene Geräte werden
+  nacheinander verarbeitet. Es gibt keine gespeicherte Offline-Warteschlange und
+  keine automatische Wiederholung fehlgeschlagener Befehle.
 - Heizungsänderungen auf dieselbe Entity werden serverweit nacheinander verarbeitet.
-  Nach einer noch unbestätigten Änderung sind weitere Schritte bis zur Bestätigung,
-  höchstens 15 Sekunden, blockiert. Danach liest ein neuer Tastendruck den aktuellen
-  HA-Sollwert; der alte Befehl wird nicht erneut gesendet. Für diesen Schutz den
-  Homeserver wie mitgeliefert mit **einem Uvicorn-Worker** betreiben.
+  Neue absolute Endwerte ersetzen auch noch unbestätigte frühere Sollwerte. Alte
+  Firmware kann weiterhin relative Schritte senden; diese warten bei ausstehender
+  Bestätigung höchstens 15 Sekunden. Für die Serialisierung den Homeserver wie
+  mitgeliefert mit **einem Uvicorn-Worker** betreiben.
 - Nach zehn Sekunden ohne erfolgreichen Abruf oder bei fehlendem WLAN wird der
   angezeigte Stand als veraltet behandelt und die Steuerung gesperrt. Zustände
   bleiben im RAM; regelmäßige Abfragen schreiben nicht ins Geräte-Flash.
@@ -137,12 +142,16 @@ data:
 ## LEAP-API
 
 `GET /api/v1/devices/{device_id}/room` liefert `schemaVersion: 1`, `climate`,
-`lights` (in Zuordnungsreihenfolge), `colors`. Ein POST auf denselben Pfad nimmt
+`lights` (in Zuordnungsreihenfolge, mit `color` als nächstliegender Palette),
+`colors` und `temperatureSetSupported: true`. Ein POST auf denselben Pfad nimmt
 nur vordefinierte Ziele und Aktionen entgegen, keine freien Entity-IDs:
 
 ```json
-{"target": "climate", "action": "warmer"}
+{"target": "climate", "action": "set_temperature", "temperature": 24}
 ```
+
+Die bisherige relative Aktion `warmer`/`colder` bleibt für alte Geräte verfügbar.
+
 ```json
 {"target": "light0", "action": "off"}
 ```
@@ -150,8 +159,8 @@ nur vordefinierte Ziele und Aktionen entgegen, keine freien Entity-IDs:
 {"target": "light1", "action": "color", "color": "lila"}
 ```
 
-Ziele: `climate`, `light0`, `light1`; Aktionen: `warmer`, `colder`, `on`, `off`,
-`color` passend zum Ziel. Farbwerte sind serverseitig fest definiert.
+Ziele: `climate`, `light0`, `light1`; Aktionen: `set_temperature` mit `temperature` (10–30 °C), `warmer`, `colder`, `on`,
+`off`, `color` passend zum Ziel. Farbwerte sind serverseitig fest definiert.
 403: nicht zugeordnet/deaktiviert; 404: Gerät fehlt/deaktiviert; 409: Grenze,
 fehlende Bestätigung oder Gerät nicht steuerbar; 422: ungültige Eingabe;
 503: fehlendes Token, falsche Serveradresse oder HA nicht erreichbar.
