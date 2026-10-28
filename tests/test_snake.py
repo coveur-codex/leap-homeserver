@@ -1,6 +1,6 @@
 import random
 import pytest
-from app.services.snake import Room, STEP, DURATION
+from app.services.snake import Room, STEP, DURATION, COLUMNS, ROWS
 
 
 def playing(n=2):
@@ -77,12 +77,12 @@ def test_simultaneous_heads_swaps_three_way_stop():
 
 def test_wall_self_respawn_protection():
     r=collision_room(); a=r.players['0']
-    a.body=[(39,5),(38,5),(37,5)]; a.direction=3
+    a.body=[(COLUMNS-1,5),(COLUMNS-2,5),(COLUMNS-3,5)]; a.direction=3
     r.move(14000); assert a.body==[] and a.respawn==17000
     a.seen=16999; r.move(16999); assert not a.body
     r.move(17000); assert len(a.body)==3 and a.protected==17900
-    a.body=[(39,5),(38,5),(37,5)]; r.move(17450)
-    assert a.body[0]==(39,5)
+    a.body=[(COLUMNS-1,5),(COLUMNS-2,5),(COLUMNS-3,5)]; r.move(17450)
+    assert a.body[0]==(COLUMNS-1,5)
     a.protected=0; a.direction=1
     a.body=[(5,5),(6,5),(6,6),(5,6),(4,6)]
     r.move(17900); assert not a.body
@@ -107,7 +107,7 @@ def test_food_replenishment_and_invariants():
         r.move(14000+step*STEP)
         cells=[c for p in r.players.values() for c in p.body]
         assert len(cells)==len(set(cells))
-        assert all(0<=x<40 and 0<=y<13 for x,y in cells)
+        assert all(0<=x<COLUMNS and 0<=y<ROWS for x,y in cells)
         assert not r.food.intersection(cells)
 
 
@@ -136,3 +136,14 @@ def test_queued_snapshot_cannot_change_with_next_move():
     r.move(13450)
     assert snapshot['players'][0]['body']==before
     assert r.players['0'].body!=before
+
+
+def test_new_grid_has_sixteen_rows_and_matching_wire_geometry():
+    assert (COLUMNS, ROWS)==(53,16)
+    r=playing(4)
+    s=r.snapshot(13000)
+    assert (s['columns'],s['rows'])==(53,16)
+    p=r.players['0']; p.body=[(52,15),(51,15),(50,15)]; p.direction=0
+    r.move(13450); assert p.body[0]==(52,14)
+    p.protected=0; p.direction=3
+    r.move(13900); assert not p.body

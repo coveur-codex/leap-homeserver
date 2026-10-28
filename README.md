@@ -1,4 +1,4 @@
-# LEAP Home Server 1.4.0-beta.1
+# LEAP Home Server 1.4.0
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -315,9 +315,17 @@ Die bestehende Geräte-API erhält dadurch keine automatische Zugriffssicherung.
 Die optionale kostenlose Yahoo-Quelle für deutsche EUR-Kurse ist in
 [Finanzen](docs/finance.md) beschrieben. Keine kostenpflichtigen Dienste erforderlich.
 
-## Kooperatives Snake (1.4.0-beta.1)
+## Kooperatives Snake (1.4.0)
 
 Snake → Multiplayer verbindet 2–4 Geräte automatisch über den Homeserver.
 Zehn Sekunden Spielersuche, 3–2–1, dann 120 Sekunden gemeinsame Spielzeit.
-Firmware und Homeserver benötigen jeweils 1.4.0-beta.1.
+Für das neue 53×16-Spielfeld benötigen Firmware und Homeserver Version 1.4.0.
+Zum Umstieg zuerst die Firmware, anschließend den Homeserver aktualisieren.
 Regeln, Protokoll, Asset-Generierung und Hardware-Abnahme: [docs/snake-multiplayer.md](docs/snake-multiplayer.md).
+
+## Spielestatus (1.4.0)
+
+Der neue Reiter **Spielestatus** zeigt offene Lobbys, Startcountdown, laufende
+Partien, verbundene Geräte, Restzeit und Punkte und aktualisiert sich automatisch.
+Die gemeinsame Statusschnittstelle unterstützt weitere Spiele ohne Änderungen
+am Status-Frontend: [docs/game-status.md](docs/game-status.md).

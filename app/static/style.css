@@ -127,3 +127,5 @@ main:has(.device-settings){max-width:1440px}
 .time-card h3 { color:var(--device-accent); }
 
 .finance-symbol-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:.4rem 0;padding:.5rem}.finance-symbol-row span{flex:1;min-width:160px}.finance-symbol-row button{padding:.3rem .6rem}.finance-card{overflow:hidden;background:#101c29!important}.finance-card canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;outline-offset:-2px}[data-finance-controls]{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin:.8rem 0}
+
+.game-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}.game-metrics dd{margin:.25rem 0 0}.game-session .system-table{min-width:0}.game-session td:first-child{overflow-wrap:anywhere}

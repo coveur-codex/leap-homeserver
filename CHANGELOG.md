@@ -1,3 +1,14 @@
+# 1.4.0 – Größeres Snake-Spielfeld und Spielestatus
+
+- Kooperatives Snake verwendet jetzt 53×16 Felder. Veraltete Geräte erhalten
+  beim Beitritt einen Firmware-Updatehinweis und belegen keinen Lobbyplatz.
+- Neuer Reiter Spielestatus: Lobby, Countdown, laufende Partie, Teilnehmer,
+  Verbindungen, Restzeit, Teamziel und Ergebnis; automatische Aktualisierung.
+- Gemeinsame, erweiterbare Status-Registry und JSON-Schnittstelle für weitere
+  serververwaltete Spiele. Statusleser verändern die laufende Simulation nicht.
+- Zum Umstieg zuerst Firmware 1.4.0, danach den Homeserver aktualisieren.
+- Keine neuen Abhängigkeiten oder Datenbankmigrationen.
+
 # 1.4.0-beta.1 – Kooperatives Multiplayer-Snake
 
 - Autoritatives kooperatives Snake für 2–4 Geräte über vorhandene WebSockets:

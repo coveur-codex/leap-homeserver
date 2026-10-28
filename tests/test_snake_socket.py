@@ -15,7 +15,7 @@ def devices(db,n=5):
 
 def join(client,id,stack,session=''):
     ws=stack.enter_context(client.websocket_connect(f'/api/v1/devices/{id}/snake/ws'))
-    ws.send_json({'type':'join','session':session})
+    ws.send_json({'type':'join','session':session,'protocolVersion':2})
     return ws,ws.receive_json()
 
 
@@ -95,3 +95,12 @@ def test_authoritative_countdown_start_finish_and_no_late_join(client,db,monkeyp
         clock[0]=134000; a.send_json({'type':'sync'})
         result=phase(a,'finished')
         assert result['remainingMs']==0 and result['target']==20
+
+
+def test_old_firmware_cannot_join_new_grid(client,db):
+    devices(db,1)
+    with client.websocket_connect('/api/v1/devices/snake-0/snake/ws') as ws:
+        ws.send_json({'type':'join','session':''})
+        frame=ws.receive_json()
+        assert frame['type']=='error' and 'Firmware' in frame['detail']
+        assert hub.room is None

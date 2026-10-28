@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Spielestatus</h1>
+<p class="muted">Live-Übersicht der vom Homeserver betreuten Spiele. Einzelspiele auf den Geräten werden hier nicht erfasst.</p>
+<p id="game-status-connection" class="muted" role="status" aria-live="polite">Automatische Aktualisierung alle fünf Sekunden.</p>
+<div data-game-status-url="/games/status">{% include 'game_status_cards.html' %}</div>
+<script src="/static/game-status.js?v=1" defer></script>
+{% endblock %}

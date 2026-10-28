@@ -65,6 +65,23 @@ class SnakeHub:
         self.broadcast()
         return queue
 
+    def status(self):
+        from app.services.game_status import GameMetric, GameParticipant, GameSession
+        from app.services.snake import COLUMNS, ROWS
+        room = self.room
+        if room is None:
+            return ()
+        now = now_ms()
+        labels = {"lobby": "Mitspieler werden gesucht", "countdown": "Startcountdown",
+                  "playing": "Spiel läuft", "alone": "Keine Mitspieler gefunden", "finished": "Partie beendet"}
+        activity = "running" if room.phase == "playing" else "waiting" if room.phase in {"lobby", "countdown"} else "finished"
+        return (GameSession(
+            session_id=room.id, phase=room.phase, label=labels[room.phase], activity=activity,
+            remaining_ms=room.remaining_ms(now),
+            players=tuple(GameParticipant(p.id, p.connected) for p in room.players.values()), max_players=4,
+            metrics=(GameMetric("Teampunkte", room.score), GameMetric("Punkteziel", room.target),
+                     GameMetric("Spielfeld", f"{COLUMNS} × {ROWS}"))),)
+
     async def run(self):
         while True:
             await asyncio.sleep(.05)
@@ -115,6 +132,8 @@ async def snake_socket(websocket: WebSocket, device_id: str, db: Session = Depen
         if (not isinstance(frame, dict) or frame.get("type") != "join" or
                 not isinstance(frame.get("session", ""), str) or len(frame.get("session", "")) > 32):
             raise ValueError("Ungültiger Beitritt")
+        if type(frame.get("protocolVersion")) is not int or frame["protocolVersion"] != 2:
+            raise ValueError("Bitte die Geräte-Firmware auf Version 1.4.0 oder neuer aktualisieren.")
         queue = hub.join(player, frame.get("session", ""))
         room = hub.room
         writer = asyncio.create_task(send_states())
