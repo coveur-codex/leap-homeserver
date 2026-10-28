@@ -1,4 +1,4 @@
-# LEAP Home Server 1.5.0-beta.1
+# LEAP Home Server 1.5.0-beta.2
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -356,3 +356,11 @@ WLAN. `SSID not found` betrifft die WLAN-Profilsuche und ist kein Versionsnachwe
 
 Heizung in 1-°C-Schritten (10–30 °C), bis zu zwei Lampen pro Gerät mit An/Aus
 und RGB-Farbauswahl: [Einrichtung und Beispiele](docs/home-assistant.md).
+
+## Zimmersteuerung (1.5.0-beta.2)
+
+Temperatur und Lichtfarbe werden direkt mit links/rechts gewählt und erst nach
+**einer Sekunde Eingabepause** übertragen. Pro Lampe zeigt eine Farbkachel die
+Auswahl; Schwarz bedeutet Aus. Zehn Farben inklusive Orange, Rosa, Türkis und
+Hellblau. Zuerst Homeserver 1.5.0-beta.2, dann Firmware 1.5.0-beta.2 installieren.
+[Einrichtung und Bedienung](docs/home-assistant.md).

@@ -1,3 +1,16 @@
+# 1.5.0-beta.2 – Zimmerauswahl mit einer Sekunde Eingabepause
+
+- Temperatur lokal in 1-°C-Schritten vorwählen; nach einer Sekunde ohne weitere
+  Änderung wird ein absoluter Sollwert gesendet. Zwischenabfragen und laufende
+  Übertragungen überschreiben die neue Auswahl nicht.
+- Direkte Farbkachel je Lampe: links/rechts wechselt zwischen Schwarz (Aus) und
+  zehn Farben, darunter neu Orange, Rosa, Türkis und Hellblau. Keine Bestätigung
+  per Mitteltaste nötig; auch Lichtauswahl wird nach einer Sekunde übernommen.
+- Vorschau und unbestätigte Werte bleiben sichtbar; Offline-Änderungen werden
+  verworfen, fehlgeschlagene Befehle nicht automatisch wiederholt.
+- Benötigt Homeserver und Firmware 1.5.0-beta.2; zuerst den Server aktualisieren.
+  Keine Datenbankmigration erforderlich.
+
 # 1.5.0-beta.1 – Home Assistant: Mein Zimmer
 
 - Neue Geräte-Seite für eine Heizung in 1-°C-Schritten zwischen 10 und 30 °C
