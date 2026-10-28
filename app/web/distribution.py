@@ -196,7 +196,8 @@ def edit_quiz(package_id: str, content: str = Form(), expected: int = Form(), db
 def firmware(request: Request, db: Session = Depends(get_db)):
     releases = db.scalars(select(FirmwareRelease).where(FirmwareRelease.deleted.is_(False))).all()
     releases.sort(key=lambda r: service.version_key(r.version), reverse=True)
-    return templates.TemplateResponse(request, "firmware.html", {"releases": releases})
+    return templates.TemplateResponse(request, "firmware.html", {"releases": releases,
+        "firmware_problems": {r.id: service.firmware_problem(service.blob_path(r.sha256), r.version) for r in releases}})
 
 @router.post("/firmware")
 async def upload_firmware(version: str = Form(), channel: str = Form(), notes: str = Form(""), file: UploadFile = File(), db: Session = Depends(get_db)):
@@ -216,6 +217,9 @@ async def upload_firmware(version: str = Form(), channel: str = Form(), notes: s
         raise HTTPException(422, "Nur universelle OTA-Firmware mit NVS-Gerätekonfiguration hochladen. "
                             "Ohne LocalConfig.h oder mit LEAP_PROVISION_DEVICE=0 bauen; "
                             "Installations-Binaries mit Gerätewerten sind nicht für OTA geeignet.")
+    problem = service.firmware_problem(service.blob_path(info["sha256"]), version)
+    if problem:
+        raise HTTPException(422, problem)
     db.add(FirmwareRelease(version=version, channel=channel, notes=notes, **info))
     db.commit()
     return redir("/firmware")
@@ -227,6 +231,9 @@ def promote(release_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404)
     if release.withdrawn:
         raise HTTPException(409, "Zurückgezogene Firmware zuerst wieder freigeben")
+    problem = service.firmware_problem(service.blob_path(release.sha256), release.version)
+    if problem:
+        raise HTTPException(409, problem)
     release.channel = "stable"
     db.commit()
     return redir("/firmware")
@@ -249,6 +256,9 @@ def restore_firmware(release_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404)
     if not service.blob_path(release.sha256).is_file():
         raise HTTPException(409, "Binary fehlt; Firmware kann nicht wieder freigegeben werden")
+    problem = service.firmware_problem(service.blob_path(release.sha256), release.version)
+    if problem:
+        raise HTTPException(409, problem)
     release.withdrawn = False
     db.commit()
     return redir("/firmware")

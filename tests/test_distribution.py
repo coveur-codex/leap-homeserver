@@ -31,14 +31,14 @@ def event(client, plan, **data):
     return client.post(f'/api/v1/devices/leap-test/sync/{plan["syncId"]}/events', json=data)
 
 
-def binary():
+def binary(version="1.0.0"):
     data = bytearray(256)
     data[0], data[1], data[12] = 0xE9, 1, 9
-    return bytes(data) + service.UNIVERSAL_CONFIG_MARKER
+    return bytes(data) + service.UNIVERSAL_CONFIG_MARKER + b"LEAP_APP_VERSION_V1=" + version.encode() + b";\0"
 
 
 def upload_firmware(client, version, channel):
-    return client.post("/firmware", data={"version": version, "channel": channel, "notes": "Test"}, files={"file": ("leap.bin", binary())}, follow_redirects=False)
+    return client.post("/firmware", data={"version": version, "channel": channel, "notes": "Test"}, files={"file": ("leap.bin", binary(version))}, follow_redirects=False)
 
 
 def test_immutable_versions_hashes_and_files(client, db):
@@ -126,9 +126,9 @@ def test_firmware_channels_promotion_order_and_streaming(client, db):
     plan = sync(client)
     assert plan["firmware"]["version"] == "0.9.0"
     response = client.get(plan["firmware"]["url"])
-    assert response.content == binary()
+    assert response.content == binary("0.9.0")
     partial = client.get(plan["firmware"]["url"], headers={"Range": "bytes=0-23"})
-    assert partial.status_code == 206 and partial.content == binary()[:24]
+    assert partial.status_code == 206 and partial.content == binary("0.9.0")[:24]
     assert hashlib.sha256(response.content).hexdigest() == plan["firmware"]["sha256"]
     assert upload_firmware(client, "0.9.0", "stable").status_code == 409
     assert event(client, plan, event="boot_success", firmwareVersion="0.9.0", installedAssets=plan["desiredAssets"]).status_code == 409
@@ -416,3 +416,33 @@ def test_legacy_devices_need_usb_provisioning_before_ota(client, db):
         response = client.post("/api/v1/devices/leap-test/sync", json=report)
         assert response.status_code == 200 and response.json()["firmware"] is None
     assert sync(client)["firmware"]["version"] == "1.0.0"
+
+
+def test_mislabeled_and_unmarked_firmware_never_reaches_device(client, db):
+    device(db)
+    def upload(data, declared):
+        return client.post('/firmware',data={'version':declared,'channel':'stable'},
+                           files={'file':('LEAP.ino.bin',data)},follow_redirects=False)
+    wrong=binary('1.4.0-beta.2')
+    response=upload(wrong,'1.4.0')
+    assert response.status_code==422 and '1.4.0-beta.2' in response.text
+    assert not db.scalar(select(FirmwareRelease))
+    unmarked=binary('1.4.0').replace(b'LEAP_APP_VERSION_V1=1.4.0;\0',b'')
+    assert upload(unmarked,'1.4.0').status_code==422
+    ambiguous=binary('1.4.1')+b'LEAP_APP_VERSION_V1=1.4.0-beta.2;\0'
+    assert upload(ambiguous,'1.4.1').status_code==422
+    # Existing mislabeled releases and old plans must be blocked too.
+    info=service.store_bytes(wrong)
+    release=FirmwareRelease(version='1.4.0',channel='stable',notes='Mislabel',**info)
+    db.add(release);db.commit()
+    assert sync(client)['firmware'] is None
+    assert client.get(f'/api/v1/firmware/{release.id}/binary').status_code==409
+    assert 'Nicht für OTA freigegeben' in client.get('/firmware').text
+    assert client.post(f'/firmware/{release.id}/promote',follow_redirects=False).status_code==409
+    assert client.post(f'/firmware/{release.id}/withdraw',follow_redirects=False).status_code==303
+    assert client.post(f'/firmware/{release.id}/restore',follow_redirects=False).status_code==409
+    assert upload_firmware(client,'1.4.1','stable').status_code==303
+    plan=sync(client,firmware='1.4.0-beta.2')
+    assert plan['firmware']['version']=='1.4.1'
+    data=client.get(plan['firmware']['url']).content
+    assert data==binary('1.4.1') and hashlib.sha256(data).hexdigest()==plan['firmware']['sha256']

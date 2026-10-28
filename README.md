@@ -1,4 +1,4 @@
-# LEAP Home Server 1.4.0
+# LEAP Home Server 1.4.1
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -329,3 +329,25 @@ Der neue Reiter **Spielestatus** zeigt offene Lobbys, Startcountdown, laufende
 Partien, verbundene Geräte, Restzeit und Punkte und aktualisiert sich automatisch.
 Die gemeinsame Statusschnittstelle unterstützt weitere Spiele ohne Änderungen
 am Status-Frontend: [docs/game-status.md](docs/game-status.md).
+
+## OTA-Versionsprüfung (1.4.1)
+
+Neue OTA-Binaries enthalten eine eindeutige LEAP-Dateiversion. Der Homeserver
+prüft sie beim Upload gegen die eingetragene Release-Version und vor jedem
+Angebot/Download. Falsch beschriftete oder ältere Dateien ohne diese Kennzeichnung
+werden nicht mehr automatisch verteilt; die Firmware-Seite zeigt den Grund an.
+Diese Kontrolle ergänzt SHA-256 und ESP-Image-Prüfung, sie ist keine Signaturprüfung.
+
+Das GitHub-Buildpaket `leap-esp32s3-1.4.1` enthält `LEAP.ino.bin`, `firmware.json`
+(mit Dateiversion, Größe und SHA-256) und `LEAP.ino.bin.sha256`. Für OTA nur die
+App-Datei `LEAP.ino.bin` hochladen. Die Release-Version muss zur Datei passen.
+Eine unpassende 1.4.0-Veröffentlichung zurückziehen und die neue, korrekt
+gekennzeichnete 1.4.1 als neues Release anlegen; bestehende Release-Versionen
+werden nicht überschrieben. Gespeicherte Geräte-/WLAN-Konfiguration bleibt erhalten.
+Ein universelles Gerät kann die neue Version weiterhin per OTA installieren.
+
+Die Firmware prüft die Dateiversion während des Downloads, vor Boot-Slot-Wechsel
+und Journalaktivierung. Eine ausstehende Startbestätigung wird bei Abweichung
+zwischen Ziel- und Laufversion verweigert; ein bereits gültiges Fallback bleibt
+weiter nutzbar. Bestätigung erfolgt weiterhin nach lokalen Selbsttests auch ohne
+WLAN. `SSID not found` betrifft die WLAN-Profilsuche und ist kein Versionsnachweis.

@@ -1,3 +1,12 @@
+# 1.4.1 – OTA-Dateiversion verbindlich prüfen
+
+- Upload prüft eingebettete Dateiversion gegen die Release-Version.
+  Unmarkierte, mehrdeutige und falsch beschriftete Dateien werden abgewiesen.
+- Prüfung gilt auch für vorhandene Releases, neue Angebote, Downloads aus alten
+  Sync-Plänen, Stable-Freigabe und Wiederfreigabe. Die Firmware-Seite zeigt den Grund.
+- Für neue Releases universelle Firmware ab 1.4.1 mit Build-Kennzeichnung verwenden;
+  bestehende Geräte können diese weiterhin per OTA erhalten. Keine DB-Migration.
+
 # 1.4.0 – Größeres Snake-Spielfeld und Spielestatus
 
 - Kooperatives Snake verwendet jetzt 53×16 Felder. Veraltete Geräte erhalten

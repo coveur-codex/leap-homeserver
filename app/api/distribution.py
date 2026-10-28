@@ -57,6 +57,9 @@ def firmware_binary(release_id: int, db: Session = Depends(get_db)):
     release = db.get(FirmwareRelease, release_id)
     if not release or release.withdrawn or release.deleted or not service.blob_path(release.sha256).is_file():
         raise HTTPException(404)
+    problem = service.firmware_problem(service.blob_path(release.sha256), release.version)
+    if problem:
+        raise HTTPException(409, problem, headers={"Cache-Control": "no-store"})
     return FileResponse(service.blob_path(release.sha256), media_type="application/octet-stream",
                         filename=f"leap-{release.version}.bin", headers={"ETag": '"' + release.sha256 + '"',
                         "Cache-Control": "no-store"})

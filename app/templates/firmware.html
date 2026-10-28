@@ -1,19 +1,20 @@
 {% extends 'base.html' %}{% block content %}<h1>Firmware</h1><p>Stable-Geräte erhalten nur freigegebene Releases. Beta-Geräte erhalten die höchste verfügbare Version aus beiden Kanälen.</p>
 <p>Zurückziehen stoppt neue Update-Angebote und Downloads. Bereits heruntergeladene oder installierte Firmware bleibt auf den Geräten. Es gibt kein automatisches Downgrade.</p>
 <p>OTA verwendet die lokal in NVS gespeicherte Geräte-ID, WLAN-Zugangsdaten, Tasterbelegung und MPU-Ausrichtung. Vor dem ersten universellen Update jedes Gerät einmal per USB mit der neuen LocalConfig installieren. Installations-Binaries und alte Releases ohne NVS-Unterstützung werden nicht automatisch verteilt.</p>
-<h2>Release hochladen</h2><p>Universelle App-Binary ohne LocalConfig.h oder mit LEAP_PROVISION_DEVICE=0 bauen. Eine Geräteinstallation mit LEAP_PROVISION_DEVICE=1 ausschließlich per Kabel verwenden.</p><form method="post" enctype="multipart/form-data"><label>Version<input name="version" placeholder="0.9.0 oder 0.9.0-beta.1" required maxlength="40"></label><label>Kanal<select name="channel"><option value="beta">Beta</option><option value="stable">Stable</option></select></label><label>ESP32-S3 App-Binary (.bin, maximal 4 MiB)<input name="file" type="file" accept=".bin" required></label><label>Release Notes<textarea name="notes" rows="4" maxlength="20000"></textarea></label><button>Release speichern</button></form>
+<h2>Release hochladen</h2><p>Ab Firmware 1.4.1 wird die Dateiversion mit der Release-Version verglichen. Nur <code>LEAP.ino.bin</code> aus dem passenden Build hochladen, keine Bootloader-, Partitions- oder Merged-Datei.</p><p>Universelle App-Binary ohne LocalConfig.h oder mit LEAP_PROVISION_DEVICE=0 bauen. Eine Geräteinstallation mit LEAP_PROVISION_DEVICE=1 ausschließlich per Kabel verwenden.</p><form method="post" enctype="multipart/form-data"><label>Version<input name="version" placeholder="0.9.0 oder 0.9.0-beta.1" required maxlength="40"></label><label>Kanal<select name="channel"><option value="beta">Beta</option><option value="stable">Stable</option></select></label><label>ESP32-S3 App-Binary (.bin, maximal 4 MiB)<input name="file" type="file" accept=".bin" required></label><label>Release Notes<textarea name="notes" rows="4" maxlength="20000"></textarea></label><button>Release speichern</button></form>
 {% for r in releases %}
 <article>
   <h2>{{r.version}} · {{r.channel|capitalize}}{% if r.withdrawn %} · Zurückgezogen{% endif %}</h2>
+  {% if firmware_problems[r.id] %}<p class="system-state error">Nicht für OTA freigegeben: {{ firmware_problems[r.id] }}</p>{% else %}<p>Dateiversion geprüft: {{ r.version }}</p>{% endif %}
   <p>{{r.size}} Bytes · {{r.created_at.strftime('%d.%m.%Y %H:%M')}} UTC</p>
   <p style="white-space:pre-wrap">{{r.notes}}</p>
   <p style="overflow-wrap:anywhere">SHA-256: {{r.sha256}}</p>
   {% if r.withdrawn %}
   <p>Dieses Release wird nicht an Geräte verteilt. Die Binary bleibt für eine erneute Freigabe gespeichert.</p>
-  <form method="post" action="/firmware/{{r.id}}/restore"><button>Wieder freigeben</button></form>
+  {% if not firmware_problems[r.id] %}<form method="post" action="/firmware/{{r.id}}/restore"><button>Wieder freigeben</button></form>{% endif %}
   {% else %}
-  <a href="/api/v1/firmware/{{r.id}}/binary">Binary herunterladen</a>
-  {% if r.channel=='beta' %}<form method="post" action="/firmware/{{r.id}}/promote"><button>Als Stable freigeben</button></form>{% endif %}
+  {% if not firmware_problems[r.id] %}<a href="/api/v1/firmware/{{r.id}}/binary">Binary herunterladen</a>{% endif %}
+  {% if r.channel=='beta' and not firmware_problems[r.id] %}<form method="post" action="/firmware/{{r.id}}/promote"><button>Als Stable freigeben</button></form>{% endif %}
   <form method="post" action="/firmware/{{r.id}}/withdraw"><button class="danger">Zurückziehen</button></form>
   {% endif %}
   <details>

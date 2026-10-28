@@ -28,7 +28,7 @@ def test_withdraw_restore_and_existing_plan(client, db):
     assert url not in page
     assert client.post(f"/firmware/{release_id}/promote").status_code == 409
     assert client.post(f"/firmware/{release_id}/restore", follow_redirects=False).status_code == 303
-    assert client.get(url).content == binary()
+    assert client.get(url).content == binary("0.9.0")
     assert sync(client)["firmware"]["version"] == "0.9.0"
 
 
@@ -56,7 +56,11 @@ def test_delete_preserves_reports_and_reserves_version(client, db):
 
 def test_delete_keeps_shared_release_binary(client, db):
     upload_firmware(client, "0.8.5", "beta")
-    upload_firmware(client, "0.9.0", "stable")
+    # Old servers allowed identical bytes to be registered under another version.
+    original = db.scalar(select(FirmwareRelease))
+    db.add(FirmwareRelease(version="0.9.0", channel="stable", notes="Legacy alias",
+                           sha256=original.sha256, size=original.size))
+    db.commit()
     releases = db.scalars(select(FirmwareRelease).order_by(FirmwareRelease.id)).all()
     path = service.blob_path(releases[0].sha256)
     assert releases[0].sha256 == releases[1].sha256
@@ -64,7 +68,7 @@ def test_delete_keeps_shared_release_binary(client, db):
     client.post(f"/firmware/{releases[1].id}/delete", data={"confirm": "true"})
     assert path.is_file()
     client.post(f"/firmware/{releases[0].id}/restore")
-    assert client.get(f"/api/v1/firmware/{releases[0].id}/binary").content == binary()
+    assert client.get(f"/api/v1/firmware/{releases[0].id}/binary").content == binary("0.8.5")
     client.post(f"/firmware/{releases[0].id}/delete", data={"confirm": "true"})
     assert not path.exists()
 
@@ -73,13 +77,13 @@ def test_delete_keeps_historical_asset_binary(client, db):
     upload_firmware(client, "0.9.0", "beta")
     release = db.scalar(select(FirmwareRelease))
     create(client, "common-backup", "common")
-    client.post("/assets/common-backup/files", data={"expected": 1}, files={"files": ("backup.bin", binary())})
+    client.post("/assets/common-backup/files", data={"expected": 1}, files={"files": ("backup.bin", binary("0.9.0"))})
     row = db.scalar(select(AssetVersion).where(AssetVersion.package_id == "common-backup", AssetVersion.version == 2))
     url = next(item["url"] for item in row.manifest["files"] if item["path"] == "backup.bin")
     client.post("/assets/common-backup/files/delete", data={"expected": 2, "path": "backup.bin"})
     client.post(f"/firmware/{release.id}/delete", data={"confirm": "true"})
     assert service.blob_path(release.sha256).is_file()
-    assert client.get(url).content == binary()
+    assert client.get(url).content == binary("0.9.0")
 
 
 def test_restore_requires_binary(client, db):
