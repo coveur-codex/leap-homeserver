@@ -552,11 +552,33 @@ def universal_firmware(path):
             and UNIVERSAL_CONFIG_MARKER in data and PROVISIONING_CONFIG_MARKER not in data)
 
 
+FIRMWARE_IDENTITY = re.compile(rb"LEAP_APP_VERSION_V1=((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-beta\.(?:0|[1-9][0-9]*))?);\x00")
+
+
+def firmware_image_version(path):
+    if not path.is_file() or not 24 < path.stat().st_size <= FIRMWARE_SLOT_SIZE:
+        return None
+    versions = {m[1].decode("ascii") for m in FIRMWARE_IDENTITY.finditer(path.read_bytes()) if len(m[1]) <= 40}
+    return next(iter(versions)) if len(versions) == 1 else None
+
+
+def firmware_problem(path, expected):
+    if not universal_firmware(path):
+        return "Keine universelle ESP32-S3 OTA-App mit NVS-Gerätekonfiguration."
+    actual = firmware_image_version(path)
+    if actual is None:
+        return ("Dateiversion nicht eindeutig überprüfbar. Eine Firmware ab 1.4.1 mit Build-Kennzeichnung verwenden; "
+                "die App-Datei LEAP.ino.bin aus dem passenden Build hochladen.")
+    if actual != expected:
+        return f"Dateiversion {actual} stimmt nicht mit der angegebenen Release-Version {expected} überein."
+    return None
+
+
 def firmware_target(db, device):
     releases = db.scalars(select(FirmwareRelease).where(
         FirmwareRelease.withdrawn.is_(False), FirmwareRelease.deleted.is_(False))).all()
     releases = [r for r in releases if (device.firmware_channel == "beta" or r.channel == "stable")
-                and universal_firmware(blob_path(r.sha256))]
+                and firmware_problem(blob_path(r.sha256), r.version) is None]
     return max(releases, key=lambda r: version_key(r.version), default=None)
 
 
