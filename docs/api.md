@@ -396,3 +396,11 @@ Die bestehende `games`-Liste enthält zusätzlich `math_lab` / „Mathe-Labor“
 Aktivierung, Duplizieren, Konfigurationsversion und Offline-Snapshot verwenden
 unverändert `enabled_games`; vier Unteraktivitäten werden nur in der Firmware
 angeboten. Mindestens Firmware 1.1.1 erforderlich; ältere Firmware ignoriert die ID.
+
+## Spielestatus (1.4.0)
+
+`GET /api/v1/games/status` liefert die gemeinsame Laufzeitübersicht aller
+registrierten serververwalteten Spiele (Schema 1), mit Partien, Phase, Teilnehmern,
+Verbindungsstatus, Restzeit und allgemeinen Kennzahlen. Die Antwort ist `no-store`.
+Webansicht: `/games`, automatische Aktualisierung über `/games/status`.
+Vertrag und Erweiterung um weitere Spiele: [game-status.md](game-status.md).

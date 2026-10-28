@@ -1,0 +1,33 @@
+<div class="stats system-stats">
+  <article><span>Laufende Partien</span><b>{{ status.runningSessions }}</b><small>Aktive Spielzeit</small></article>
+  <article><span>Startvorbereitung</span><b>{{ status.waitingSessions }}</b><small>Lobby oder Startcountdown</small></article>
+</div>
+<p class="muted">Stand: <time datetime="{{ status.generatedAt }}">{{ status.generatedAt[11:19] }} UTC</time></p>
+{% for game in status.games %}
+<section class="system-section" data-game-id="{{ game.id }}">
+  <h2>{{ game.name }}</h2>
+  {% if game.error %}
+    <p class="system-state error">Spielestatus derzeit nicht verfügbar</p>
+  {% elif not game.sessions %}
+    <p class="empty-state">Keine Partie aktiv</p>
+  {% else %}
+    {% for session in game.sessions %}
+    <article class="game-session" data-session-id="{{ session.session_id }}">
+      <p><strong class="system-state{% if session.activity == 'running' %} ok{% endif %}">{{ session.label }}</strong>
+      {% if session.activity != 'finished' %}{% set seconds = (session.remaining_ms + 999) // 1000 %}
+        <span>Restzeit: {{ '%d:%02d'|format(seconds // 60, seconds % 60) }}</span>
+      {% endif %}</p>
+      <p>Teilnehmer: {{ session.players|length }}{% if session.max_players %} / {{ session.max_players }}{% endif %}
+        · {{ session.players|selectattr('connected')|list|length }} verbunden</p>
+      {% if session.metrics %}<dl class="game-metrics">{% for metric in session.metrics %}<div><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div>{% endfor %}</dl>{% endif %}
+      {% if session.players %}
+      <div class="table-scroll"><table class="system-table">
+        <thead><tr><th>Gerät</th><th>Verbindung</th></tr></thead>
+        <tbody>{% for player in session.players %}<tr><td>{{ player.device_id }}</td><td>{% if player.connected %}<span class="system-state ok">Verbunden</span>{% else %}<span class="muted">Unterbrochen</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  {% endif %}
+</section>
+{% else %}<p class="empty-state">Noch keine Spiele mit zentralem Status verfügbar.</p>{% endfor %}

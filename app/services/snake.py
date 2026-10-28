@@ -8,7 +8,7 @@ from collections import deque
 import random
 import secrets
 
-COLUMNS, ROWS, STEP = 40, 13, 450
+COLUMNS, ROWS, STEP = 53, 16, 450
 LOBBY, COUNTDOWN, DURATION = 10_000, 3_000, 120_000
 RESPAWN, PROTECTION, STALE, REMOVE = 3_000, 900, 3_000, 15_000
 DIRECTIONS = ((0, -1), (0, 1), (-1, 0), (1, 0))
@@ -202,12 +202,15 @@ class Room:
                 self.phase, self.ended = "finished", self.start + DURATION
                 self.revision += 1
 
-    def snapshot(self, now):
+    def remaining_ms(self, now):
         deadline = (self.created+LOBBY if self.phase == "lobby" else self.start
                     if self.phase == "countdown" else self.start+DURATION)
+        return max(0, deadline-now) if not self.ended else 0
+
+    def snapshot(self, now):
         return {"type":"state", "schemaVersion":1, "session":self.id,
                 "revision":self.revision, "tick":self.tick, "phase":self.phase,
-                "remainingMs":max(0, deadline-now) if not self.ended else 0,
+                "remainingMs":self.remaining_ms(now),
                 "score":self.score, "target":self.target, "columns":COLUMNS, "rows":ROWS,
                 "stepMs":STEP, "fruitCount":self.food_count, "food":sorted(self.food),
                 "players":[{"id":p.id, "avatar":p.avatar, "accentColor":p.accent,

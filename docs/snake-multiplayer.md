@@ -1,4 +1,4 @@
-# Kooperatives Snake – 1.4.0-beta.1
+# Kooperatives Snake – 1.4.0
 
 Firmware und Homeserver verwenden Protokollversion 1. Im bisherigen Snake-Menü
 stehen die drei Solo-Geschwindigkeiten und zusätzlich Multiplayer zur Auswahl.
@@ -15,7 +15,8 @@ Die Firmware erkennt die verlorene Session und bietet über R Mitte einen Neusta
 
 - 2–4 Geräte; zehn Sekunden Lobby ab dem ersten Beitritt, ohne Verlängerung.
   Anschließend drei Sekunden Startcountdown oder „Keine Mitspieler gefunden“.
-- 40×13 Zellen wie Solo, 450 ms pro Bewegung (bisherige Standardgeschwindigkeit).
+- 53×16 Zellen wie Solo, quadratische 6-Pixel-Zellen im bestehenden 320×104-Pixel-Bereich.
+  450 ms pro Bewegung (bisherige Standardgeschwindigkeit).
   120 Sekunden aktive Zeit; das Punkteziel beendet die Partie nicht.
 - Zwei/drei/vier Spieler: sechs/acht/zehn Früchte und 20/30/40 Teampunkte als Ziel.
   Beides bleibt nach Verbindungsabbrüchen auf der Startspielerzahl festgelegt.
@@ -44,8 +45,14 @@ Weder Avatarbilder noch Farben werden von Steuerbefehlen übernommen.
 Erste Nachricht innerhalb von fünf Sekunden:
 
 ```json
-{"type":"join","session":""}
+{"type":"join","session":"","protocolVersion":2}
 ```
+
+Für das größere Spielfeld benötigt der Homeserver beim Beitritt `protocolVersion:2`.
+Geräte ohne diese Angabe erhalten einen Updatehinweis und belegen keinen Lobbyplatz.
+Deshalb zuerst die Firmware auf 1.4.0 aktualisieren, anschließend den Homeserver.
+Die neue Firmware kann während des Übergangs auch das alte 40×13-Raster darstellen;
+Geometrie und Bewegung bleiben dabei vollständig vom Homeserver bestimmt.
 
 Nach jeder erfolgreichen Verbindung wird ein vollständiger `state` gesendet.
 Für Reconnects sendet das Gerät die erhaltene Sessionkennung statt des Leerstrings.
@@ -118,3 +125,15 @@ Avatartransparenz und Akzentfarben (auch gleiche Farben), 3–2–1 und gemeinsa
 Ende, Eingabelatenz, gleichzeitige Kopfkollision, Wand/Selbstkollision und
 Wiedereinstieg, WLAN-Aussetzer unter/über 15 Sekunden, Serverneustart und neue
 Partie. Diese Hardwareprüfung ist in der Entwicklungsumgebung nicht möglich.
+
+## Spielestatus im Homeserver
+
+Der Reiter **Spielestatus** (`/games`) zeigt die zentrale Partie mit Phase,
+Teilnehmerzahl, verbundenen Gerätekennungen, Restzeit, Teampunkten und Ziel.
+Die Anzeige aktualisiert sich alle fünf Sekunden. Bei einer Unterbrechung bleibt
+der letzte Stand als solcher erkennbar; automatische Wiederholungen laufen weiter.
+Nach Spielende wird das Ergebnis angezeigt, bis die reguläre Aufbewahrung endet.
+Solo-Spiele laufen weiterhin lokal und werden deshalb nicht als Serverpartien erfasst.
+
+Die spielunabhängige Statusschnittstelle und die Erweiterung um andere Spiele
+sind in `docs/game-status.md` des Homeserver-Repositories beschrieben.
