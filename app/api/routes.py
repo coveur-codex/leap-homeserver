@@ -201,3 +201,14 @@ def finance(device_id: str, db: Session = Depends(get_db)):
     if not any(p.page_id == "finance" and p.enabled for p in device.pages):
         raise HTTPException(403, "Finanzen ist für dieses Gerät nicht aktiviert")
     return data_for_device(device, db)
+
+
+from app.services import room
+
+@router.get("/devices/{device_id}/room")
+async def room_state(device_id: str, db: Session = Depends(get_db)):
+    return await room.read_room(device_or_404(device_id, db))
+
+@router.post("/devices/{device_id}/room")
+async def room_command(device_id: str, command: room.Command, db: Session = Depends(get_db)):
+    return await room.command(device_or_404(device_id, db), command)

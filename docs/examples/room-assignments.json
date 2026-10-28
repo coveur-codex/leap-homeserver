@@ -1,0 +1,34 @@
+{
+  "leap-papa": {
+    "climate": "climate.heizung_homeoffice",
+    "lights": [],
+    "minimum": 10,
+    "maximum": 30
+  },
+  "leap-erik": {
+    "climate": "climate.heizung_lars_erik",
+    "lights": [
+      "light.einfahrt_garage",
+      "light.erik_tisch"
+    ],
+    "minimum": 10,
+    "maximum": 30
+  },
+  "leap-lars": {
+    "climate": "climate.heizung_lars_erik",
+    "lights": [
+      "light.lars_hochbett",
+      "light.lars_tisch"
+    ],
+    "minimum": 10,
+    "maximum": 30
+  },
+  "leap-anna": {
+    "climate": "climate.trv_z01_80_7",
+    "lights": [
+      "light.lichterkette_anna"
+    ],
+    "minimum": 10,
+    "maximum": 30
+  }
+}

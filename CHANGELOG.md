@@ -1,3 +1,13 @@
+# 1.5.0-beta.1 – Home Assistant: Mein Zimmer
+
+- Neue Geräte-Seite für eine Heizung in 1-°C-Schritten zwischen 10 und 30 °C
+  sowie bis zu zwei Lampen mit An/Aus und festen RGB-Farben.
+- Zuordnung je Gerät im Editor, gemeinsame Erik-/Lars-Heizung und serverseitige
+  Temperaturgrenzen; Home-Assistant-Token bleibt lokal am Homeserver.
+- Migration 0022 ergänzt vorhandene Geräte; bestehende Seiten bleiben erhalten.
+- Benötigt Firmware 1.5.0-beta.1; zuerst den Homeserver aktualisieren.
+- Einrichtung und Beispiele: `docs/home-assistant.md`.
+
 # 1.4.1 – OTA-Dateiversion verbindlich prüfen
 
 - Upload prüft eingebettete Dateiversion gegen die Release-Version.

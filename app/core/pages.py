@@ -12,4 +12,5 @@ PAGE_REGISTRY = [
     PageDefinition("finance", "Finanzen"),
     PageDefinition("communication", "Kommunikation"),
     PageDefinition("time", "Zeit"), PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
+    PageDefinition("room", "Mein Zimmer"),
 ]
