@@ -2,6 +2,7 @@
   "leap-papa": {
     "climate": "climate.heizung_homeoffice",
     "lights": [],
+    "light_scenes": {},
     "minimum": 10,
     "maximum": 30
   },
@@ -11,6 +12,7 @@
       "light.einfahrt_garage",
       "light.erik_tisch"
     ],
+    "light_scenes": {},
     "minimum": 10,
     "maximum": 30
   },
@@ -20,6 +22,7 @@
       "light.lars_hochbett",
       "light.lars_tisch"
     ],
+    "light_scenes": {},
     "minimum": 10,
     "maximum": 30
   },
@@ -28,6 +31,9 @@
     "lights": [
       "light.lichterkette_anna"
     ],
+    "light_scenes": {
+      "light.lichterkette_anna": "scene.anna_lichterkette_szene"
+    },
     "minimum": 10,
     "maximum": 30
   }

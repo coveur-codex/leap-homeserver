@@ -32,6 +32,7 @@ class RoomConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     climate: str = Field("", pattern=r"^(?:climate\.[a-z0-9_]+)?$")
     lights: list[str] = Field(default_factory=list, max_length=2)
+    light_scenes: dict[str, str] = Field(default_factory=dict, max_length=2)
     minimum: int = Field(10, ge=10, le=30)
     maximum: int = Field(30, ge=10, le=30)
 
@@ -42,6 +43,9 @@ class RoomConfig(BaseModel):
             raise ValueError("Temperaturgrenzen sind vertauscht")
         if any(not re.fullmatch(r"light\.[a-z0-9_]+", x) for x in self.lights):
             raise ValueError("Ungültige Lampen-Entity-ID")
+        if any(light not in self.lights or not re.fullmatch(r"scene\.[a-z0-9_]+", scene)
+               for light, scene in self.light_scenes.items()):
+            raise ValueError("Szene muss einer zugeordneten Lampe gehören und eine scene.…-Entity sein")
         if len(set(self.lights)) != len(self.lights):
             raise ValueError("Lampen dürfen nicht doppelt zugeordnet sein")
         return self
@@ -49,7 +53,8 @@ class RoomConfig(BaseModel):
 
 def default_config(device_id):
     climate, lights = DEFAULT_ROOMS.get(device_id, ("", []))
-    return RoomConfig(climate=climate, lights=lights).model_dump()
+    scenes = {"light.lichterkette_anna": "scene.anna_lichterkette_szene"} if device_id == "leap-anna" else {}
+    return RoomConfig(climate=climate, lights=lights, light_scenes=scenes).model_dump()
 
 
 def configuration(device):
@@ -65,7 +70,7 @@ def configuration(device):
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target: Literal["climate", "light0", "light1"]
-    action: Literal["warmer", "colder", "set_temperature", "on", "off", "color"]
+    action: Literal["warmer", "colder", "set_temperature", "on", "off", "color", "scene"]
     color: Literal["weiss", "rot", "gruen", "blau", "lila", "gelb", "orange", "rosa", "tuerkis", "hellblau"] | None = None
 
     temperature: float | None = Field(None, ge=10, le=30, allow_inf_nan=False)
@@ -77,7 +82,7 @@ class Command(BaseModel):
                 raise ValueError("Ungültiger Heizungsbefehl")
             if (self.action == "set_temperature") != (self.temperature is not None):
                 raise ValueError("Zieltemperatur ist nur für set_temperature erforderlich")
-        elif self.action not in {"on", "off", "color"} or (self.action == "color") != (self.color is not None) or self.temperature is not None:
+        elif self.action not in {"on", "off", "color", "scene"} or (self.action == "color") != (self.color is not None) or self.temperature is not None:
             raise ValueError("Ungültiger Lichtbefehl")
         return self
 
@@ -160,9 +165,12 @@ async def snapshot(cfg, ha, unit):
     entities = ([cfg.climate] if cfg.climate else []) + cfg.lights
     async def read(entity):
         try:
-            return normalize(entity, await ha.state(entity), cfg, unit)
+            value = normalize(entity, await ha.state(entity), cfg, unit)
         except HTTPException:
-            return {"name": entity, "available": False, "controllable": False, "colorSupported": False}
+            value = {"name": entity, "available": False, "controllable": False, "colorSupported": False}
+        if entity.startswith("light."):
+            value["sceneSupported"] = entity in cfg.light_scenes
+        return value
     values = await asyncio.gather(*(read(entity) for entity in entities))
     return {"schemaVersion": 1, "temperatureSetSupported": True, "climate": values[0] if cfg.climate else None,
             "lights": values[1:] if cfg.climate else values, "colors": list(COLORS)}
@@ -207,6 +215,15 @@ async def command(device, cmd):
             await ha.service("climate", "set_temperature", {"entity_id": entity, "temperature": target})
             # Home Assistant normally updates its state during the blocking service call.
             # Only legacy relative steps stay blocked until confirmation.
+        elif cmd.action == "scene":
+            scene = cfg.light_scenes.get(entity)
+            if not scene:
+                raise HTTPException(403, "Dieser Lampe ist keine Szene zugeordnet")
+            scene_state = await ha.state(scene)
+            if scene_state["state"] == "unavailable":
+                raise HTTPException(409, "Szene ist nicht verfügbar")
+            # HA scene states may be 'unknown' before their first activation.
+            await ha.service("scene", "turn_on", {"entity_id": scene})
         elif cmd.action == "color":
             if not normalized["colorSupported"]:
                 raise HTTPException(409, "Diese Lampe unterstützt keine Farben")
@@ -218,5 +235,5 @@ async def command(device, cmd):
         confirmed = cmd.target != "climate" or (climate and climate.get("target") == target)
         if cmd.target == "climate" and confirmed:
             _pending.pop(entity, None)
-        result["notice"] = "Gesendet" if confirmed else "Warte auf Heizungsbestätigung"
+        result["notice"] = "Szene gesendet" if cmd.action == "scene" else "Gesendet" if confirmed else "Warte auf Heizungsbestätigung"
         return result

@@ -203,7 +203,11 @@
 <form method="post" action="/devices/{{device.id}}/room">
 <label><input type="checkbox" name="enabled" {% if room_page and room_page.enabled %}checked{% endif %}>Mein Zimmer aktiv</label>
 <label>Heizung (climate.…, optional)<input name="climate" value="{{rc.get('climate','')}}"></label>
-{% for i in range(2) %}<label>Lampe {{i+1}} (light.…, optional)<input name="light{{i}}" value="{{rc.get('lights',[])[i] if rc.get('lights',[])|length > i else ''}}"></label>{% endfor %}
+{% for i in range(2) %}{% set lamp = rc.get('lights',[])[i] if rc.get('lights',[])|length > i else '' %}
+<label>Lampe {{i+1}} (light.…, optional)<input name="light{{i}}" value="{{lamp}}"></label>
+<label>Szene für Lampe {{i+1}} (scene.…, optional)<input name="scene{{i}}" value="{{rc.get('light_scenes',{}).get(lamp,'')}}" placeholder="scene.anna_lichterkette_szene"></label>
+{% endfor %}
+<p>Mit Szene erscheint die bunte Kachel. Auswahl startet die Szene nach einer Sekunde Pause über scene.turn_on.</p>
 <label>Minimum °C<input type="number" name="minimum" min="10" max="30" value="{{rc.get('minimum',10)}}" required></label>
 <label>Maximum °C<input type="number" name="maximum" min="10" max="30" value="{{rc.get('maximum',30)}}" required></label>
 <p>Erik und Lars teilen sich climate.heizung_lars_erik. Beide bedienen dieselbe Zieltemperatur.</p>
