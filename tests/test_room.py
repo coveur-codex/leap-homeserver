@@ -19,6 +19,7 @@ def ha(monkeypatch):
         "light.einfahrt_garage": {"state": "off", "attributes": {"supported_color_modes": ["rgb"]}},
         "light.erik_tisch": {"state": "off", "attributes": {"supported_color_modes": ["brightness"]}},
         "light.lars_hochbett": {"state": "off", "attributes": {"supported_color_modes": ["xy"]}},
+        "scene.anna_lichterkette_szene": {"state": "unknown", "attributes": {"friendly_name": "Annas Szene"}},
         "light.lars_tisch": {"state": "off", "attributes": {"supported_color_modes": ["hs"]}},
     }
     calls, options = [], {"confirm": True, "fail": False, "unit": "°C"}
@@ -35,6 +36,7 @@ def ha(monkeypatch):
         calls.append((path, data))
         entity = data["entity_id"]
         await asyncio.sleep(.001)
+        if path == "/api/services/scene/turn_on": return httpx.Response(200, json=[])
         if options["confirm"]:
             if "temperature" in data: states[entity]["attributes"]["temperature"] = data["temperature"]
             else: states[entity]["state"] = "off" if path.endswith("turn_off") else "on"
@@ -59,7 +61,7 @@ def test_mapping_and_secret(client, db, ha):
         device(db, name)
         config = client.get(f"/api/v1/devices/{name}/config").json()
         page = next(p for p in config["pages"] if p["id"] == "room")
-        assert page["enabled"] and page["settings"] == dict(climate=climate, lights=lights, minimum=10, maximum=30)
+        assert page["enabled"] and page["settings"] == room.default_config(name)
         assert "test-secret" not in json.dumps(config)
     data = client.get("/api/v1/devices/leap-erik/room").json()
     assert data["climate"]["target"] == 20 and data["climate"]["controllable"]
@@ -185,7 +187,7 @@ def test_migration_preserves_existing_device_pages(tmp_path):
         assert [(p.page_id, p.position, p.settings) for p in d.pages if p.page_id != "room"] == before
         page = next(p for p in d.pages if p.page_id == "room")
         assert page.enabled and page.settings == room.default_config("leap-erik")
-        assert d.config_version == version+1
+        assert d.config_version == version+2
         assert len([p for p in d.pages if p.page_id == "room"]) == 1
 
 
@@ -246,3 +248,120 @@ def test_ten_colors_and_current_palette_color(client, db, ha):
     for invalid in (None, [1], ["red", 1, 1], [0, 0, 0]):
         states["light.einfahrt_garage"]["attributes"]["rgb_color"] = invalid
         assert client.get(path).json()["lights"][0]["color"] is None
+
+
+def assign_scene(db, d, light="light.einfahrt_garage", scene="scene.anna_lichterkette_szene"):
+    page = next(p for p in d.pages if p.page_id == "room")
+    page.settings = {**page.settings, "light_scenes": {light: scene}}
+    db.commit()
+
+
+def test_scene_is_assigned_per_light_and_triggered_as_scene(client, db, ha):
+    states, calls, _ = ha
+    d = device(db)
+    assign_scene(db, d)
+    path = "/api/v1/devices/leap-erik/room"
+    lights = client.get(path).json()["lights"]
+    assert lights[0]["sceneSupported"] and not lights[1]["sceneSupported"]
+    response = client.post(path, json={"target": "light0", "action": "scene"})
+    assert response.status_code == 200 and response.json()["notice"] == "Szene gesendet"
+    assert calls == [("/api/services/scene/turn_on", {"entity_id": "scene.anna_lichterkette_szene"})]
+    assert not response.json()["lights"][0]["on"]  # A scene invocation does not invent lamp/mode confirmation.
+    assert client.post(path, json={"target": "light1", "action": "scene"}).status_code == 403
+    assert len(calls) == 1
+    assert client.post(path, json={"target": "light0", "action": "off"}).status_code == 200
+    assert calls[-1] == ("/api/services/light/turn_off", {"entity_id": "light.einfahrt_garage"})
+
+
+def test_scene_does_not_require_rgb_support_and_errors_do_not_send(client, db, ha):
+    states, calls, _ = ha
+    d = device(db)
+    assign_scene(db, d, light="light.erik_tisch")
+    path = "/api/v1/devices/leap-erik/room"
+    light = client.get(path).json()["lights"][1]
+    assert light["sceneSupported"] and not light["colorSupported"]
+    assert client.post(path, json={"target": "light1", "action": "scene"}).status_code == 200
+    for invalid in [dict(target="climate", action="scene"),
+                    dict(target="light1", action="scene", color="rot"),
+                    dict(target="light1", action="scene", temperature=23),
+                    dict(target="light1", action="scene", entity_id="scene.other")]:
+        assert client.post(path, json=invalid).status_code == 422
+    before = len(calls)
+    states["scene.anna_lichterkette_szene"]["state"] = "unavailable"
+    assert client.post(path, json={"target": "light1", "action": "scene"}).status_code == 409
+    del states["scene.anna_lichterkette_szene"]
+    assert client.post(path, json={"target": "light1", "action": "scene"}).status_code == 503
+    assert len(calls) == before
+
+
+def test_scene_editor_validation_preservation_reorder_and_clear(client, db):
+    d = device(db)
+    path = f"/devices/{d.id}/room"
+    data = dict(enabled="true", light0="light.einfahrt_garage", light1="light.erik_tisch",
+                scene0="scene.anna_lichterkette_szene", minimum=10, maximum=30)
+    assert client.post(path, data=data, follow_redirects=False).status_code == 303
+    page = next(p for p in d.pages if p.page_id == "room")
+    expected = {"light.einfahrt_garage": "scene.anna_lichterkette_szene"}
+    assert page.settings["light_scenes"] == expected
+    html = client.get(f"/devices/{d.id}").text
+    assert 'name="scene0"' in html and 'value="scene.anna_lichterkette_szene"' in html
+    # Old form clients omit the field; assignments remain bound to entity IDs, not positions.
+    data.pop("scene0")
+    data.update(light0="light.erik_tisch", light1="light.einfahrt_garage")
+    assert client.post(path, data=data, follow_redirects=False).status_code == 303
+    assert page.settings["light_scenes"] == expected
+    for invalid in [dict(data, scene0="light.invalid"), dict(data, scene1="scene.bad/path"),
+                    dict(data, light0="", scene0="scene.test")]:
+        assert client.post(path, data=invalid).status_code == 422
+    # Empty input explicitly removes the association.
+    data["scene1"] = ""
+    assert client.post(path, data=data, follow_redirects=False).status_code == 303
+    assert page.settings["light_scenes"] == {}
+    with pytest.raises(ValueError):
+        room.RoomConfig(lights=["light.test"], light_scenes={"light.other": "scene.test"})
+    with pytest.raises(ValueError):
+        room.RoomConfig(lights=["light.test"], light_scenes={"light.test": "script.test"})
+
+
+@pytest.mark.parametrize("preset,light,expected", [
+    ({}, "light.lichterkette_anna", {"light.lichterkette_anna": "scene.anna_lichterkette_szene"}),
+    ({"light.lichterkette_anna": "scene.custom"}, "light.lichterkette_anna", {"light.lichterkette_anna": "scene.custom"}),
+    ({}, "light.replacement", {}),
+])
+def test_scene_migration_preserves_assignments(tmp_path, preset, light, expected):
+    import os
+    import subprocess
+    import sys
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    url = f"sqlite:///{tmp_path / 'scene-migration.db'}"
+    env = {**os.environ, "LEAP_DATABASE_URL": url, "LEAP_DATA_DIR": str(tmp_path)}
+    def migrate(action, revision):
+        subprocess.run([sys.executable, "-m", "alembic", action, revision], env=env,
+                       capture_output=True, check=True, timeout=30)
+    migrate("upgrade", "0022")
+    engine = create_engine(url)
+    with Session(engine) as session:
+        d = Device(device_id="leap-anna", name="Anna")
+        initialize_pages(d)
+        page = next(p for p in d.pages if p.page_id == "room")
+        settings = {"climate": "climate.custom", "lights": [light], "minimum": 12, "maximum": 25, "custom": "preserve"}
+        if preset: settings["light_scenes"] = preset
+        page.settings = settings
+        page.enabled = False
+        session.add(d)
+        session.commit()
+        before = [(p.page_id, p.position, p.enabled) for p in d.pages]
+        version = d.config_version
+    migrate("upgrade", "head")
+    migrate("upgrade", "head")
+    with Session(engine) as session:
+        d = session.scalar(select(Device))
+        page = next(p for p in d.pages if p.page_id == "room")
+        assert page.settings == {**settings, "light_scenes": expected}
+        assert [(p.page_id, p.position, p.enabled) for p in d.pages] == before
+        assert d.config_version == version + (0 if preset else 1)
+    migrate("downgrade", "0022")
+    with Session(engine) as session:
+        d = session.scalar(select(Device))
+        assert "light_scenes" not in next(p for p in d.pages if p.page_id == "room").settings

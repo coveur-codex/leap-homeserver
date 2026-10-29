@@ -1,3 +1,15 @@
+# 1.5.1 – Bunte Kachel für Home-Assistant-Szenen
+
+- Optionale Szene pro Lampe im Homeserver pflegen; bei Zuordnung erscheint eine
+  bunte Kachel in der direkten Links-/Rechts-Farbwahl, ebenfalls mit 1 s Pause.
+- Der Server ruft ausschließlich die zugeordnete Szene über `scene.turn_on` auf.
+  Annas Lichterkette erhält `scene.anna_lichterkette_szene`; bestehende eigene
+  Szenenzuordnungen, Lampen und Temperaturgrenzen bleiben erhalten.
+- Rückkehr zu einer festen Farbe oder Aus sendet einen expliziten Lichtbefehl,
+  auch wenn HA noch den Zustand von vor der Szene meldet. Keine Szenenwiederholung.
+- Die Anzeige „Szene gesendet“ bestätigt den Aufruf, keinen aus HA ausgelesenen
+  Tuya-Modus. Zuerst Homeserver 1.5.1 mit Migration 0023, dann Firmware 1.5.1.
+
 # 1.5.0-beta.2 – Zimmerauswahl mit einer Sekunde Eingabepause
 
 - Temperatur lokal in 1-°C-Schritten vorwählen; nach einer Sekunde ohne weitere

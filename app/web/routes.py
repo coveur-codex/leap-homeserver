@@ -283,16 +283,24 @@ def chill_library_photo(digest: str, db: Session = Depends(get_db)):
 @router.post("/devices/{id}/room")
 def update_room(id: int, climate: str = Form(""), light0: str = Form(""), light1: str = Form(""),
                 minimum: int = Form(10), maximum: int = Form(30), enabled: bool = Form(False),
+                scene0: str | None = Form(None), scene1: str | None = Form(None),
                 db: Session = Depends(get_db)):
     from app.models import DevicePage
     d = db.get(Device, id)
     if not d: raise HTTPException(404)
+    page = next((p for p in d.pages if p.page_id == "room"), None)
+    old_scenes = page.settings.get("light_scenes", {}) if page else {}
+    scenes = {}
+    for light, scene in ((light0.strip(), scene0), (light1.strip(), scene1)):
+        value = old_scenes.get(light, "") if scene is None else scene.strip()
+        if value:
+            if not light: raise HTTPException(422, "Eine Szene benötigt eine Lampe")
+            scenes[light] = value
     try:
         cfg = room.RoomConfig(climate=climate.strip(), lights=[x.strip() for x in (light0, light1) if x.strip()],
-                              minimum=minimum, maximum=maximum)
+                              minimum=minimum, maximum=maximum, light_scenes=scenes)
     except ValueError:
-        raise HTTPException(422, "Ungültige Zimmerzuordnung oder Temperaturgrenzen (10–30 °C)") from None
-    page = next((p for p in d.pages if p.page_id == "room"), None)
+        raise HTTPException(422, "Ungültige Zimmer-/Szenenzuordnung oder Temperaturgrenzen (10–30 °C)") from None
     if not page:
         page = DevicePage(page_id="room", title="Mein Zimmer", position=max((p.position for p in d.pages), default=0)+1)
         d.pages.append(page)

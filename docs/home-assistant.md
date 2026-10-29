@@ -1,6 +1,6 @@
 # LEAP-Zimmersteuerung mit Home Assistant
 
-Ab Homeserver **1.5.0-beta.2** und Firmware **1.5.0-beta.2**.
+Ab Homeserver **1.5.1** und Firmware **1.5.1**.
 
 Die neue Firmwareseite **Mein Zimmer** steuert eine Heizung und null bis zwei
 Lampen über den LEAP-Homeserver. Home Assistant benötigt dafür keine zusätzliche
@@ -9,9 +9,9 @@ vorhandene Zeitpläne und Automationen können sie später wieder überschreiben
 
 ## Einrichtung
 
-1. Homeserver-Datenverzeichnis sichern. Diese Version ergänzt Migration `0022`
-   nach `0021`. Die vorhandenen Seiten, ihre Reihenfolge und Inhalte bleiben bestehen;
-   die neue Seite wird hinten angehängt. Bei anderen Migrationsständen vor dem
+1. Homeserver-Datenverzeichnis sichern. Diese Version ergänzt Migration `0023`
+   nach `0022` für optionale Szenen je Lampe. Vorhandene Seiten, ihre Reihenfolge
+   und Inhalte bleiben erhalten. Bei anderen Migrationsständen vor dem
    Installieren die Versionslinie abgleichen, nicht die Datenbank zurücksetzen.
 2. Im Home-Assistant-Benutzerprofil unter **Sicherheit → Langlebige Zugriffstoken**
    ein Token erstellen. Lokal in der `.env` des Homeservers eintragen:
@@ -31,7 +31,7 @@ vorhandene Zeitpläne und Automationen können sie später wieder überschreiben
    genannten Zuordnungen bei der Migration automatisch angelegt; neue Geräte mit
    diesen IDs erhalten dieselben Startwerte. Andere Geräte starten mit deaktivierter
    Zimmerseite. Das Duplizieren übernimmt keine Zimmerzuordnung.
-5. Firmware **1.5.0-beta.2** mit dem bestehenden Arduino-/CI-Verfahren bauen und
+5. Firmware **1.5.1** mit dem bestehenden Arduino-/CI-Verfahren bauen und
    zunächst auf `leap-papa` testen. Erst den Homeserver, dann die Firmware aktualisieren.
    Die Beta-Dateiversion muss beim Firmware-Upload exakt übereinstimmen. Nach dem
    Gerätesync erscheint **Mein Zimmer**. Kein Home-Assistant-Token im Sketch nötig.
@@ -56,6 +56,24 @@ zusätzliche Verzögerung verursachen.
 [Beispielzuordnungen als JSON](examples/room-assignments.json): Referenz für die
 Felder im Geräteeditor, keine automatisch eingelesene Konfigurationsdatei.
 
+## Optionale Szene je Lampe
+
+Im Geräteeditor unter **Mein Zimmer · Home Assistant** steht bei jeder Lampe ein
+optionales Feld **Szene für Lampe 1/2**. Dort eine Entity-ID wie
+`scene.anna_lichterkette_szene` hinterlegen. Leer speichern entfernt die Zuordnung.
+Die Szene bleibt an die Lampen-Entity gebunden, auch wenn die Reihenfolge geändert
+wird. Szenen für nicht zugeordnete Lampen werden abgelehnt.
+
+Für **leap-anna → light.lichterkette_anna** wird die oben genannte Szene bei der
+Migration und bei neu angelegten Geräten automatisch ergänzt. Eine vorhandene
+abweichende Szene wird nicht überschrieben. Bei anderen Lampen bleibt das Feld leer.
+Die Szenen-Entity muss bereits in Home Assistant verfügbar und ausführbar sein.
+
+Der Homeserver ruft **`scene.turn_on`** mit dieser Entity-ID als Ziel auf. Er
+rekonstruiert keine Effekte und sendet keine Blinkfolge. Was die Szene ausführt
+(z. B. den Tuya-Modus wechseln oder zusätzlich einschalten), wird in Tuya/HA
+festgelegt. Es werden keine zusätzlichen Tuya-Zugangsdaten benötigt.
+
 ## Bedienung am Gerät
 
 Alle folgenden Tasten sind am **rechten** Richtungsschalter:
@@ -63,6 +81,8 @@ Alle folgenden Tasten sind am **rechten** Richtungsschalter:
 - Hoch/runter: Heizung oder Lampe auswählen.
 - Heizung links/rechts: Zieltemperatur lokal −1 / +1 °C vorwählen.
 - Lampe links/rechts: direkte Farbkachel wechseln; Schwarz bedeutet Aus.
+- Bei einer hinterlegten Szene gibt es zusätzlich **Bunt** mit einer
+  mehrfarbigen Kachel. Sie startet die Szene nach derselben einsekündigen Pause.
 - Farben: Weiß, Gelb, Orange, Rot, Rosa, Lila, Blau, Hellblau, Türkis und Grün.
 - Nach **einer Sekunde ohne weitere Wertänderung** werden die gewählten Endwerte
   automatisch übertragen. Mehrere Schritte verursachen einen Sollwertaufruf,
@@ -71,6 +91,7 @@ Alle folgenden Tasten sind am **rechten** Richtungsschalter:
 Der linke Schalter navigiert wie bisher zwischen Seiten und zum Menü.
 Die bereits gewählte Übernahme läuft auch beim Verlassen der Seite weiter.
 „Weiß“ ist ein warm wirkender RGB-Wert, keine Kelvin-Einstellung.
+Die Szenenkachel ist auch ohne RGB-Unterstützung verfügbar.
 Farben sind bei `hs`, `xy`, `rgb`, `rgbw` oder `rgbww` verfügbar; reine Dimmer
 wechseln zwischen Schwarz/Aus und Weiß/An. Andere HA-Farben werden anhand des
 RGB-Werts der nächstliegenden Kachelfarbe zugeordnet.
@@ -143,7 +164,7 @@ data:
 
 `GET /api/v1/devices/{device_id}/room` liefert `schemaVersion: 1`, `climate`,
 `lights` (in Zuordnungsreihenfolge, mit `color` als nächstliegender Palette),
-`colors` und `temperatureSetSupported: true`. Ein POST auf denselben Pfad nimmt
+`colors`, `temperatureSetSupported: true` und pro Lampe `sceneSupported`. Ein POST auf denselben Pfad nimmt
 nur vordefinierte Ziele und Aktionen entgegen, keine freien Entity-IDs:
 
 ```json
@@ -160,7 +181,22 @@ Die bisherige relative Aktion `warmer`/`colder` bleibt für alte Geräte verfüg
 ```
 
 Ziele: `climate`, `light0`, `light1`; Aktionen: `set_temperature` mit `temperature` (10–30 °C), `warmer`, `colder`, `on`,
-`off`, `color` passend zum Ziel. Farbwerte sind serverseitig fest definiert.
+`off`, `color`, `scene` passend zum Ziel. Farbwerte sind serverseitig fest definiert.
+
+```json
+{"target": "light0", "action": "scene"}
+```
+
+Der Client sendet keine freie Szenen-ID. Der Server verwendet nur die zugeordnete
+Szene und prüft deren Existenz/Verfügbarkeit vor dem Aufruf. Eine noch nie
+aktivierte Szene mit HA-Zustand `unknown` ist trotzdem ausführbar.
+„Szene gesendet“ bestätigt die angenommene Aktion; HA liefert für viele Tuya-
+Modelle keinen verlässlichen Modusstatus. Die bunte Kachel zeigt lokal die zuletzt
+angenommene Szene, bis eine feste Farbe/Aus gewählt, ein späteres Ausschalten
+beobachtet oder die lokale Verbindung/Vorschau zurückgesetzt wird. Sie ist keine
+Erkennung externer Szenenaufrufe. Bei Fehlern oder Offline-Verhalten gibt es keine
+automatische Wiederholung. Ein Wechsel von Bunt zu Farbe/Aus sendet immer einen
+Lichtbefehl, auch wenn HA noch denselben Zustand von vor der Szene meldet.
 403: nicht zugeordnet/deaktiviert; 404: Gerät fehlt/deaktiviert; 409: Grenze,
 fehlende Bestätigung oder Gerät nicht steuerbar; 422: ungültige Eingabe;
 503: fehlendes Token, falsche Serveradresse oder HA nicht erreichbar.
