@@ -59,14 +59,18 @@ async def lifespan(app):
         ensure_packages(db)
     from app.api.snake import hub as snake_hub
     snake_hub.start()
+    from app.api.connect_four import matchmaker as four_hub
+    four_hub.start()
     from app.services.game_status import registry as game_status
     game_status.register("snake", "Snake (kooperativ)", snake_hub.status)
+    game_status.register("connect_four", "Vier Gewinnt", four_hub.status)
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.start()
     try:
         yield
     finally:
         await snake_hub.stop()
+        await four_hub.stop()
         from app.services import chill
         await chill.shutdown()
         scheduler.shutdown(wait=False)
@@ -92,3 +96,6 @@ app.include_router(snake_api)
 
 from app.web.games import router as games_web
 app.include_router(games_web)
+
+from app.api.connect_four import router as connect_four_router
+app.include_router(connect_four_router)

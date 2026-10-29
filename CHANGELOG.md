@@ -1,3 +1,11 @@
+# 1.5.2 – Vier Gewinnt im Multiplayer
+
+- Mehrere parallele Zweierpartien, automatische Suche für 30 Sekunden,
+  servergeprüfte Züge mit 30-Sekunden-Frist und Akzentfarben aus der Geräteverwaltung.
+- Verbindungsabbruch pausiert die Zugzeit, 30 Sekunden Wiedereinstieg; gemeinsame
+  Revanche mit wechselndem Startspieler. Alle Partien im vorhandenen Spielestatus.
+- Bestehende Spielefreigaben, Akzentfarben und Datenmodelle; keine neue Migration.
+
 # 1.5.1 – Bunte Kachel für Home-Assistant-Szenen
 
 - Optionale Szene pro Lampe im Homeserver pflegen; bei Zuordnung erscheint eine

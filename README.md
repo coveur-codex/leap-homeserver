@@ -1,4 +1,4 @@
-# LEAP Home Server 1.5.1
+# LEAP Home Server 1.5.2
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -372,3 +372,9 @@ werden. Die zusätzliche bunte Kachel startet sie nach einer Sekunde Eingabepaus
 Annas Lichterkette erhält `scene.anna_lichterkette_szene` als Startzuordnung.
 Zuerst Homeserver 1.5.1 mit Migration 0023, danach Firmware 1.5.1 installieren.
 [Einrichtung und Bedienung](docs/home-assistant.md).
+
+## Vier Gewinnt im Multiplayer
+
+Mehrere parallele Zweierpartien mit Geräteakzentfarben, Punkt/Kreuz,
+30 Sekunden Such- und Zugzeit, Wiederverbindung und gemeinsamer Revanche.
+[Einrichtung, Regeln und Protokoll](docs/connect-four-multiplayer.md).

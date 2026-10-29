@@ -47,3 +47,8 @@ den Geräten werden nicht erfasst, da hierfür keine Laufzeit-Telemetrie existie
 Es bleibt bei einem Uvicorn-Worker für diese zentrale In-Memory-Spielverwaltung;
 Neustart verwirft laufende Sessions. Die Übersicht legt keine zweite Raumverwaltung
 und keine zusätzliche Datenbank-Historie an.
+
+Vier Gewinnt registriert ebenfalls einen Statuslieferanten. Er liefert mehrere
+parallele Zweierpartien mit Runde und Zuganzahl; Verbindungspausen zählen als
+laufende Partie. Die Restzeit entspricht je nach Phase Such-, Zug- oder
+Wiederverbindungsfrist. Regeln: [Vier Gewinnt](connect-four-multiplayer.md).

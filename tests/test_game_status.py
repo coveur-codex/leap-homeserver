@@ -51,7 +51,8 @@ def test_snake_status_tracks_lobby_play_reconnect_and_end(client, monkeypatch):
     room.join('leap-b', 'avatar-frog', '#00ff00', clock[0])
     def snapshot():
         result = client.get('/api/v1/games/status').json()
-        return result, result['games'][0]['sessions'][0]
+        game = next(game for game in result['games'] if game['id'] == 'snake')
+        return result, game['sessions'][0]
     result, session = snapshot()
     assert (result['runningSessions'], result['waitingSessions']) == (0, 1)
     assert session['phase'] == 'lobby' and session['remaining_ms'] == 10000
