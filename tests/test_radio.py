@@ -69,7 +69,7 @@ def test_station_crud_grants_order_revocation_and_sync(client, db):
 
 @pytest.mark.parametrize('url', ['ftp://example.org/a.mp3', 'https://user:pass@example.org/a',
     'https://example.org/a.m3u8', 'https://example.org/a.aac', 'https://example.org:bad/a',
-    'https://example.org/a\r\nHeader:bad', 'https://example.org/a#fragment'])
+    'https://example.org/a\r\nHeader:bad', 'https://example.org/a#fragment', 'https://example.org/a#', 'https://example.org/\\bad'])
 def test_invalid_stream_urls(client, url):
     assert client.post('/radio', data={'name': 'Radio', 'url': url}).status_code == 422
 
@@ -88,22 +88,46 @@ def test_invalid_grants_duplicates_and_names(client, db):
 def test_existing_device_migration(tmp_path):
     path = tmp_path / 'radio.db'
     env = {**os.environ, 'LEAP_DATABASE_URL': f'sqlite:///{path}', 'LEAP_DATA_DIR': str(tmp_path)}
-    def migrate(target):
-        subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', target], env=env, check=True, capture_output=True)
-    migrate('0006')
+    def run(*arguments):
+        subprocess.run([sys.executable, *arguments], env=env, check=True, capture_output=True)
+    run('-m', 'alembic', 'upgrade', '0023')
+    run('-c', """from app.core.database import SessionLocal
+from app.models import Device, DevicePage
+with SessionLocal() as db:
+ d = Device(device_id='old', name='Old', config_version=7)
+ d.pages = [DevicePage(page_id='news', title='News', enabled=True, position=3, settings={'custom': 'keep'})]
+ db.add(d)
+ db.commit()
+""")
+    # Initial migration uses current metadata; reconstruct the actual pre-radio schema.
     with sqlite3.connect(path) as connection:
-        connection.execute("""INSERT INTO devices (id,device_id,name,child_name,age,avatar,avatar_name,
-            communication_enabled,avatar_config,enabled,created_at,updated_at,config_version,news_version,
-            weather_version,aircraft_version,quiz_version,knowledge_version,knowledge_source,home_slots,
-            news_limit,news_max_age_hours,included_feed_ids,excluded_feed_ids,weather_location,temperature_unit,
-            weather_fields,firmware_channel,content_selection,installed_assets)
-            VALUES (1,'old','Old','',8,'dragon','',1,'{}',1,'2026-01-01','2026-01-01',7,1,1,1,1,1,
-            'klexikon','{}',20,48,'[]','[]','','C','[]','stable','[]','{}')""")
-        connection.execute("INSERT INTO device_pages (device_id,page_id,title,enabled,position,settings) VALUES (1,'news','News',1,3,'{}')")
-    migrate('head')
-    migrate('head')
+        connection.execute('ALTER TABLE devices DROP COLUMN radio_station_ids')
+        connection.execute('DROP TABLE radio_stations')
+    run('-m', 'alembic', 'upgrade', 'head')
+    run('-m', 'alembic', 'upgrade', 'head')
     with sqlite3.connect(path) as connection:
-        assert connection.execute('SELECT radio_station_ids,config_version FROM devices').fetchone() [0] == '[]'
-        assert connection.execute("SELECT enabled FROM device_pages WHERE page_id='radio'").fetchone() == (0,)
-        assert connection.execute("SELECT position FROM device_pages WHERE page_id='radio'").fetchone()[0] == connection.execute("SELECT MAX(position) FROM device_pages").fetchone()[0]
+        assert connection.execute('SELECT radio_station_ids,config_version FROM devices').fetchone() == ('[]', 8)
+        assert connection.execute("SELECT enabled,position FROM device_pages WHERE page_id='radio'").fetchone() == (0, 4)
+        assert connection.execute("SELECT enabled,position,settings FROM device_pages WHERE page_id='news'").fetchone() == (1, 3, '{"custom": "keep"}')
+    run('-m', 'alembic', 'downgrade', '0023')
+    with sqlite3.connect(path) as connection:
+        assert 'radio_station_ids' not in [row[1] for row in connection.execute('PRAGMA table_info(devices)')]
+        assert connection.execute("SELECT COUNT(*) FROM device_pages WHERE page_id='radio'").fetchone() == (0,)
         assert connection.execute("SELECT enabled,position FROM device_pages WHERE page_id='news'").fetchone() == (1, 3)
+
+
+def test_duplicate_device_preserves_radio_grants_and_page(client, db):
+    d = device(db, 'original')
+    station = RadioStation(name='Radio', url='https://example.org/mp3')
+    db.add(station)
+    db.commit()
+    assert save_device(client, d, [station.id]).status_code == 303
+    assert client.post(f'/devices/{d.id}/duplicate', follow_redirects=False).status_code == 303
+    copied = db.scalar(select(Device).where(Device.device_id == 'original-copy'))
+    assert copied.radio_station_ids == [station.id]
+    assert config(client, copied)['radioStations'] == config(client, d)['radioStations']
+
+
+def test_scheme_normalization_matches_firmware_validation(client, db):
+    assert client.post('/radio', data={'name': 'HTTPS', 'url': 'HTTPS://example.org/Live?Token=ABC'}, follow_redirects=False).status_code == 303
+    assert db.scalar(select(RadioStation)).url == 'https://example.org/Live?Token=ABC'

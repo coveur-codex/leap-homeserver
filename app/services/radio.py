@@ -1,5 +1,5 @@
 """Central stations and explicit per-device grants in the existing config snapshot."""
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,12 +17,12 @@ def validate_station(name: str, url: str, position: int) -> tuple[str, str]:
     except ValueError:
         valid = False
     if (not name or len(name.encode("utf-8")) > 120 or len(url.encode("utf-8")) > 1000 or
-        not valid or any(ord(c) <= 32 or ord(c) == 127 for c in url) or
+        not valid or "#" in url or "\\" in url or any(ord(c) <= 32 or ord(c) == 127 for c in url) or
         any(ord(c) < 32 for c in name) or not 1 <= position <= 9999):
         raise HTTPException(422, "Name, Position und direkte HTTP(S)-MP3-Stream-URL prüfen")
     if parsed.path.lower().endswith((".m3u", ".m3u8", ".pls", ".aac", ".ogg", ".flac", ".wav")):
         raise HTTPException(422, "Nur direkte MP3-Streams, keine Playlists oder anderen Audioformate")
-    return name, url
+    return name, urlunsplit(parsed)
 
 def stations(db: Session):
     return db.scalars(select(RadioStation).order_by(RadioStation.position, RadioStation.id)).all()

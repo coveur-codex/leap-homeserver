@@ -1,4 +1,4 @@
-# LEAP Home Server 1.5.2
+# LEAP Home Server 1.6.0
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -378,3 +378,9 @@ Zuerst Homeserver 1.5.1 mit Migration 0023, danach Firmware 1.5.1 installieren.
 Mehrere parallele Zweierpartien mit Geräteakzentfarben, Punkt/Kreuz,
 30 Sekunden Such- und Zugzeit, Wiederverbindung und gemeinsamer Revanche.
 [Einrichtung, Regeln und Protokoll](docs/connect-four-multiplayer.md).
+
+## Internetradio (1.6.0)
+
+Zentrale Radiosender unter **Radio** verwalten und in der Geräteverwaltung
+Radio sowie einzelne Sender freigeben. Einrichtung und Sync-Vertrag:
+[Radio-Dokumentation](docs/radio.md). Erfordert Migration `0024` und Firmware 1.6.0.

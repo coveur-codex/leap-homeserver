@@ -180,8 +180,8 @@ def test_migration_preserves_existing_device_pages(tmp_path):
         session.commit()
         before = [(p.page_id, p.position, p.settings) for p in d.pages]
         version = d.config_version
-    migrate("head")
-    migrate("head")
+    migrate("0023")
+    migrate("0023")
     with Session(engine) as session:
         d = session.scalar(select(Device))
         assert [(p.page_id, p.position, p.settings) for p in d.pages if p.page_id != "room"] == before
@@ -353,8 +353,8 @@ def test_scene_migration_preserves_assignments(tmp_path, preset, light, expected
         session.commit()
         before = [(p.page_id, p.position, p.enabled) for p in d.pages]
         version = d.config_version
-    migrate("upgrade", "head")
-    migrate("upgrade", "head")
+    migrate("upgrade", "0023")
+    migrate("upgrade", "0023")
     with Session(engine) as session:
         d = session.scalar(select(Device))
         page = next(p for p in d.pages if p.page_id == "room")
