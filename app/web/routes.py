@@ -17,7 +17,8 @@ from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,Qu
 from app.services.devices import initialize_pages, page_enabled
 from app.services import finance as finance_service
 from app.services import room
-from app.services import communication
+from app.services import communication, radio
+from app.models import RadioStation
 from app.services.backup import backup_database
 from app.services.feeds import fetch_feed
 from app.services.news import articles_for_device
@@ -60,9 +61,9 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
     preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"radio_stations":radio.stations(db),"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),radio_station_ids:list[int]=Form([]),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     if accent_color is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent_color):
@@ -120,6 +121,9 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         from app.services.chill import keyword
         try: d.chill_keyword=keyword(chill_keyword)
         except ValueError as error: raise HTTPException(422,str(error))
+    if len(set(radio_station_ids)) > radio.MAX_STATIONS or any(not db.get(RadioStation, key) for key in radio_station_ids):
+        raise HTTPException(422, "Unbekannte Senderauswahl oder mehr als 32 Sender")
+    d.radio_station_ids=sorted(set(radio_station_ids))
     old_knowledge_source=d.knowledge_source
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.communication_enabled=communication_enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
     positions=dict(zip((page.page_id for page in d.pages),page_positions))
@@ -140,7 +144,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
 def delete_device(id:int,db:Session=Depends(get_db)): db.delete(db.get(Device,id)); db.commit(); return redir("/devices")
 @router.post("/devices/{id}/duplicate")
 def duplicate_device(id:int,db:Session=Depends(get_db)):
-    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),math_lab=dict(old.math_lab),network_config=dict(old.network_config),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs))
+    old=db.get(Device,id); d=Device(device_id=old.device_id+"-copy",name=old.name+" (Kopie)",child_name=old.child_name,age=old.age,avatar=old.avatar,avatar_name=old.avatar_name,accent_color=old.accent_color,location_altitude_meters=old.location_altitude_meters,notification_sounds=dict(old.notification_sounds),notification_quiet_hours=dict(old.notification_quiet_hours),communication_enabled=old.communication_enabled,math_quiz=dict(old.math_quiz),math_lab=dict(old.math_lab),network_config=dict(old.network_config),weather_location=old.weather_location,latitude=old.latitude,longitude=old.longitude,temperature_unit=old.temperature_unit,knowledge_source=old.knowledge_source,firmware_channel=old.firmware_channel,enabled_games=list(old.enabled_games),content_selection=list(old.content_selection),chill_keyword=old.chill_keyword,quiz_catalogs=list(old.quiz_catalogs),radio_station_ids=list(old.radio_station_ids))
     d.content_selection=[key for key in d.content_selection if key != old.chill_album_id]
     initialize_pages(d)
     for page in d.pages:
@@ -309,3 +313,38 @@ def update_room(id: int, climate: str = Form(""), light0: str = Form(""), light1
     d.config_version += 1
     db.commit()
     return redir(f"/devices/{id}")
+
+
+@router.get("/radio", response_class=HTMLResponse)
+def radio_stations(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "radio.html", {"stations": radio.stations(db)})
+
+@router.post("/radio")
+def add_radio(name: str = Form(), url: str = Form(), position: int = Form(1), enabled: bool = Form(False), db: Session = Depends(get_db)):
+    name, url = radio.validate_station(name, url, position)
+    if db.scalar(select(RadioStation).where(RadioStation.url == url)):
+        raise HTTPException(409, "Stream-URL bereits vorhanden")
+    db.add(RadioStation(name=name, url=url, position=position, enabled=enabled))
+    db.commit()
+    return redir("/radio")
+
+@router.post("/radio/{id}")
+def update_radio(id: int, name: str = Form(), url: str = Form(), position: int = Form(1), enabled: bool = Form(False), db: Session = Depends(get_db)):
+    station = db.get(RadioStation, id)
+    if not station: raise HTTPException(404)
+    name, url = radio.validate_station(name, url, position)
+    if db.scalar(select(RadioStation).where(RadioStation.url == url, RadioStation.id != id)):
+        raise HTTPException(409, "Stream-URL bereits vorhanden")
+    station.name, station.url, station.position, station.enabled = name, url, position, enabled
+    radio.bump_assigned(db, id)
+    db.commit()
+    return redir("/radio")
+
+@router.post("/radio/{id}/delete")
+def delete_radio(id: int, db: Session = Depends(get_db)):
+    station = db.get(RadioStation, id)
+    if not station: raise HTTPException(404)
+    radio.bump_assigned(db, id, delete=True)
+    db.delete(station)
+    db.commit()
+    return redir("/radio")

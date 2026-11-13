@@ -49,6 +49,7 @@ class Device(Base):
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
     memory_usage: Mapped[dict|None] = mapped_column(JSON)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
+    radio_station_ids: Mapped[list]=mapped_column(JSON, default=list, server_default="[]")
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
     location_altitude_meters: Mapped[float|None] = mapped_column(Float)
     notification_quiet_hours: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -191,3 +192,12 @@ class FinanceCache(Base):
     news_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
     news_error: Mapped[str | None] = mapped_column(Text)
+
+
+class RadioStation(Base):
+    __tablename__ = "radio_stations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(1000), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    position: Mapped[int] = mapped_column(Integer, default=1)

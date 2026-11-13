@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Radio · Sender</h1>
+<p>Direkte MP3-Streams. Die Freigabe erfolgt pro Gerät unter Geräte → Radio.</p>
+<h2>Sender hinzufügen</h2>
+<form method="post" action="/radio">
+<label>Name<input name="name" maxlength="120" required></label>
+<label>Stream-URL<input type="url" name="url" maxlength="1000" placeholder="https://…/stream.mp3" required></label>
+<label>Reihenfolge<input type="number" name="position" min="1" max="9999" value="1" required></label>
+<label><input type="checkbox" name="enabled" checked> Aktiv</label><button>Speichern</button>
+</form>
+<h2>Radiosender</h2>
+<table><tr><th>Name / Stream</th><th>Aktionen</th></tr>
+{% for s in stations %}<tr><td><form id="station-{{s.id}}" method="post" action="/radio/{{s.id}}">
+<label>Name<input name="name" value="{{s.name}}" maxlength="120" required></label>
+<label>Stream-URL<input name="url" type="url" value="{{s.url}}" maxlength="1000" required></label>
+<label>Reihenfolge<input name="position" type="number" min="1" max="9999" value="{{s.position}}" required></label>
+<label><input name="enabled" type="checkbox" {% if s.enabled %}checked{% endif %}> Aktiv</label>
+</form></td><td><button form="station-{{s.id}}">Speichern</button>
+<form class="inline" method="post" action="/radio/{{s.id}}/delete" onsubmit="return confirm('Sender und Gerätefreigaben löschen?')"><button class="danger">Löschen</button></form></td></tr>
+{% else %}<tr><td colspan="2">Noch keine Radiosender angelegt.</td></tr>{% endfor %}</table>
+{% endblock %}
