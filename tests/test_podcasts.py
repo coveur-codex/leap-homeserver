@@ -75,11 +75,21 @@ def test_all_episodes_pagination_grants_and_resume(client,db):
         if data['nextOffset'] is None:break
         offset=data['nextOffset']
     assert len(set(seen))==57 and seen[0]==f'{0:064x}' and seen[-1]==f'{56:064x}'
+    anchored=client.get(base+f'/{p.id}/episodes?anchor={seen[30]}&direction=1').json()
+    assert anchored['selectedOffset']==31 and anchored['offset']==24
+    # A newly published episode must not shift a previous/next action to the wrong neighbor.
+    db.add(PodcastEpisode(id=f'{99:064x}',podcast_id=p.id,external_id='99',title='New',
+        published_at=datetime(2027,1,1,tzinfo=timezone.utc),url='https://example.org/new.mp3',mime_type='audio/mpeg',supported=True))
+    db.commit()
+    anchored=client.get(base+f'/{p.id}/episodes?offset=24&anchor={seen[30]}&direction=1').json()
+    selected=anchored['episodes'][anchored['selectedOffset']-anchored['offset']]
+    assert selected['id']==seen[31]
+    assert client.get(base+f'/{p.id}/episodes?anchor=missing').status_code==404
     assert client.get(base+'/resume').json()=={'episode':None}
     body={'podcastId':p.id,'episodeId':seen[30],'position':40,'duration':120,'status':'partial','revision':1700000000000}
     assert client.post(base+'/progress',json=body).json()['ok']
     resumed=client.get(base+'/resume').json()
-    assert resumed['episode']['id']==seen[30] and resumed['offset']==30 and resumed['episode']['position']==40
+    assert resumed['episode']['id']==seen[30] and resumed['offset']==31 and resumed['episode']['position']==40
     # Revision makes offline retries idempotent; a delayed packet cannot overwrite newer progress.
     assert client.post(base+'/progress',json={**body,'position':5,'revision':2}).json()['revision']==body['revision']
     assert client.get(base+'/resume').json()['episode']['position']==40

@@ -21,12 +21,19 @@ def resume(device_id: str, db: Session = Depends(get_db)):
 
 @router.get('/{podcast_id}/episodes')
 def episodes(device_id: str, podcast_id: int, offset: int = Query(0, ge=0), limit: int = Query(12, ge=1, le=20),
-             db: Session = Depends(get_db)):
+             anchor: str = "", direction: int = Query(0, ge=-100000, le=100000), db: Session = Depends(get_db)):
     d = device_or_404(device_id, db); service.authorize(d, podcast_id, db)
     query = select(PodcastEpisode).where(*service.available(podcast_id))
     total = db.scalar(select(func.count()).select_from(query.subquery()))
+    selected = None
+    if anchor:
+        e = db.get(PodcastEpisode, anchor)
+        if not e or e.podcast_id != podcast_id or not e.available or not e.supported:
+            raise HTTPException(404, 'Episode nicht mehr verfügbar')
+        selected = max(0, min(total - 1, service.episode_index(e, db) + direction))
+        offset = (selected // limit) * limit
     rows = db.scalars(query.order_by(*service.ORDER).offset(offset).limit(limit)).all()
-    return {'podcastId': podcast_id, 'offset': offset, 'total': total,
+    return {'selectedOffset': selected,'podcastId': podcast_id, 'offset': offset, 'total': total,
             'nextOffset': offset + limit if offset + limit < total else None,
             'episodes': [service.serialize(e, d, db) for e in rows]}
 

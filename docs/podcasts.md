@@ -49,6 +49,10 @@ Es wird dasselbe Vertrauensmodell im Heimnetz verwendet, keine neue Anmeldung.
 Konfiguration: `config.podcasts = [{id, name, episodeCount}]`, unabhängig von
 Episodenlisten und Wiedergabedaten. Sortierung: Veröffentlichungsdatum absteigend,
 bei gleichem Datum stabile Episoden-ID absteigend. Bereits gehörte Folgen bleiben sichtbar.
+Für Vorige/Nächste während der Wiedergabe kann die Listenanfrage `anchor={episode_id}`
+und eine relative `direction` angeben. Der Server bestimmt den aktuellen Offset und
+liefert `selectedOffset`; neue RSS-Einträge verschieben dadurch nicht den gewählten
+Nachbarn. Ohne Anker bleibt normale Offset-Pagination erhalten.
 
 Ein Fortschrittsupload enthält `podcastId`, `episodeId`, `position` und `duration`
 in Sekunden, `status` (`unheard`, `partial`, `completed`), eine steigende
