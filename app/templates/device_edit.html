@@ -23,6 +23,10 @@
     <input type="hidden" name="game_settings" value="true">
     {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
   </section>
+    <section><h2>Podcasts</h2><input type="hidden" name="podcast_settings" value="true">
+    <p>Podcasts oben unter Seiten aktivieren. Bis zu 32 Kanäle freigeben.</p>
+    {% for p in podcasts %}<label><input type="checkbox" name="podcast_ids" value="{{p.id}}" {% if p.id in device.podcast_ids %}checked{% endif %}>{{p.name}}{% if not p.enabled %} (zentral inaktiv){% endif %}</label>
+    {% else %}<p><a href="/podcasts">Podcasts anlegen</a></p>{% endfor %}</section>
     <section><h2>Radio</h2><p>Radio oben unter Seiten aktivieren. Bis zu 32 Sender freigeben.</p>
     {% for s in radio_stations %}<label><input type="checkbox" name="radio_station_ids" value="{{s.id}}" {% if s.id in device.radio_station_ids %}checked{% endif %}>{{s.name}}{% if not s.enabled %} (zentral inaktiv){% endif %}</label>
     {% else %}<p><a href="/radio">Radiosender anlegen</a></p>{% endfor %}</section>

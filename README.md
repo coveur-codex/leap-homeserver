@@ -1,4 +1,4 @@
-# LEAP Home Server 1.6.0
+# LEAP Home Server 1.7.0
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -384,3 +384,13 @@ Mehrere parallele Zweierpartien mit Geräteakzentfarben, Punkt/Kreuz,
 Zentrale Radiosender unter **Radio** verwalten und in der Geräteverwaltung
 Radio sowie einzelne Sender freigeben. Einrichtung und Sync-Vertrag:
 [Radio-Dokumentation](docs/radio.md). Erfordert Migration `0024` und Firmware 1.6.0.
+
+
+## Podcasts Stufe 1 (1.7.0)
+
+Unter **Podcasts** RSS-/Atom-Feeds verwalten und Episoden prüfen. In der
+Geräteverwaltung die Podcast-Seite aktivieren und Kanäle individuell freigeben.
+Episodenlisten und Hörfortschritt werden getrennt von der Konfiguration
+übertragen; MP3s streamt das Gerät direkt vom Anbieter. Erfordert Migration
+**0025** und Firmware **1.7.0**.
+[Einrichtung, API, Fortschritt und Grenzen](docs/podcasts.md).

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Podcasts · Feeds</h1><p>RSS-/Atom-Feeds werden alle drei Stunden aktualisiert. Freigaben: Geräte → Podcasts. Audiodateien streamt LEAP direkt vom Anbieter.</p>
+<h2>Podcast hinzufügen &amp; testen</h2>
+<form method="post" action="/podcasts">
+<label>Name<input name="name" maxlength="120" required></label>
+<label>RSS-Feed-URL<input name="url" type="url" maxlength="1000" required></label>
+<label>Reihenfolge<input name="position" type="number" min="1" max="9999" value="1" required></label>
+<label><input name="enabled" type="checkbox" checked> Aktiv</label><button>Speichern und abrufen</button></form>
+<h2>Podcasts</h2><table><tr><th>Name / Feed</th><th>Status / Diagnose</th><th>Aktionen</th></tr>
+{% for p in podcasts %}<tr><td><form id="podcast-{{p.id}}" method="post" action="/podcasts/{{p.id}}">
+<label>Name<input name="name" maxlength="120" value="{{p.name}}" required></label>
+<label>RSS-Feed-URL<input name="url" type="url" maxlength="1000" value="{{p.url}}" required></label>
+<label>Reihenfolge<input name="position" type="number" min="1" max="9999" value="{{p.position}}" required></label>
+<label><input name="enabled" type="checkbox" {% if p.enabled %}checked{% endif %}> Aktiv</label></form></td>
+<td>{{counts.get(p.id,0)}} MP3-Episoden<br>Letzter Erfolg: {{p.last_success or 'noch nicht geprüft'}}{% if p.last_error %}<br><mark>{{p.last_error}}</mark>{% endif %}</td>
+<td><button form="podcast-{{p.id}}">Speichern</button><form class="inline" method="post" action="/podcasts/{{p.id}}/fetch"><button>Aktualisieren</button></form>
+<a href="/podcasts/{{p.id}}/episodes">Episoden anzeigen</a>
+<form class="inline" method="post" action="/podcasts/{{p.id}}/delete" onsubmit="return confirm('Podcast, Episoden, Fortschritt und Freigaben löschen?')"><button class="danger">Löschen</button></form></td></tr>
+{% else %}<tr><td colspan="3">Noch keine Podcasts angelegt.</td></tr>{% endfor %}</table>{% endblock %}

@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}<h1>{{podcast.name}} · Episoden</h1><p><a href="/podcasts">Zu den Podcasts</a> · {{total}} erkannte Episoden</p>
+<table><tr><th>Titel</th><th>Datum / Dauer</th><th>Format / Verfügbarkeit</th></tr>
+{% for e in episodes %}<tr><td>{{e.title}}<br><small>{{e.description[:250]}}</small></td><td>{{e.published_at}}<br>{{e.duration or '?'}} s</td><td>{{e.mime_type or 'unbekannt'}}<br>{% if not e.available %}Nicht mehr im Feed{% elif e.supported %}MP3 · auf LEAP abspielbar{% else %}Auf LEAP nicht unterstützt{% endif %}</td></tr>{% endfor %}</table>
+{% if offset %}<a href="?offset={{[0,offset-50]|max}}">Vorherige</a>{% endif %} {% if offset+50 < total %}<a href="?offset={{offset+50}}">Weitere Episoden</a>{% endif %}{% endblock %}

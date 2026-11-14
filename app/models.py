@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .core.database import Base
 from .core.games import DEFAULT_GAMES
@@ -49,6 +49,9 @@ class Device(Base):
     battery: Mapped[int|None]=mapped_column(Integer); wifi_rssi: Mapped[int|None]=mapped_column(Integer); free_flash: Mapped[int|None]=mapped_column(Integer)
     memory_usage: Mapped[dict|None] = mapped_column(JSON)
     news_limit: Mapped[int]=mapped_column(Integer, default=20); news_max_age_hours: Mapped[int]=mapped_column(Integer, default=48)
+    podcast_progress: Mapped[list["PodcastProgress"]] = relationship(cascade="all, delete-orphan")
+    podcast_ids: Mapped[list]=mapped_column(JSON, default=list, server_default="[]")
+    podcast_last: Mapped[dict]=mapped_column(JSON, default=dict, server_default="{}")
     radio_station_ids: Mapped[list]=mapped_column(JSON, default=list, server_default="[]")
     included_feed_ids: Mapped[list]=mapped_column(JSON, default=list); excluded_feed_ids: Mapped[list]=mapped_column(JSON, default=list)
     location_altitude_meters: Mapped[float|None] = mapped_column(Float)
@@ -201,3 +204,42 @@ class RadioStation(Base):
     url: Mapped[str] = mapped_column(String(1000), unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     position: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class Podcast(Base):
+    __tablename__ = "podcasts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(1000), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    position: Mapped[int] = mapped_column(Integer, default=1)
+    last_fetch: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+    last_success: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str|None] = mapped_column(Text)
+    episodes: Mapped[list["PodcastEpisode"]] = relationship(cascade="all, delete-orphan")
+
+class PodcastEpisode(Base):
+    __tablename__ = "podcast_episodes"
+    __table_args__ = (UniqueConstraint("podcast_id", "external_id"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    podcast_id: Mapped[int] = mapped_column(ForeignKey("podcasts.id", ondelete="CASCADE"), index=True)
+    external_id: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text, default="")
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    duration: Mapped[int|None] = mapped_column(Integer)
+    url: Mapped[str] = mapped_column(String(1000))
+    mime_type: Mapped[str] = mapped_column(String(100))
+    supported: Mapped[bool] = mapped_column(Boolean)
+    available: Mapped[bool] = mapped_column(Boolean, default=True)
+    progress: Mapped[list["PodcastProgress"]] = relationship(cascade="all, delete-orphan")
+
+class PodcastProgress(Base):
+    __tablename__ = "podcast_progress"
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("podcast_episodes.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    duration: Mapped[int|None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="unheard")
+    revision: Mapped[int] = mapped_column(BigInteger, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

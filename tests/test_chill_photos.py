@@ -264,7 +264,8 @@ async def test_background_fetch_shutdown_and_topic_change(db, monkeypatch):
     assert calls == ["nature"]
     release.set()
     await chill._fetches[1][1]
-    await chill.photo(d)
+    # Image processing for the new topic runs in a worker; its success is not a 10 ms deadline.
+    await chill.photo(d, wait=1)
     assert calls == ["nature", "forest"]
     release.clear()
     d.chill_keyword = "ocean"
