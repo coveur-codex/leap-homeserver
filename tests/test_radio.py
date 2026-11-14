@@ -106,7 +106,7 @@ with SessionLocal() as db:
     run('-m', 'alembic', 'upgrade', 'head')
     run('-m', 'alembic', 'upgrade', 'head')
     with sqlite3.connect(path) as connection:
-        assert connection.execute('SELECT radio_station_ids,config_version FROM devices').fetchone() == ('[]', 8)
+        assert connection.execute('SELECT radio_station_ids,config_version FROM devices').fetchone() == ('[]', 9)
         assert connection.execute("SELECT enabled,position FROM device_pages WHERE page_id='radio'").fetchone() == (0, 4)
         assert connection.execute("SELECT enabled,position,settings FROM device_pages WHERE page_id='news'").fetchone() == (1, 3, '{"custom": "keep"}')
     run('-m', 'alembic', 'downgrade', '0023')

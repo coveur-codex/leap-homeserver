@@ -25,6 +25,11 @@ async def scheduled_feeds():
         for feed in db.scalars(select(Feed).where(Feed.enabled==True)).all():
             last=feed.last_fetch.replace(tzinfo=timezone.utc) if feed.last_fetch and feed.last_fetch.tzinfo is None else feed.last_fetch
             if not last or last < now-timedelta(minutes=feed.update_interval): await fetch_feed(feed,db)
+async def scheduled_podcasts():
+    from app.services.podcasts import refresh_due
+    with SessionLocal() as db:
+        await refresh_due(db)
+
 async def scheduled_finance():
     from app.services.finance import refresh_configured
     with SessionLocal() as db:
@@ -65,7 +70,7 @@ async def lifespan(app):
     game_status.register("snake", "Snake (kooperativ)", snake_hub.status)
     game_status.register("connect_four", "Vier Gewinnt", four_hub.status)
     scheduler=AsyncIOScheduler()
-    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.start()
+    log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.add_job(scheduled_podcasts,"interval",minutes=1,max_instances=1,coalesce=True,id="podcasts");scheduler.start()
     try:
         yield
     finally:
@@ -99,3 +104,8 @@ app.include_router(games_web)
 
 from app.api.connect_four import router as connect_four_router
 app.include_router(connect_four_router)
+
+from app.api.podcasts import router as podcasts_api
+from app.web.podcasts import router as podcasts_web
+app.include_router(podcasts_api)
+app.include_router(podcasts_web)

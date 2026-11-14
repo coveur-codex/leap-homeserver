@@ -11,6 +11,6 @@ PAGE_REGISTRY = [
     PageDefinition("games", "Spiele"), PageDefinition("aircraft", "Flugzeuge"),
     PageDefinition("finance", "Finanzen"),
     PageDefinition("communication", "Kommunikation"),
-    PageDefinition("time", "Zeit"), PageDefinition("radio", "Radio"), PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
+    PageDefinition("time", "Zeit"), PageDefinition("radio", "Radio"), PageDefinition("podcasts", "Podcasts"), PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
     PageDefinition("room", "Mein Zimmer"),
 ]
