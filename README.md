@@ -29,6 +29,17 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 7. Im Geräteeditor die 428×142-Vorschau prüfen.
 8. Speicherbelegung für Flash (Firmware), LittleFS und PSRAM in der Geräteübersicht oder im Geräteeditor ablesen. Die Werte stammen vom letzten Check-in einer passenden Firmware und sind mit Zeitstempel versehen.
 
+Im Geräteeditor stehen **Allgemein**, **Seiten** und die **Seiteneinstellungen**
+nebeneinander. Ein Klick auf einen Seitennamen öffnet die passenden Einstellungen;
+die Checkbox aktiviert die Seite. Am Anfasser lassen sich Seiten nach oben oder unten
+ziehen, alternativ mit ↑/↓ sowie Pos1/Ende auf dem fokussierten Anfasser. Die Reihenfolge
+wird mit **Speichern & Version erhöhen** übernommen, auch für deaktivierte Seiten.
+**Mein Zimmer** enthält die Heizungs-, Lampen- und Szenenzuordnung; das **Mathe-Labor**
+liegt bei **Spiele**. Zimmerzuordnung und Mathe-Labor behalten ihre eigenen
+Speicherbuttons. Unter der Display-Vorschau folgen **Firmware**, **WLAN und Server**
+sowie **Sync- und Update-Status** mit Speicherbelegung. Auf schmalen Bildschirmen
+stehen die Bereiche untereinander.
+
 Über **Design** in der Kopfzeile lässt sich zwischen **Hell**, **Dunkel** und
 **System** wechseln. Die Auswahl wird pro Browser gespeichert; **System** folgt
 dem Farbschema des Betriebssystems. Standard ist **Hell**. Das Design gilt für
@@ -308,7 +319,8 @@ Pro Gerät unter **Seiten → Finanzen** aktivieren und im Abschnitt **Finanzen*
 Migration 0020 ergänzt je Gerät Serveradresse, vier WLAN-Profile und Zielzahlen
 für „Fehlenden Teil finden“ im Mathe-Labor (z. B. `9,10` oder `3-15`, 1–100).
 Die Firmware bietet zusätzlich vier lokale WLAN-Profile mit Eingabe am Gerät.
-Im Geräteeditor über „WLAN und Server“ / „Zahlenzerlegung“ erreichbar.
+Im Geräteeditor unterhalb der Display-Vorschau über **WLAN und Server** erreichbar.
+Die Zahlenzerlegung liegt unter **Seiten → Spiele → Mathe-Labor**.
 Neue Geräte-Route: `GET /api/v1/devices/{id}/network-config`, `Cache-Control: no-store`.
 HTTP überträgt Passwörter unverschlüsselt; WLANs im vertrauten Heimnetz vorbereiten.
 Die bestehende Geräte-API erhält dadurch keine automatische Zugriffssicherung.

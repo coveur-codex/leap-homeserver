@@ -185,7 +185,7 @@ def test_knowledge_configuration_and_preview(client,db):
  settings=BeautifulSoup(client.get(f"/devices/{device.id}").text,"html.parser")
  pages=settings.find("h2",string="Seiten").parent
  assert pages.select_one('input[name="page_ids"][value="knowledge"]') is not None
- assert len(pages.select('input[name="page_positions"][type="number"]'))==len(device.pages)
+ assert len(pages.select('input[name="page_order_ids"][type="hidden"]'))==len(device.pages)
  assert settings.find("h2",string="Standort") is not None
  assert settings.select_one('input[name="knowledge_enabled"]') is None
  form={"device_id":device.device_id,"name":device.name,"age":device.age,"avatar":device.avatar,"enabled":"on","page_ids":["home","knowledge"],"knowledge_source":"miniklexikon"}

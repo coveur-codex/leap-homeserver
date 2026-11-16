@@ -92,25 +92,53 @@ fieldset { min-width: 0; margin: .7rem 0; border: 1px solid var(--border); borde
 .chill-card [data-chill-slider] { position: absolute; bottom: 8%; left: 29%; width: 42%; opacity: 0; transition: opacity .6s; }
 .chill-card:hover [data-chill-slider], .chill-card:focus-within [data-chill-slider] { opacity: .6; }
 
-/* Independent cards flow into responsive columns without tall grid-row gaps. */
-main:has(.device-settings){max-width:1440px}
-.device-settings{column-width:280px;column-gap:1rem}
-.device-settings>section{display:inline-block;width:100%;min-width:0;margin:0 0 1rem;vertical-align:top;break-inside:avoid;overflow-wrap:anywhere}
-.device-settings.device-settings-packed{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));grid-auto-rows:1px;grid-auto-flow:dense;gap:0 1rem;align-items:start;column-width:auto}
-.device-settings-packed>section{margin:0;grid-row-end:span var(--settings-rows,1)}
-.device-settings label{margin:.45rem 0}
-.device-settings input:not([type=checkbox]),.device-settings select{padding:.45rem}
-.device-settings p{margin:.5rem 0;font-size:.9rem}
-.device-settings .finance-symbol-row{gap:.4rem;padding:.5rem 0;border-top:1px solid var(--border)}
-.device-settings .finance-symbol-row span{flex-basis:calc(100% - 4rem);min-width:0;font-size:.85rem}
-.device-settings .finance-symbol-row button{font-size:.8rem;padding:.35rem .5rem}
-.device-settings .finance-symbol-add button{margin-top:.25rem}
-.device-settings h2{margin-top:0}
-.device-settings h3{margin:1rem 0 .5rem;font-size:1rem}
+/* Device editor: general settings, sortable pages and the selected page's details. */
+main:has(.device-editor){max-width:1440px}
+.device-editor{padding:0;background:transparent;box-shadow:none}
+.device-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr);gap:1rem;align-items:start}
+.device-settings>section,.page-settings,.device-maintenance>section{min-width:0;overflow-wrap:anywhere}
+.device-settings h2,.device-maintenance h2,.device-display-preview h2{margin-top:0}
+.device-settings label{margin:.5rem 0}
+.device-settings p{font-size:.9rem}
 .device-settings small{color:var(--muted)}
-.device-settings details{margin:.5rem 0}
-.device-settings details p{font-size:.9rem;color:var(--muted)}
-.device-settings-save{margin-top:1rem}
+.page-settings{padding:1rem;background:var(--surface);border-radius:.6rem;box-shadow:0 1px 4px var(--shadow)}
+.page-settings>section{padding:0;background:transparent;box-shadow:none}
+.page-settings>section[hidden]{display:none}
+.page-settings>section+section:not([hidden]){margin-top:1rem}
+.page-settings-label{margin:0 0 1rem;color:var(--muted);font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.page-settings h3{font-size:1rem}
+.page-settings #math-lab{padding:0;margin-top:1.5rem;box-shadow:none}
+.page-settings #math-lab h2{font-size:1.1rem}
+.page-settings .finance-symbol-row{padding:.5rem 0;gap:.4rem;border-top:1px solid var(--border)}
+.page-settings .finance-symbol-row span{min-width:0;flex-basis:100%;font-size:.85rem}
+.page-settings .finance-symbol-row button{font-size:.8rem;padding:.35rem .5rem}
+.device-page-list{list-style:none;margin:1rem 0;padding:0}
+.device-page-list li{display:flex;align-items:center;gap:.45rem;min-height:44px;padding:.2rem;border:1px solid transparent;border-radius:.4rem}
+.device-page-list li.selected,.page-extra.selected{border-color:var(--accent);background:var(--input)}
+.device-page-list li.dragging{opacity:.7;border-style:dashed;border-color:var(--accent);background:var(--input)}
+.device-page-list input[type=checkbox]{flex-shrink:0;margin:0}
+.page-drag-handle{flex:0 0 28px;padding:.4rem .2rem;color:var(--muted);background:transparent;font-size:1.35rem;line-height:1;cursor:grab;touch-action:none;user-select:none}
+.page-drag-handle:active{cursor:grabbing}
+.page-select{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex:1;min-width:0;padding:.55rem .3rem;color:var(--text);background:transparent;text-align:left;font:inherit}
+.page-select span:first-child{overflow-wrap:anywhere}
+.page-select span:last-child{color:var(--muted)}
+.page-select.selected{font-weight:700}
+.page-extra{width:100%;border:1px solid var(--border);padding:.65rem;margin-top:.7rem}
+.device-settings-save{margin:1rem 0}
+.device-display-preview{margin-bottom:1rem}
+.device-display-preview .leap-preview{margin:0 auto 1rem}
+.device-display-preview .preview-heading{margin-top:0}
+.device-maintenance{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.6fr);gap:1rem;align-items:start;margin-bottom:1rem}
+.device-maintenance form{padding:0;box-shadow:none}
+.device-maintenance button{margin:.5rem 0}
+.device-maintenance #network>button,.page-settings #math-lab>button{display:block}
+.wifi-profile{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-bottom:1px solid var(--border)}
+.device-maintenance table{min-width:460px;font-size:.85rem;padding:0;box-shadow:none}
+.device-maintenance td,.device-maintenance th{padding:.5rem}
+.device-maintenance details{max-width:100%}
+.device-maintenance #sync-status p,.device-maintenance #network p{font-size:.9rem}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@media(max-width:950px){.device-settings,.device-maintenance{grid-template-columns:minmax(0,1fr)}.device-pages{scroll-margin-top:1rem}.page-settings{scroll-margin-top:1rem}}
 .dragon-preview{position:relative;height:100%;background:#a5dfff}.dragon-preview[hidden]{display:none}.dragon-preview canvas{display:block;width:100%;height:100%;image-rendering:pixelated}.dragon-controls{position:absolute;right:4px;top:38px;display:flex;flex-direction:column;gap:3px;max-width:180px;padding:4px;background:#eff5f1e8;border-radius:5px}.dragon-controls button{font-size:12px;padding:4px}.dragon-controls [data-dragon-duck]{touch-action:none;user-select:none}.dragon-controls small{font-size:10px}
 
 .leap-preview .current-card,.leap-preview h3,.leap-preview .communication-received strong {color:var(--device-accent,#00d7c5)}
