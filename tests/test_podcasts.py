@@ -179,7 +179,7 @@ with SessionLocal() as db:
         for name in ['podcast_progress','podcast_episodes','podcasts']:c.execute(f'DROP TABLE {name}')
     run('-m','alembic','upgrade','head');run('-m','alembic','upgrade','head')
     with sqlite3.connect(path) as c:
-        assert c.execute('SELECT config_version,radio_station_ids,podcast_ids,podcast_last FROM devices').fetchone()==(8,'[1]','[]','{}')
+        assert c.execute('SELECT config_version,radio_station_ids,podcast_ids,podcast_last FROM devices').fetchone()==(9,'[1]','[]','{}')
         assert c.execute("SELECT enabled,position FROM device_pages WHERE page_id='podcasts'").fetchone()==(0,6)
         assert c.execute("SELECT enabled,position FROM device_pages WHERE page_id='radio'").fetchone()==(1,5)
     run('-m','alembic','downgrade','0024')

@@ -406,3 +406,13 @@ Episodenlisten und Hörfortschritt werden getrennt von der Konfiguration
 übertragen; MP3s streamt das Gerät direkt vom Anbieter. Erfordert Migration
 **0025** und Firmware **1.7.0**.
 [Einrichtung, API, Fortschritt und Grenzen](docs/podcasts.md).
+
+
+## Lernwelt (1.8.0)
+
+Neue gerätebezogene Region mit Mathe-Labor und SilbenTrainer.
+Geräte → Seiten → Lernwelt öffnet Freigaben, Schwierigkeitsstufen, Standardmodus,
+Rundengröße, Reihenfolge, Wechselintervall und eigene Silben/Wörter.
+Das vorhandene Mathe-Zielzahlenformular befindet sich ebenfalls dort.
+Migration 0026 erhält bestehende Daten und Freigaben. Firmware 1.9.0 erforderlich.
+[Schema, Offlinebetrieb und Migration](docs/learning.md).

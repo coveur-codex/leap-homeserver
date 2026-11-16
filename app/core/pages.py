@@ -8,7 +8,7 @@ class PageDefinition:
 PAGE_REGISTRY = [
     PageDefinition("home", "Home"), PageDefinition("news", "News"),
     PageDefinition("weather", "Wetter"), PageDefinition("quiz", "Quiz"),
-    PageDefinition("games", "Spiele"), PageDefinition("aircraft", "Flugzeuge"),
+    PageDefinition("games", "Spiele"), PageDefinition("learning", "Lernwelt"), PageDefinition("aircraft", "Flugzeuge"),
     PageDefinition("finance", "Finanzen"),
     PageDefinition("communication", "Kommunikation"),
     PageDefinition("time", "Zeit"), PageDefinition("radio", "Radio"), PageDefinition("podcasts", "Podcasts"), PageDefinition("knowledge", "Wissen"), PageDefinition("settings", "Einstellungen"),
