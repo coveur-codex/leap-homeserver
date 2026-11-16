@@ -2,35 +2,31 @@
 {% from 'device_memory.html' import memory_status %}
 {% block content %}
 <h1>{{device.name}} bearbeiten</h1>
-<p><a href="#network">WLAN und Server</a> · <a href="#math-lab">Zahlenzerlegung</a></p>
-<form method="post">
+<form method="post" id="device-editor-form" class="device-editor">
   <div class="device-settings">
     <section><h2>Allgemein</h2><label>Device-ID<input name="device_id" value="{{device.device_id}}" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="80" required aria-describedby="device-id-help"></label><small id="device-id-help">Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche. Die neue ID muss anschließend auch am Gerät eingetragen werden.</small><label>Name<input name="name" value="{{device.name}}"></label><label>Kind<input name="child_name" value="{{device.child_name}}"></label><label>Alter<input type="number" min="1" name="age" value="{{device.age}}"></label><label>Avatar<select name="avatar">{% for a in asset_packages if a.kind=='avatar' %}<option value="{{a.id}}" {% if a.id==device.avatar or a.id=='avatar-'+device.avatar %}selected{% endif %}>{{a.name}}</option>{% endfor %}</select></label><label>Akzentfarbe<input type="color" name="accent_color" value="{{device.accent_color}}" data-accent-color></label><small>Farbe für Überschriften und Markierungen auf diesem Gerät. Standard: Türkis.</small><label>Avatar-Name<input name="avatar_name" value="{{device.avatar_name}}"></label><label><input type="checkbox" name="enabled" {% if device.enabled %}checked{% endif %}> Aktiv</label></section>
-    <section><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
-    <section><h2>Seiten</h2><p>Die Positionsnummern bestimmen die Reihenfolge der Seiten.</p>{% for p in device.pages %}<label><input type="checkbox" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}> {{p.title}} <input class="order" type="number" min="1" max="{{device.pages|length}}" name="page_positions" value="{{p.position}}" aria-label="Position"></label>{% endfor %}</section>
-    <section><h2>Chill</h2>
-    <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' and (not p.id.startswith('chill-album-') or p.id==device.chill_album_id) %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
-    <p><a href="/devices/{{device.id}}/chill/album">Eigene Bilder auswählen / hochladen</a></p>
-    <fieldset id="loremflickr-settings" {% if 'chill-loremflickr' not in device.content_selection %}hidden{% endif %}><legend>LoremFlickr – Themenwahl</legend>
-      <label>Thema <input name="chill_keyword" value="{{device.chill_keyword}}" maxlength="80" required placeholder="nature"></label>
-      <small>Zum Beispiel nature, forest, ocean oder animals. Mehrere Begriffe mit Komma trennen. Bei Ausfall von LoremFlickr werden zufällige Fotos von Picsum ohne Themenfilter verwendet. Zufallsbilder sind nicht garantiert kindgerecht; Keywords sind kein Inhaltsfilter.</small>
-    </fieldset>
-    <script>document.addEventListener('DOMContentLoaded',()=>{const select=document.querySelector('[name="chill_id"]');const box=document.getElementById('loremflickr-settings');const update=()=>{box.hidden=select.value!=='chill-loremflickr';box.querySelector('input').disabled=box.hidden;};select.addEventListener('change',update);update();});</script>
+    <section class="device-pages"><h2>Seiten</h2>
+      <p id="page-order-help">Am Anfasser ziehen, um Seiten zu sortieren. Mit der Tastatur: Anfasser fokussieren und ↑ / ↓ drücken.</p>
+      <p class="muted">Checkbox: Seite aktivieren · Name: Einstellungen öffnen</p>
+      <ol class="device-page-list" data-page-list aria-describedby="page-order-help">
+      {% for p in device.pages|sort(attribute='position') %}
+        <li>
+          <input type="hidden" name="page_order_ids" value="{{p.page_id}}">
+          <button type="button" class="page-drag-handle" data-page-handle hidden aria-label="{{p.title}} verschieben" aria-describedby="page-order-help"><span aria-hidden="true">⠿</span></button>
+          <input type="checkbox" aria-label="{{p.title}} aktivieren" {% if p.page_id == "communication" %}name="communication_enabled" data-communication-toggle {% if device.communication_enabled %}checked{% endif %}{% else %}name="page_ids" value="{{p.page_id}}" {% if p.enabled %}checked{% endif %}{% endif %}>
+          <button type="button" class="page-select" data-page-select="{{p.page_id}}" aria-controls="page-settings" aria-expanded="false"><span>{{p.title}}</span><span aria-hidden="true">›</span></button>
+        </li>
+      {% endfor %}
+      </ol>
+      <button type="button" class="page-select page-extra" data-page-select="chill" aria-controls="page-settings" aria-expanded="false"><span>Chill / Ruhezeit</span><span aria-hidden="true">›</span></button>
+      <p class="muted">Die Reihenfolge wird mit „Speichern & Version erhöhen“ übernommen.</p>
+      <span class="visually-hidden" data-page-order-status role="status"></span>
     </section>
-    <section><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
-    <section><h2>Spiele auf dem Gerät</h2>
-    <small>Zum Spielen die Seite „Spiele“ aktivieren.</small>
-    <input type="hidden" name="game_settings" value="true">
-    {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
-  </section>
-    <section><h2>Podcasts</h2><input type="hidden" name="podcast_settings" value="true">
-    <p>Podcasts oben unter Seiten aktivieren. Bis zu 32 Kanäle freigeben.</p>
-    {% for p in podcasts %}<label><input type="checkbox" name="podcast_ids" value="{{p.id}}" {% if p.id in device.podcast_ids %}checked{% endif %}>{{p.name}}{% if not p.enabled %} (zentral inaktiv){% endif %}</label>
-    {% else %}<p><a href="/podcasts">Podcasts anlegen</a></p>{% endfor %}</section>
-    <section><h2>Radio</h2><p>Radio oben unter Seiten aktivieren. Bis zu 32 Sender freigeben.</p>
-    {% for s in radio_stations %}<label><input type="checkbox" name="radio_station_ids" value="{{s.id}}" {% if s.id in device.radio_station_ids %}checked{% endif %}>{{s.name}}{% if not s.enabled %} (zentral inaktiv){% endif %}</label>
-    {% else %}<p><a href="/radio">Radiosender anlegen</a></p>{% endfor %}</section>
-    <section><h2>Quiz</h2>
+    <div class="page-settings" id="page-settings" aria-label="Seiteneinstellungen">
+      <p class="page-settings-label">Seiteneinstellungen</p>
+      <section data-page-placeholder><h2>Seite auswählen</h2><p>Klicke links auf eine Seite, um ihre Einstellungen zu bearbeiten.</p></section>
+      <section data-page-panel="news"><h2>News</h2>{% for c in categories %}<label><input type="checkbox" name="category_ids" value="{{c.id}}" {% if c in device.categories %}checked{% endif %}>{{c.name}}</label>{% endfor %}<label>Max. Artikel<input type="number" name="news_limit" value="{{device.news_limit}}"></label><label>Max. Alter (Stunden)<input type="number" name="news_max_age_hours" value="{{device.news_max_age_hours}}"></label></section>
+      <section data-page-panel="quiz"><h2>Quiz</h2>
   <h3>Mathe-Quiz</h3>
     <input type="hidden" name="math_settings" value="true">
     <label>Rechenart<select name="math_operation">
@@ -42,15 +38,40 @@
     <details><summary>Hinweise zum Mathe-Quiz</summary><p>Zum Beispiel: + bis 20, − bis 100 oder Multiplikation bis 10 für das kleine Einmaleins. Bei + und − bleiben Zahlen und Ergebnis im gewählten Bereich; bei × sind beide Faktoren 1 bis zur Grenze (maximal 20). Aufgaben entstehen zufällig auf dem Gerät, auch offline.</p></details>
 
   <h3>Quiz-Themen</h3>{% for c in catalogs %}<label><input type="checkbox" name="quiz_catalog_ids" value="{{c.id}}" {% if c in device.quiz_catalogs %}checked{% endif %}>{{c.name}}{% if not c.enabled %} (inaktiv){% endif %}</label>{% else %}<p><a href="/assets?kind=quiz">Quiz-Inhalte erstellen</a></p>{% endfor %}
+    <p><a href="/devices/{{device.id}}/quiz-results">Quiz-Ergebnisse und Antwortzeiten</a></p></section>
+      <section data-page-panel="knowledge"><h2>Wissen</h2><label>Quelle<select name="knowledge_source"><option value="klexikon" {% if device.knowledge_source == 'klexikon' %}selected{% endif %}>Klexikon</option><option value="miniklexikon" {% if device.knowledge_source == 'miniklexikon' %}selected{% endif %}>MiniKlexikon</option></select></label></section>
+      <section data-page-panel="chill"><h2>Chill</h2>
+    <label>Chill-Szene<select name="chill_id"><option value="">Aus</option>{% for p in asset_packages if p.kind=='chill' and (not p.id.startswith('chill-album-') or p.id==device.chill_album_id) %}<option value="{{p.id}}" {% if p.id in device.content_selection %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+    <p><a href="/devices/{{device.id}}/chill/album">Eigene Bilder auswählen / hochladen</a></p>
+    <fieldset id="loremflickr-settings" {% if 'chill-loremflickr' not in device.content_selection %}hidden{% endif %}><legend>LoremFlickr – Themenwahl</legend>
+      <label>Thema <input name="chill_keyword" value="{{device.chill_keyword}}" maxlength="80" required placeholder="nature"></label>
+      <small>Zum Beispiel nature, forest, ocean oder animals. Mehrere Begriffe mit Komma trennen. Bei Ausfall von LoremFlickr werden zufällige Fotos von Picsum ohne Themenfilter verwendet. Zufallsbilder sind nicht garantiert kindgerecht; Keywords sind kein Inhaltsfilter.</small>
+    </fieldset>
+    <script>document.addEventListener('DOMContentLoaded',()=>{const select=document.querySelector('[name="chill_id"]');const box=document.getElementById('loremflickr-settings');const update=()=>{box.hidden=select.value!=='chill-loremflickr';box.querySelector('input').disabled=box.hidden;};select.addEventListener('change',update);update();});</script>
     </section>
-    <section><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch"), ("time", "Timer · Warnton")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
+      <section data-page-panel="games"><h2>Spiele auf dem Gerät</h2>
+    <small>Zum Spielen die Seite „Spiele“ aktivieren.</small>
+    <input type="hidden" name="game_settings" value="true">
+    {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
+  <fieldset><legend>{{asset_kinds['game']}}</legend>{% for p in asset_packages if p.kind=='game' %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>
+<section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
+<label>Zielzahlen<input form="math-lab-settings" name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button form="math-lab-settings">Zielzahlen speichern</button></section>
+</section>
+      <section data-page-panel="podcasts"><h2>Podcasts</h2><input type="hidden" name="podcast_settings" value="true">
+    <p>Podcasts oben unter Seiten aktivieren. Bis zu 32 Kanäle freigeben.</p>
+    {% for p in podcasts %}<label><input type="checkbox" name="podcast_ids" value="{{p.id}}" {% if p.id in device.podcast_ids %}checked{% endif %}>{{p.name}}{% if not p.enabled %} (zentral inaktiv){% endif %}</label>
+    {% else %}<p><a href="/podcasts">Podcasts anlegen</a></p>{% endfor %}</section>
+      <section data-page-panel="radio"><h2>Radio</h2><p>Radio oben unter Seiten aktivieren. Bis zu 32 Sender freigeben.</p>
+    {% for s in radio_stations %}<label><input type="checkbox" name="radio_station_ids" value="{{s.id}}" {% if s.id in device.radio_station_ids %}checked{% endif %}>{{s.name}}{% if not s.enabled %} (zentral inaktiv){% endif %}</label>
+    {% else %}<p><a href="/radio">Radiosender anlegen</a></p>{% endfor %}</section>
+      <section data-page-panel="settings"><h2>Benachrichtigungstöne</h2><input type="hidden" name="notification_settings" value="true">{% for key, label in [("communication", "Kommunikation · Pling"), ("news", "News · Plong"), ("aircraft", "Flugzeug · Zisch"), ("time", "Timer · Warnton")] %}<label><input type="checkbox" name="sound_{{key}}" {% if device.notification_sounds.get(key, true) %}checked{% endif %}>{{label}}</label>{% endfor %}<small>Die Hinweise auf dem Display bleiben auch ohne Ton sichtbar.</small>
     <input type="hidden" name="quiet_hours_settings" value="true">
     <label><input type="checkbox" name="quiet_hours_enabled" {% if device.notification_quiet_hours.get('enabled', false) %}checked{% endif %}>Nachtruhe für Benachrichtigungstöne</label>
     <label>Von<input type="time" name="quiet_hours_start" value="{{device.notification_quiet_hours.get('start') or '22:00'}}"></label>
     <label>Bis<input type="time" name="quiet_hours_end" value="{{device.notification_quiet_hours.get('end') or '07:00'}}"></label>
-    <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small></section>
-    <section><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
-<section id="finance"><h2>Finanzen</h2>
+    <small>Es gilt die Uhrzeit des Geräts, einschließlich Sommerzeit. Zeiträume über Mitternacht sind möglich. Anzeige und Seitenwechsel bleiben aktiv.</small><fieldset><legend>{{asset_kinds['sound']}}</legend>{% for p in asset_packages if p.kind=='sound' %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset></section>
+      <section data-page-panel="weather aircraft"><h2>Standort</h2><label>Standorthöhe (Meter über Meer)<input type="number" step="1" min="-500" max="9000" name="location_altitude_meters" value="{{device.location_altitude_meters if device.location_altitude_meters is not none else ''}}" placeholder="0"></label><small>Leer entspricht 0 m. Für die räumliche Flugzeugentfernung.</small><label>Ort<input name="weather_location" value="{{device.weather_location}}"></label><label>Breitengrad<input name="latitude" value="{{device.latitude or ''}}"></label><label>Längengrad<input name="longitude" value="{{device.longitude or ''}}"></label></section>
+      <section data-page-panel="finance" id="finance"><h2>Finanzen</h2>
 <p>Symbole werden sofort gespeichert. Aktivierung unter „Seiten“.</p>
 <details><summary>Datenquelle & Hinweise</summary><p>Bis zu 48 Symbole pro Gerät. Kostenloser Finnhub-Zugang: US-Aktien und gesammelte Kursstände. Indizes und internationale Märkte sind tarifabhängig. API-Schlüssel werden ausschließlich am Server eingerichtet. <a href="https://finnhub.io/">Finnhub</a></p></details>
 {% for quote in preview_finance.securities %}
@@ -67,10 +88,31 @@
 <small>Yahoo nutzt eine inoffizielle Schnittstelle ohne Verfügbarkeits- oder Verzögerungsgarantie. Kurse werden als verzögert markiert. Vorhandene US-/Toronto-Symbole bei Bedarf separat entfernen.</small>
 <div class="finance-symbol-add"><label>Symbol<input form="finance-add" name="symbol" maxlength="32" placeholder="AAPL" required></label><button form="finance-add">Hinzufügen & prüfen</button></div>
 </section>
+      <section data-page-panel="room"><h2>Mein Zimmer · Home Assistant</h2>
+<p>Eine Heizung und bis zu zwei Lampen. Serveradresse und Token werden lokal in der .env konfiguriert.</p>
+{% set rc = room_page.settings if room_page else {} %}
+
+<label><input form="room-settings" type="checkbox" name="enabled" {% if room_page and room_page.enabled %}checked{% endif %}>Mein Zimmer aktiv</label>
+<label>Heizung (climate.…, optional)<input form="room-settings" name="climate" value="{{rc.get('climate','')}}"></label>
+{% for i in range(2) %}{% set lamp = rc.get('lights',[])[i] if rc.get('lights',[])|length > i else '' %}
+<label>Lampe {{i+1}} (light.…, optional)<input form="room-settings" name="light{{i}}" value="{{lamp}}"></label>
+<label>Szene für Lampe {{i+1}} (scene.…, optional)<input form="room-settings" name="scene{{i}}" value="{{rc.get('light_scenes',{}).get(lamp,'')}}" placeholder="scene.anna_lichterkette_szene"></label>
+{% endfor %}
+<p>Mit Szene erscheint die bunte Kachel. Auswahl startet die Szene nach einer Sekunde Pause über scene.turn_on.</p>
+<label>Minimum °C<input form="room-settings" type="number" name="minimum" min="10" max="30" value="{{rc.get('minimum',10)}}" required></label>
+<label>Maximum °C<input form="room-settings" type="number" name="maximum" min="10" max="30" value="{{rc.get('maximum',30)}}" required></label>
+<p>Erik und Lars teilen sich climate.heizung_lars_erik. Beide bedienen dieselbe Zieltemperatur.</p>
+<button form="room-settings">Zimmerzuordnung speichern</button>
+</section>
+      <section data-page-panel="weather"><h2>Wetter-Inhalte</h2><fieldset><legend>{{asset_kinds['weather']}}</legend>{% for p in asset_packages if p.kind=='weather' %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset></section>
+      <section data-page-panel="home"><h2>Home</h2><p>Die Startseite verwendet Name, Avatar und Standort des Geräts.</p></section>
+      <section data-page-panel="communication"><h2>Kommunikation</h2><p>Nachrichtenvorlagen werden zentral unter <a href="/communication">Kommunikation</a> verwaltet. Töne und Nachtruhe findest du bei der Seite „Einstellungen“.</p></section>
+      <section data-page-panel="time"><h2>Zeit</h2><p>Timer und Stoppuhr werden direkt am Gerät eingestellt. Töne und Nachtruhe findest du bei der Seite „Einstellungen“.</p></section>
+    </div>
   </div>
   <button class="device-settings-save">Speichern & Version erhöhen</button>
 
-<h2 class="preview-heading">Display-Vorschau</h2>
+<section class="device-display-preview"><h2 class="preview-heading">Display-Vorschau</h2>
 <div class="leap-preview" style="--device-accent: {{device.accent_color}}" aria-label="Vorschau des LEAP-Displays">
   <aside class="leap-sidebar">
     <div class="device-signals" aria-label="WLAN, Bluetooth und Akku">
@@ -190,13 +232,25 @@
 <button type="button" data-finance-key="ArrowUp">↑</button><button type="button" data-finance-key="ArrowDown">↓</button>
 </div><small>Vorschau nutzt konfigurierte Cache-Daten. Ein fehlender Kurs wird als fehlend angezeigt. Intraday-Zeiten gelten in der Börsenzeitzone.</small>
 
-<p><a href="/devices/{{device.id}}/quiz-results">Quiz-Ergebnisse und Antwortzeiten</a></p>
-{{memory_status(device)}}
-
-  <input type="hidden" name="distribution_settings" value="true">
-  <section><h2>Firmware & Inhalte</h2><label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
-  {% for kind in ['sound','weather','game'] %}<fieldset><legend>{{asset_kinds[kind]}}</legend>{% for p in asset_packages if p.kind==kind %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>{% endfor %}</section>
-  <button>Speichern & Version erhöhen</button>
+</section>
+  <div class="device-maintenance">
+    <section id="firmware-settings"><h2>Firmware</h2>
+      <input type="hidden" name="distribution_settings" value="true">
+      <label>Firmware-Kanal<select name="firmware_channel"><option value="stable" {% if device.firmware_channel=='stable' %}selected{% endif %}>Stable</option><option value="beta" {% if device.firmware_channel=='beta' %}selected{% endif %}>Beta</option></select></label>
+      <p>Installiert: {{device.firmware_version or 'Unbekannt'}}</p>
+      <p><a href="/firmware">Firmware verwalten</a></p>
+      <button>Speichern & Version erhöhen</button>
+    </section>
+    <section id="network"><h2>WLAN und Server</h2>
+<p>Serverprofile werden beim nächsten Sync übertragen. Direkt am Gerät gespeicherte WLANs bleiben erhalten. Reihenfolge: zuletzt gespeichertes Profil zuerst.</p>
+<label>Serveradresse<input form="network-server" name="server" maxlength="256" value="{{device.network_config.get('serverUrl', 'http://ndk.tstromi.de:8080')}}" required></label><button form="network-server">Serveradresse speichern</button>
+{% for profile in device.network_config.get('wifiProfiles', []) %}
+<div class="wifi-profile"><span>{{loop.index}}. {{profile.ssid}}</span><input form="network-remove-{{loop.index}}" type="hidden" name="ssid" value="{{profile.ssid}}"><button form="network-remove-{{loop.index}}">Entfernen</button></div>
+{% endfor %}
+<label>WLAN-Name (SSID)<input form="network-wifi" name="ssid" required maxlength="32"></label><label>Passwort<input form="network-wifi" type="password" name="password" maxlength="64" autocomplete="new-password"></label><small>Leer für offene Netze. Vorhandenen WLAN-Namen erneut speichern, um sein Passwort zu ändern. Maximal vier Serverprofile.</small><button form="network-wifi">WLAN speichern</button>
+<p><small>Bei HTTP werden Zugangsdaten unverschlüsselt übertragen. WLAN-Profile im vertrauten Heimnetz synchronisieren. Unterstützt werden 2,4-GHz-Netze ohne Anmeldeseite.</small></p></section>
+    {% include 'device_distribution.html' %}
+  </div>
 </form>
 
 {# External form owners keep finance actions independent of unsaved device settings. #}
@@ -204,37 +258,15 @@
 <form id="finance-german-rocket" hidden method="post" action="/devices/{{device.id}}/finance/add"><input name="symbol" value="YAHOO:6RJ0.F"></form>
 <form id="finance-add" hidden method="post" action="/devices/{{device.id}}/finance/add"></form>
 {% for quote in preview_finance.securities %}<form id="finance-change-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/finance/change"></form>{% endfor %}
-<section><h2>Mein Zimmer · Home Assistant</h2>
-<p>Eine Heizung und bis zu zwei Lampen. Serveradresse und Token werden lokal in der .env konfiguriert.</p>
-{% set rc = room_page.settings if room_page else {} %}
-<form method="post" action="/devices/{{device.id}}/room">
-<label><input type="checkbox" name="enabled" {% if room_page and room_page.enabled %}checked{% endif %}>Mein Zimmer aktiv</label>
-<label>Heizung (climate.…, optional)<input name="climate" value="{{rc.get('climate','')}}"></label>
-{% for i in range(2) %}{% set lamp = rc.get('lights',[])[i] if rc.get('lights',[])|length > i else '' %}
-<label>Lampe {{i+1}} (light.…, optional)<input name="light{{i}}" value="{{lamp}}"></label>
-<label>Szene für Lampe {{i+1}} (scene.…, optional)<input name="scene{{i}}" value="{{rc.get('light_scenes',{}).get(lamp,'')}}" placeholder="scene.anna_lichterkette_szene"></label>
-{% endfor %}
-<p>Mit Szene erscheint die bunte Kachel. Auswahl startet die Szene nach einer Sekunde Pause über scene.turn_on.</p>
-<label>Minimum °C<input type="number" name="minimum" min="10" max="30" value="{{rc.get('minimum',10)}}" required></label>
-<label>Maximum °C<input type="number" name="maximum" min="10" max="30" value="{{rc.get('maximum',30)}}" required></label>
-<p>Erik und Lars teilen sich climate.heizung_lars_erik. Beide bedienen dieselbe Zieltemperatur.</p>
-<button>Zimmerzuordnung speichern</button>
-</form></section>
-{% include 'device_distribution.html' %}
-
-<section id="network"><h2>WLAN und Server · {{device.name}}</h2>
-<p>Serverprofile werden beim nächsten Sync übertragen. Direkt am Gerät gespeicherte WLANs bleiben erhalten. Reihenfolge: zuletzt gespeichertes Profil zuerst.</p>
-<form method="post" action="/devices/{{device.id}}/network"><label>Serveradresse<input name="server" maxlength="256" value="{{device.network_config.get('serverUrl', 'http://ndk.tstromi.de:8080')}}" required></label><button>Serveradresse speichern</button></form>
-{% for profile in device.network_config.get('wifiProfiles', []) %}
-<form method="post" action="/devices/{{device.id}}/network/remove"><span>{{loop.index}}. {{profile.ssid}}</span><input type="hidden" name="ssid" value="{{profile.ssid}}"><button>Entfernen</button></form>
-{% endfor %}
-<form method="post" action="/devices/{{device.id}}/network/wifi" autocomplete="off"><label>WLAN-Name (SSID)<input name="ssid" required maxlength="32"></label><label>Passwort<input type="password" name="password" maxlength="64" autocomplete="new-password"></label><small>Leer für offene Netze. Vorhandenen WLAN-Namen erneut speichern, um sein Passwort zu ändern. Maximal vier Serverprofile.</small><button>WLAN speichern</button></form>
-<p><small>Bei HTTP werden Zugangsdaten unverschlüsselt übertragen. WLAN-Profile im vertrauten Heimnetz synchronisieren. Unterstützt werden 2,4-GHz-Netze ohne Anmeldeseite.</small></p></section>
-<section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
-<form method="post" action="/devices/{{device.id}}/math-lab"><label>Zielzahlen<input name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button>Zielzahlen speichern</button></form></section>
+{# External owners preserve the existing independent room, math and network actions. #}
+<form id="room-settings" hidden method="post" action="/devices/{{device.id}}/room"></form>
+<form id="math-lab-settings" hidden method="post" action="/devices/{{device.id}}/math-lab"></form>
+<form id="network-server" hidden method="post" action="/devices/{{device.id}}/network"></form>
+<form id="network-wifi" hidden method="post" action="/devices/{{device.id}}/network/wifi" autocomplete="off"></form>
+{% for profile in device.network_config.get('wifiProfiles', []) %}<form id="network-remove-{{loop.index}}" hidden method="post" action="/devices/{{device.id}}/network/remove"></form>{% endfor %}
 
 <div class="device-actions"><form method="post" action="/devices/{{device.id}}/duplicate"><button>Duplizieren</button></form><form method="post" action="/devices/{{device.id}}/delete" onsubmit="return confirm('Wirklich löschen?')"><button class="danger">Löschen</button></form></div>
-<script src="/static/device-settings.js?v=1" defer></script>
+<script src="/static/device-settings.js?v=2" defer></script>
 <script src="/static/device-preview.js?v=5" defer></script>
 <script src="/static/aircraft-preview.js" defer data-aircraft-url="/api/v1/devices/{{device.id}}/aircraft"></script>
 <script src="/static/finance-preview.js?v=1" defer></script>

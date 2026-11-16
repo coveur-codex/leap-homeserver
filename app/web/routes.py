@@ -63,9 +63,11 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
     return templates.TemplateResponse(request,"device_edit.html",{"device":d,"radio_stations":radio.stations(db),"podcasts":podcasts.channels(db),"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),radio_station_ids:list[int]=Form([]),podcast_ids:list[int]|None=Form(None),podcast_settings:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),radio_station_ids:list[int]=Form([]),podcast_ids:list[int]|None=Form(None),podcast_settings:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),page_order_ids:list[str]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
+    if page_order_ids and (len(page_order_ids) != len(d.pages) or set(page_order_ids) != {page.page_id for page in d.pages}):
+        raise HTTPException(422,"Die Seitenreihenfolge muss jede Seite genau einmal enthalten")
     if accent_color is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent_color):
         raise HTTPException(422,"Akzentfarbe muss eine Farbe im Format #RRGGBB sein")
     if location_altitude_meters is not None:
@@ -131,15 +133,15 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
         d.podcast_ids=sorted(set(podcast_ids or []))
     old_knowledge_source=d.knowledge_source
     d.device_id=new_device_id; d.name=name; d.child_name=child_name; d.age=age; d.avatar=avatar; d.avatar_name=avatar_name; d.enabled=enabled; d.communication_enabled=communication_enabled; d.categories=[c for x in category_ids if (c:=db.get(Category,x))]; d.weather_location=weather_location; d.latitude=float(latitude) if latitude else None; d.longitude=float(longitude) if longitude else None; d.news_limit=news_limit; d.news_max_age_hours=news_max_age_hours; d.knowledge_source=knowledge_source
-    positions=dict(zip((page.page_id for page in d.pages),page_positions))
-    for pos,pid in enumerate(page_ids,1):
-        if page:=next((x for x in d.pages if x.page_id==pid),None): page.enabled=True; page.position=positions.get(pid,pos)
+    if page_order_ids:
+        positions={pid:position for position,pid in enumerate(page_order_ids,1)}
+    else:
+        # Keep accepting position numbers and checkbox order from older clients.
+        positions={pid:position for position,pid in enumerate(page_ids,1)}
+        positions.update(zip((page.page_id for page in d.pages),page_positions))
     for page in d.pages:
-        if page.page_id not in page_ids: page.enabled=False
-    for page in d.pages:
-        if page.page_id == "communication":
-            page.enabled=d.communication_enabled
-            page.position=positions.get(page.page_id,page.position)
+        page.enabled=communication_enabled if page.page_id == "communication" else page.page_id in page_ids
+        page.position=positions.get(page.page_id,page.position)
     if old_knowledge_source != knowledge_source: d.knowledge_version+=1
     d.config_version+=1; db.commit();
     from app.api.communication import relay_hub
