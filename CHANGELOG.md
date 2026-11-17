@@ -1,3 +1,12 @@
+# 1.8.0 – Lernwelt und SilbenTrainer
+
+- Lernwelt als aktivierbare/sortierbare Hauptmenü-Region im Geräteeditor;
+  App-Freigaben, Übungsoptionen und eigene Silben/Wörter über bestehende Einstellungen.
+- Mathe-Labor aus Spiele in die Lernwelt verschoben; bisheriger Zielzahlenpfad
+  und gespeicherte Daten bleiben unverändert. Migration 0026 übernimmt Freigaben.
+- Strukturvalidierung für explizite Silbengliederung, Datenlimits für ESP32-S3,
+  Offline-Synchronisierung ohne neue Endpoints oder Libraries. Firmware 1.9.0.
+
 # 1.5.2 – Vier Gewinnt im Multiplayer
 
 - Mehrere parallele Zweierpartien, automatische Suche für 30 Sekunden,

@@ -86,11 +86,11 @@ def test_editor_layout_and_independent_form_owners(client, db):
     assert len(soup.select('[name="page_order_ids"]')) == len(device.pages)
     assert len(editor.select(".device-settings > section")) == 2
     assert editor.select_one('[data-page-panel="room"] [name="climate"]')
-    assert editor.select_one('[data-page-panel="games"] #math-lab [name="targets"]')
+    assert editor.select_one('[data-page-panel="learning"] #math-lab [name="targets"]')
     assert [section.get("id") for section in editor.select(".device-maintenance > section")] == [
         "firmware-settings", "network", "sync-status"]
     assert editor.select_one(".device-display-preview").find_next_sibling()["class"] == ["device-maintenance"]
-    for panel, owner in [("room", "room-settings"), ("games", "math-lab-settings")]:
+    for panel, owner in [("room", "room-settings"), ("learning", "math-lab-settings")]:
         for control in editor.select(f'[data-page-panel="{panel}"] [form="{owner}"]'):
             assert soup.select_one(f'form#{control["form"]}')["method"] == "post"
     assert editor.select_one('[name="climate"]')["form"] == "room-settings"

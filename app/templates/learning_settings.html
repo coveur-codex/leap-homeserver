@@ -1,0 +1,22 @@
+<section data-page-panel="learning"><h2>Lernwelt</h2>
+  <input type="hidden" name="learning_settings" value="true">
+  <p>Region unter „Seiten“ aktivieren. Benötigt Firmware 1.9.0. Mathe-Labor befindet sich jetzt in der Lernwelt.</p>
+  {% for id, label in [('math_lab','Mathe-Labor'),('syllable_trainer','SilbenTrainer')] %}
+  <label><input type="checkbox" name="learning_applications" value="{{id}}" {% if id in learning_apps %}checked{% endif %}>{{label}}</label>
+  {% endfor %}
+  <section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
+<label>Zielzahlen<input form="math-lab-settings" name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button form="math-lab-settings">Zielzahlen speichern</button></section>
+  <fieldset><legend>SilbenTrainer</legend>
+  {% for level, label in [(1,'Leicht'),(2,'Mittel'),(3,'Schwer')] %}<label><input type="checkbox" name="learning_levels" value="{{level}}" {% if level in trainer.levels %}checked{% endif %}>{{label}}</label>{% endfor %}
+  <label>Standardmodus<select name="learning_mode">{% for label in ['Silben lesen','Silben verbinden','Wörter lesen'] %}<option value="{{loop.index0}}" {% if trainer.defaultMode==loop.index0 %}selected{% endif %}>{{label}}</option>{% endfor %}</select></label>
+  <label>Aufgaben pro Runde<select name="learning_length">{% for count in [10,15] %}<option {% if trainer.sessionLength==count %}selected{% endif %}>{{count}}</option>{% endfor %}</select></label>
+  <label><input type="checkbox" name="learning_random" {% if trainer.random %}checked{% endif %}>Zufallsreihenfolge</label>
+  <label>Automatischer Wechsel<select name="learning_seconds">{% for seconds in [0,5,10,15] %}<option value="{{seconds}}" {% if trainer.autoSeconds==seconds %}selected{% endif %}>{{seconds|string+' Sekunden' if seconds else 'Aus'}}</option>{% endfor %}</select></label>
+  <details><summary>Eigene Übungsinhalte ergänzen</summary>
+    <p>Je höchstens 32 Einträge. Großbuchstaben A–Z und ÄÖÜ. Wörter: höchstens 16 Buchstaben, 2–5 Silben mit jeweils höchstens 6 Buchstaben. Die hinterlegten Silben müssen zusammen genau das Wort ergeben. Bitte Silbengliederung pädagogisch prüfen. Vorhandene Wörter bleiben unverändert.</p>
+    <label>Silben (JSON)<textarea name="learning_syllables" rows="4">{{trainer.syllables|tojson(indent=2)}}</textarea></label>
+    <small>Beispiel: [{"text":"WE","level":1}]</small>
+    <label>Wörter mit Silbengliederung (JSON)<textarea name="learning_words" rows="6">{{trainer.words|tojson(indent=2)}}</textarea></label>
+    <small>Beispiel: [{"word":"WIESE","syllables":["WIE","SE"],"level":3}]</small>
+  </details></fieldset>
+</section>

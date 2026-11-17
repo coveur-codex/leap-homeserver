@@ -87,16 +87,11 @@ def test_dragon_run_selection_and_preview(client, db):
     assert not BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser").select('[data-game-open="dragon"]')
 
 
-def test_math_lab_uses_existing_game_configuration(client, db):
+def test_math_lab_moved_to_learning(client, db):
     d = make_device(db)
-    form = {"name": "Erik", "age": 9, "avatar": "dragon", "enabled": "on",
-            "page_ids": ["games"], "game_settings": "true", "game_ids": ["math_lab"]}
-    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
     config = client.get("/api/v1/devices/leap-erik/config").json()
-    assert [g["id"] for g in config["games"] if g["enabled"]] == ["math_lab"]
+    assert "math_lab" not in {g["id"] for g in config["games"]}
     html = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
-    assert html.select('input[name="game_ids"][value="math_lab"][checked]')
-    assert "Mathe-Labor" in html.get_text()
-    form.pop("game_ids")
-    client.post(f"/devices/{d.id}", data=form, follow_redirects=False)
-    assert not any(g["enabled"] for g in client.get("/api/v1/devices/leap-erik/config").json()["games"])
+    assert not html.select('input[name="game_ids"][value="math_lab"]')
+    assert html.select('[data-page-panel="learning"] input[name="learning_applications"][value="math_lab"][checked]')
+    assert html.select('[data-page-panel="learning"] #math-lab input[form="math-lab-settings"]')

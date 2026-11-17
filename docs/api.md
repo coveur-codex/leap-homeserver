@@ -404,3 +404,13 @@ registrierten serververwalteten Spiele (Schema 1), mit Partien, Phase, Teilnehme
 Verbindungsstatus, Restzeit und allgemeinen Kennzahlen. Die Antwort ist `no-store`.
 Webansicht: `/games`, automatische Aktualisierung über `/games/status`.
 Vertrag und Erweiterung um weitere Spiele: [game-status.md](game-status.md).
+
+
+## Lernwelt (1.8.0)
+
+Die normale Seite `learning` nutzt `DevicePage.settings` für App-Freigaben und
+`syllableTrainer` (Stufen, nullbasierter Standardmodus, Rundenlänge, Reihenfolge,
+Wechselzeit und eigene Inhalte). `configVersion` und bestehender Config-/Syncpfad
+verteilen alle Daten; der Firmware-Snapshot hält sie offline vor.
+`config.mathLab` und der vorhandene Zielzahlen-Endpoint bleiben unverändert.
+Vollständiges Schema und Migration 0026: [Lernwelt](learning.md).

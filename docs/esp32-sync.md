@@ -12,3 +12,13 @@ News kann über `since` inkrementell geladen werden; Geräte sollten dennoch auf
 ## Versionierte Assets und OTA
 
 Der neue POST-Start-Sync, unveränderliche Paketdownloads, Firmware-Kanäle und Bestätigungsereignisse sind in [distribution.md](distribution.md) beschrieben. Bestehende GET-APIs bleiben für ältere Clients erhalten.
+
+
+## Lernwelt (1.8.0)
+
+Die normale Seite `learning` nutzt `DevicePage.settings` für App-Freigaben und
+`syllableTrainer` (Stufen, nullbasierter Standardmodus, Rundenlänge, Reihenfolge,
+Wechselzeit und eigene Inhalte). `configVersion` und bestehender Config-/Syncpfad
+verteilen alle Daten; der Firmware-Snapshot hält sie offline vor.
+`config.mathLab` und der vorhandene Zielzahlen-Endpoint bleiben unverändert.
+Vollständiges Schema und Migration 0026: [Lernwelt](learning.md).

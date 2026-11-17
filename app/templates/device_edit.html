@@ -49,13 +49,13 @@
     </fieldset>
     <script>document.addEventListener('DOMContentLoaded',()=>{const select=document.querySelector('[name="chill_id"]');const box=document.getElementById('loremflickr-settings');const update=()=>{box.hidden=select.value!=='chill-loremflickr';box.querySelector('input').disabled=box.hidden;};select.addEventListener('change',update);update();});</script>
     </section>
+      {% include 'learning_settings.html' %}
       <section data-page-panel="games"><h2>Spiele auf dem Gerät</h2>
     <small>Zum Spielen die Seite „Spiele“ aktivieren.</small>
     <input type="hidden" name="game_settings" value="true">
     {% for game_id, title in game_registry %}<label><input type="checkbox" name="game_ids" value="{{game_id}}" {% if game_id in device.enabled_games %}checked{% endif %}>{{title}}</label>{% endfor %}
   <fieldset><legend>{{asset_kinds['game']}}</legend>{% for p in asset_packages if p.kind=='game' %}<label><input type="checkbox" name="content_ids" value="{{p.id}}" {% if p.id in device.content_selection %}checked{% endif %}>{{p.name}}</label>{% else %}<small>Noch keine Inhalte vorhanden.</small>{% endfor %}</fieldset>
-<section id="math-lab"><h2>Mathe-Labor · Fehlenden Teil finden</h2>
-<label>Zielzahlen<input form="math-lab-settings" name="targets" value="{{device.math_lab.get('targets', [10])|join(',')}}" maxlength="1024" required placeholder="9,10 oder 3-15"></label><small>Zielzahlen 1–100; Listen und Bereiche kombinierbar, z. B. 3-8,10,12. Die 0 ist als Summand erlaubt. Im Mathe-Labor unter Zahlenwerkstatt verfügbar, auch offline.</small><button form="math-lab-settings">Zielzahlen speichern</button></section>
+
 </section>
       <section data-page-panel="podcasts"><h2>Podcasts</h2><input type="hidden" name="podcast_settings" value="true">
     <p>Podcasts oben unter Seiten aktivieren. Bis zu 32 Kanäle freigeben.</p>
@@ -175,6 +175,12 @@
       <script type="application/json" data-aircraft-snapshot>{{ (preview_aircraft or {})|tojson }}</script>
       <div class="aircraft-list" data-aircraft-list><div class="news-meta"><strong>IN DER NÄHE</strong></div>{% if preview_aircraft and preview_aircraft.aircraft %}{% set plane = preview_aircraft.aircraft[0] %}<b>{{plane.callsign or plane.registration or plane.hex}}</b><p>{{plane.typeName or 'Unbekannter Flugzeugtyp'}}</p><p>{{(plane.distanceNm * 1.852)|round(1)}} km · {% if plane.altitudeFeet is not none %}{{(plane.altitudeFeet * 0.3048)|round|int}} m{% else %}Höhe unbekannt{% endif %}</p>{% else %}<div class="empty-preview"><strong>Keine Flugdaten</strong></div>{% endif %}</div>
       <div class="radar-panel"><div class="radar-scope" data-aircraft-scope aria-label="Flugzeuge im Umkreis"></div><small data-aircraft-status></small></div>
+    </article>
+    {% elif page_id == 'learning' %}
+    <article class="leap-card games-card" data-preview-card="LERNWELT"{% if not loop.first %} hidden{% endif %}>
+      <div class="games-preview-menu"><strong>Lernwelt</strong>
+        {% for id, label in [('math_lab','Mathe-Labor'),('syllable_trainer','SilbenTrainer')] if id in learning_apps %}<span>{{label}}</span>{% else %}<span>Keine Lernanwendungen freigegeben.</span>{% endfor %}
+      </div>
     </article>
     {% elif page_id == 'games' %}
     <article class="leap-card games-card" data-preview-card="SPIELE"{% if not loop.first %} hidden{% endif %}>

@@ -17,6 +17,7 @@ from app.models import Article,Category,Device,Feed,LocationCache,QuizCatalog,Qu
 from app.services.devices import initialize_pages, page_enabled
 from app.services import finance as finance_service
 from app.services import room
+from app.services import learning as learning_service
 from app.services import communication, radio, podcasts
 from app.models import RadioStation
 from app.services.backup import backup_database
@@ -58,12 +59,15 @@ def edit_device(id:int,request:Request,db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     distribution_service.ensure_packages(db)
+    learning=next((page.settings for page in d.pages if page.page_id=="learning"), learning_service.default_settings())
+    trainer={**learning_service.TrainerSettings().model_dump(), **learning.get("syllableTrainer",{})}
+    learning_apps=[app["id"] for app in learning.get("applications",[]) if app.get("enabled") is True]
     location_cache=cache_for_device(d,db)
     enabled_page_ids=[page.page_id for page in sorted(d.pages,key=lambda page:page.position) if page_enabled(d,page)]
-    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","time","finance"}]
-    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"radio_stations":radio.stations(db),"podcasts":podcasts.channels(db),"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
+    preview_page_ids=[page_id for page_id in enabled_page_ids if page_id in {"home","news","weather","quiz","aircraft","knowledge","communication","games","learning","time","finance"}]
+    return templates.TemplateResponse(request,"device_edit.html",{"device":d,"learning":learning,"trainer":trainer,"learning_apps":learning_apps,"radio_stations":radio.stations(db),"podcasts":podcasts.channels(db),"registry":PAGE_REGISTRY,"game_registry":GAME_REGISTRY,"categories":db.scalars(select(Category)).all(),"feeds":db.scalars(select(Feed)).all(),"catalogs":db.scalars(select(QuizCatalog)).all(),"preview_page_ids":preview_page_ids,"preview_articles":articles_for_device(d,db,limit=min(d.news_limit,8)),"preview_weather":location_cache.weather_data if location_cache else None,"preview_aircraft":location_cache.aircraft_data if location_cache else None,"preview_knowledge":demo_article(d.knowledge_source),"preview_finance":finance_service.data_for_device(d,db),"preview_now":datetime.now(),"preview_messages":communication.active_messages(db),"room_page":next((p for p in d.pages if p.page_id=="room"),None),**distribution_service.device_context(db,d)})
 @router.post("/devices/{id}")
-def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),radio_station_ids:list[int]=Form([]),podcast_ids:list[int]|None=Form(None),podcast_settings:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),page_order_ids:list[str]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),db:Session=Depends(get_db)):
+def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),avatar:str=Form(),device_id:str|None=Form(None),avatar_name:str=Form(""),enabled:bool=Form(False),communication_enabled:bool=Form(False),radio_station_ids:list[int]=Form([]),podcast_ids:list[int]|None=Form(None),podcast_settings:bool=Form(False),category_ids:list[int]=Form([]),page_ids:list[str]=Form([]),page_positions:list[int]=Form([]),page_order_ids:list[str]=Form([]),knowledge_source:str=Form("klexikon"),weather_location:str=Form(""),latitude:str=Form(""),longitude:str=Form(""),news_limit:int=Form(20),news_max_age_hours:int=Form(48),firmware_channel:str=Form("stable"),content_ids:list[str]=Form([]),chill_id:str=Form(""),quiz_catalog_ids:list[int]=Form([]),distribution_settings:bool=Form(False),math_settings:bool=Form(False),math_operation:str=Form("add"),math_limit:int=Form(20),game_settings:bool=Form(False),game_ids:list[str]=Form([]),accent_color:str|None=Form(None),location_altitude_meters:str|None=Form(None),notification_settings:bool=Form(False),sound_communication:bool=Form(False),sound_news:bool=Form(False),sound_aircraft:bool=Form(False),sound_time:bool=Form(False),quiet_hours_settings:bool=Form(False),quiet_hours_enabled:bool=Form(False),quiet_hours_start:str=Form(""),quiet_hours_end:str=Form(""),chill_keyword:str|None=Form(None),learning_settings:bool=Form(False),learning_applications:list[str]=Form([]),learning_levels:list[int]=Form([]),learning_mode:int=Form(0),learning_length:int=Form(10),learning_random:bool=Form(False),learning_seconds:int=Form(0),learning_syllables:str=Form("[]"),learning_words:str=Form("[]"),db:Session=Depends(get_db)):
     d=db.get(Device,id)
     if not d: raise HTTPException(404)
     if page_order_ids and (len(page_order_ids) != len(d.pages) or set(page_order_ids) != {page.page_id for page in d.pages}):
@@ -85,6 +89,11 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     if math_settings:
         if math_operation not in {"add", "subtract", "multiply"} or not 3 <= math_limit <= (20 if math_operation == "multiply" else 1000):
             raise HTTPException(422,"Mathe: +/− mit Zahlenbereich 3–1000 oder Malreihen 1 bis 3–20 wählen")
+    learning_page=next((page for page in d.pages if page.page_id=="learning"),None)
+    new_learning=None
+    if learning_settings:
+        if not learning_page: raise HTTPException(422,"Lernwelt-Migration fehlt")
+        new_learning=learning_service.form_settings(learning_page.settings,learning_applications,learning_levels,learning_mode,learning_length,learning_random,learning_seconds,learning_syllables,learning_words)
     new_device_id=(device_id or d.device_id).strip()
     if len(new_device_id)>80 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*",new_device_id): raise HTTPException(422,"Device-ID darf höchstens 80 Zeichen sowie nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten")
     if db.scalar(select(Device).where(Device.device_id==new_device_id,Device.id!=id)): raise HTTPException(409,"Device-ID bereits vorhanden")
@@ -142,6 +151,7 @@ def update_device(id:int,name:str=Form(),child_name:str=Form(""),age:int=Form(),
     for page in d.pages:
         page.enabled=communication_enabled if page.page_id == "communication" else page.page_id in page_ids
         page.position=positions.get(page.page_id,page.position)
+    if new_learning is not None: learning_page.settings=new_learning
     if old_knowledge_source != knowledge_source: d.knowledge_version+=1
     d.config_version+=1; db.commit();
     from app.api.communication import relay_hub
