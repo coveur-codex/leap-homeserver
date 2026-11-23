@@ -87,6 +87,32 @@ def test_dragon_run_selection_and_preview(client, db):
     assert not BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser").select('[data-game-open="dragon"]')
 
 
+def test_fall_blocks_requires_device_opt_in(client, db):
+    d = make_device(db)
+    config_url = "/api/v1/devices/leap-erik/config"
+
+    def checkbox():
+        editor = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
+        return editor.select_one('[data-page-panel="games"] input[name="game_ids"][value="fall_blocks"]')
+
+    assert checkbox() is not None
+    assert not checkbox().has_attr("checked")
+    assert {"id": "fall_blocks", "enabled": False} in client.get(config_url).json()["games"]
+
+    form = {"name": "Erik", "age": 9, "avatar": "dragon", "enabled": "on",
+            "page_ids": ["games"], "game_settings": "true", "game_ids": ["fall_blocks"]}
+    before = d.config_version
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    config = client.get(config_url).json()
+    assert config["configVersion"] == before + 1
+    assert [game["id"] for game in config["games"] if game["enabled"]] == ["fall_blocks"]
+    assert checkbox().has_attr("checked")
+
+    form.pop("game_ids")
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    assert {"id": "fall_blocks", "enabled": False} in client.get(config_url).json()["games"]
+
+
 def test_math_lab_moved_to_learning(client, db):
     d = make_device(db)
     config = client.get("/api/v1/devices/leap-erik/config").json()
