@@ -1,3 +1,10 @@
+# 1.9.0 – Fallblöcke für LEAP
+
+- Fallblöcke lässt sich im Geräteeditor unter „Spiele auf dem Gerät“ pro Gerät
+  freigeben. Die Spiele-Seite muss für das Gerät aktiviert sein.
+- Die Freigabe wird mit der Gerätekonfiguration synchronisiert. Das
+  Hochkant-Spiel benötigt Firmware 1.10.0 und ist nach dem Sync offline spielbar.
+
 # 1.8.0 – Lernwelt und SilbenTrainer
 
 - Lernwelt als aktivierbare/sortierbare Hauptmenü-Region im Geräteeditor;

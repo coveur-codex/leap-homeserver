@@ -9,6 +9,7 @@ GAME_REGISTRY = (
     ("kitchen", "Meine Küche"),
     ("crab_journey", "Krabbenreise"),
     ("dragon_run", "Drachenrennen"),
+    ("fall_blocks", "Fallblöcke"),
 )
-# Preserve the games previously shown by the server plus the firmware's kitchen.
-DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY]
+# Fallblöcke is enabled explicitly in the device editor.
+DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id != "fall_blocks"]
