@@ -10,6 +10,7 @@ GAME_REGISTRY = (
     ("crab_journey", "Krabbenreise"),
     ("dragon_run", "Drachenrennen"),
     ("fall_blocks", "Fallblöcke"),
+    ("rangierwerk", "Rangierwerk"),
 )
-# Fallblöcke is enabled explicitly in the device editor.
-DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id != "fall_blocks"]
+# These games are enabled explicitly in the device editor.
+DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id not in {"fall_blocks", "rangierwerk"}]

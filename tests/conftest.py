@@ -18,3 +18,17 @@ def client(db, monkeypatch):
  app.dependency_overrides[get_db]=lambda:db
  with TestClient(app) as c:yield c
  app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def rangierwerk_library(tmp_path_factory):
+    from pathlib import Path
+    import subprocess
+
+    source = Path(__file__).resolve().parents[1] / "app" / "native" / "rangierwerk.cpp"
+    output = tmp_path_factory.mktemp("rangierwerk") / "librangierwerk.so"
+    subprocess.run(["c++", "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
+                    "-fPIC", "-shared", str(source), "-o", str(output)], check=True)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("LEAP_RANGIERWERK_LIBRARY", str(output))
+        yield

@@ -66,9 +66,18 @@ async def lifespan(app):
     snake_hub.start()
     from app.api.connect_four import matchmaker as four_hub
     four_hub.start()
+    from app.models import RangierwerkSettings
+    from app.services.rangierwerk import YardService
+    with SessionLocal() as db:
+        yard_settings = db.get(RangierwerkSettings, 1)
+        yard_difficulty = yard_settings.difficulty if yard_settings else 1
+    yard_hub = YardService(yard_difficulty)
+    app.state.rangierwerk = yard_hub
+    yard_hub.start()
     from app.services.game_status import registry as game_status
     game_status.register("snake", "Snake (kooperativ)", snake_hub.status)
     game_status.register("connect_four", "Vier Gewinnt", four_hub.status)
+    game_status.register("rangierwerk", "Rangierwerk", yard_hub.status)
     scheduler=AsyncIOScheduler()
     log.info("server_start version=%s",__version__); seed(); scheduler.add_job(scheduled_feeds,"interval",minutes=1,max_instances=1,coalesce=True,id="feeds");scheduler.add_job(scheduled_location_data,"interval",seconds=settings.aircraft_cache_seconds,max_instances=1,coalesce=True,id="location-data");scheduler.add_job(cleanup,"cron",hour=3,id="cleanup");scheduler.add_job(scheduled_finance,"interval",minutes=1,max_instances=1,coalesce=True,id="finance");scheduler.add_job(scheduled_podcasts,"interval",minutes=1,max_instances=1,coalesce=True,id="podcasts");scheduler.start()
     try:
@@ -76,6 +85,7 @@ async def lifespan(app):
     finally:
         await snake_hub.stop()
         await four_hub.stop()
+        await yard_hub.stop()
         from app.services import chill
         await chill.shutdown()
         scheduler.shutdown(wait=False)
@@ -109,3 +119,6 @@ from app.api.podcasts import router as podcasts_api
 from app.web.podcasts import router as podcasts_web
 app.include_router(podcasts_api)
 app.include_router(podcasts_web)
+
+from app.api.rangierwerk import router as rangierwerk_api
+app.include_router(rangierwerk_api)

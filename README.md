@@ -1,4 +1,4 @@
-# LEAP Home Server 1.7.0
+# LEAP Home Server 1.10.0
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -45,6 +45,8 @@ stehen die Bereiche untereinander.
 dem Farbschema des Betriebssystems. Standard ist **Hell**. Das Design gilt für
 die Verwaltungsoberfläche; die Display-Vorschau behält die Gerätefarben.
 
+Rangierwerk wird im Geräteeditor unter **Spiele** freigegeben. Auf **Spielestatus** lässt sich die Schwierigkeit für den nächsten gemeinsamen Bahnhof einstellen. [Rangierwerk und Geräteprotokoll](docs/rangierwerk.md)
+
 ## Wichtige Geräte-API
 
 - `GET /api/v1/devices/{device_id}/config`
@@ -66,6 +68,7 @@ die Verwaltungsoberfläche; die Display-Vorschau behält die Gerätefarben.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
+c++ -std=c++17 -O2 -fPIC -shared app/native/rangierwerk.cpp -o app/native/librangierwerk.so
 alembic upgrade head
 uvicorn app.main:app --reload --port 8080
 pytest
