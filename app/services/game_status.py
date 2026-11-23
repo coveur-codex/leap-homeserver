@@ -27,7 +27,7 @@ class GameSession:
     session_id: str
     phase: str
     label: str
-    activity: Literal["waiting", "running", "finished"]
+    activity: Literal["idle", "waiting", "running", "finished"]
     remaining_ms: int
     players: tuple[GameParticipant, ...] = ()
     max_players: int = 0

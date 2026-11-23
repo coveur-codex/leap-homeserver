@@ -3,6 +3,16 @@
 <h1>Spielestatus</h1>
 <p class="muted">Live-Übersicht der vom Homeserver betreuten Spiele. Einzelspiele auf den Geräten werden hier nicht erfasst.</p>
 <p id="game-status-connection" class="muted" role="status" aria-live="polite">Automatische Aktualisierung alle fünf Sekunden.</p>
+<section class="system-section" id="rangierwerk-settings">
+  <h2>Rangierwerk-Einstellungen</h2>
+  <form method="post" action="/games/rangierwerk">
+    <label for="rangierwerk-difficulty">Schwierigkeit ab der nächsten Karte</label>
+    <select id="rangierwerk-difficulty" name="difficulty">
+      {% for level in rangierwerk_levels %}<option value="{{ loop.index }}"{% if loop.index == rangierwerk_level %} selected{% endif %}>{{ loop.index }} – {{ level }}</option>{% endfor %}
+    </select>
+    <button>Speichern</button>
+  </form>
+</section>
 <div data-game-status-url="/games/status">{% include 'game_status_cards.html' %}</div>
 <script src="/static/game-status.js?v=1" defer></script>
 {% endblock %}

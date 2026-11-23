@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Table, Column, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .core.database import Base
 from .core.games import DEFAULT_GAMES
@@ -243,3 +243,13 @@ class PodcastProgress(Base):
     status: Mapped[str] = mapped_column(String(12), default="unheard")
     revision: Mapped[int] = mapped_column(BigInteger, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class RangierwerkSettings(Base):
+    __tablename__ = "rangierwerk_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="rangierwerk_singleton"),
+        CheckConstraint("difficulty BETWEEN 1 AND 4", name="rangierwerk_difficulty"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    difficulty: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
