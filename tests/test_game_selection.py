@@ -1,4 +1,5 @@
 import json
+import pytest
 from importlib import import_module
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -121,3 +122,31 @@ def test_math_lab_moved_to_learning(client, db):
     assert not html.select('input[name="game_ids"][value="math_lab"]')
     assert html.select('[data-page-panel="learning"] input[name="learning_applications"][value="math_lab"][checked]')
     assert html.select('[data-page-panel="learning"] #math-lab input[form="math-lab-settings"]')
+
+
+@pytest.mark.parametrize("game_id", ["minesweeper", "breakout"])
+def test_local_arcade_game_requires_device_opt_in(client, db, game_id):
+    d = make_device(db)
+    plan = client.post("/api/v1/devices/leap-erik/sync",
+                       json={"firmwareVersion": "1.12.0", "installedAssets": {}}).json()
+
+    def config():
+        return client.get(plan["configUrl"]).json()
+
+    def checkbox():
+        editor = BeautifulSoup(client.get(f"/devices/{d.id}").text, "html.parser")
+        return editor.select_one(f'[data-page-panel="games"] input[name="game_ids"][value="{game_id}"]')
+
+    assert {"id": game_id, "enabled": False} in config()["games"]
+    assert checkbox() is not None and not checkbox().has_attr("checked")
+    before = d.config_version
+    form = {"name": "Erik", "age": 9, "avatar": "dragon", "enabled": "on",
+            "page_ids": ["games"], "game_settings": "true", "game_ids": [game_id]}
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    updated = config()
+    assert updated["configVersion"] == before + 1
+    assert [game["id"] for game in updated["games"] if game["enabled"]] == [game_id]
+    assert checkbox().has_attr("checked")
+    form.pop("game_ids")
+    assert client.post(f"/devices/{d.id}", data=form, follow_redirects=False).status_code == 303
+    assert {"id": game_id, "enabled": False} in config()["games"]

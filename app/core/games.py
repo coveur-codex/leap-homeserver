@@ -11,6 +11,9 @@ GAME_REGISTRY = (
     ("dragon_run", "Drachenrennen"),
     ("fall_blocks", "Fallblöcke"),
     ("rangierwerk", "Rangierwerk"),
+    ("minesweeper", "Minesweeper"),
+    ("breakout", "Breakout"),
 )
 # These games are enabled explicitly in the device editor.
-DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id not in {"fall_blocks", "rangierwerk"}]
+OPT_IN_GAMES = {"fall_blocks", "rangierwerk", "minesweeper", "breakout"}
+DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id not in OPT_IN_GAMES]
