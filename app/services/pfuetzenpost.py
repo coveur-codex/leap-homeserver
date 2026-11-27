@@ -42,6 +42,7 @@ class Room:
     dice: tuple[int, int] = (NO_SEAT, NO_SEAT)
     pending: tuple[int, int] | None = None
     active: int = NO_SEAT
+    host: int = NO_SEAT
     round_pending: set[int] = field(default_factory=set)
     revision: int = 0
     move: int = 0
@@ -68,7 +69,7 @@ class Room:
 
     def snapshot(self, seat, now):
         return {"type": "state", "schemaVersion": 1, "session": self.id, "revision": self.revision,
-                "self": seat, "host": min(self.seats, default=NO_SEAT), "turn": self.active,
+                "self": seat, "host": self.host, "turn": self.active,
                 "phase": "paused" if self.pause_remaining is not None else self.phase,
                 "remainingMs": self.remaining_ms(now), "move": self.move, "turnId": self.turn_id, "round": self.round,
                 "positions": self.positions[:], "previous": self.previous[:], "dice": self.dice,
@@ -158,6 +159,8 @@ class PondService:
 
     def _forget(self, room, seat):
         player = room.seats.pop(seat)
+        if room.host == seat:
+            room.host = min(room.seats, default=NO_SEAT)
         if room.phase != "lobby":
             room.retired[seat] = player.name, player.color
         if self.members.get(player.id) == (room, seat):
@@ -213,6 +216,8 @@ class PondService:
                 self.rooms[room.id] = room
             seat = next(i for i in range(LANES) if i not in room.seats)
             room.seats[seat] = Participant(device_id, name, color)
+            if room.host == NO_SEAT:
+                room.host = seat
             self.members[device_id] = room, seat
         player = room.seats[seat]
         player.token = object()
@@ -279,7 +284,7 @@ class PondService:
         if (type(seq) is not int or not player.sequence < seq <= 0xffffffff or
                 type(turn_id) is not int or turn_id != room.turn_id):
             return True
-        if kind == "start" and room.phase == "lobby" and seat == min(room.seats) and len(room.seats) >= 2:
+        if kind == "start" and room.phase == "lobby" and seat == room.host and len(room.seats) >= 2:
             if all(p.disconnected is None for p in room.seats.values()):
                 player.sequence = seq
                 room.start(now, self.choose)

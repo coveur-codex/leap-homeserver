@@ -100,6 +100,20 @@ def test_four_seats_second_room_and_timeout_during_roll():
     assert room.active == 0 and players[4][0].phase == "lobby"
 
 
+def test_host_transfer_during_lobby_survives_seat_reuse():
+    hub = PondService(choose=lambda _: 0)
+    first = hub.join("a", "Ada", "#ffffff", "")
+    second = hub.join("b", "Ben", "#000000", "")
+    send(hub, first, "leave")
+    replacement = hub.join("c", "Cem", "#112233", "")
+    room = replacement[0]
+    assert replacement[1] == 0 and room.host == second[1] == 1
+    send(hub, replacement, "start")
+    assert room.phase == "lobby"
+    send(hub, second, "start")
+    assert room.phase == "ready"
+
+
 def test_device_grant_lobby_and_accent_color_through_real_websockets(client, db):
     for i, color in enumerate(('#0022e0', '#0022e0', '#ee9900')):
         device = Device(device_id=f"frog-{i}", name=f"Gerät {i}", child_name=f"Kind {i}", accent_color=color)
