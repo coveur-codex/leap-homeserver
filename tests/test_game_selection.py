@@ -124,11 +124,11 @@ def test_math_lab_moved_to_learning(client, db):
     assert html.select('[data-page-panel="learning"] #math-lab input[form="math-lab-settings"]')
 
 
-@pytest.mark.parametrize("game_id", ["minesweeper", "breakout"])
-def test_local_arcade_game_requires_device_opt_in(client, db, game_id):
+@pytest.mark.parametrize("game_id", ["minesweeper", "breakout", "dice"])
+def test_offline_game_requires_device_opt_in(client, db, game_id):
     d = make_device(db)
     plan = client.post("/api/v1/devices/leap-erik/sync",
-                       json={"firmwareVersion": "1.12.0", "installedAssets": {}}).json()
+                       json={"firmwareVersion": "1.14.0", "installedAssets": {}}).json()
 
     def config():
         return client.get(plan["configUrl"]).json()

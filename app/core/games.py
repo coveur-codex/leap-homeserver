@@ -14,7 +14,8 @@ GAME_REGISTRY = (
     ("minesweeper", "Minesweeper"),
     ("breakout", "Breakout"),
     ("pfuetzenpost", "Pfützenpost"),
+    ("dice", "Würfeln"),
 )
 # These games are enabled explicitly in the device editor.
-OPT_IN_GAMES = {"fall_blocks", "rangierwerk", "minesweeper", "breakout", "pfuetzenpost"}
+OPT_IN_GAMES = {"fall_blocks", "rangierwerk", "minesweeper", "breakout", "pfuetzenpost", "dice"}
 DEFAULT_GAMES = [game_id for game_id, _ in GAME_REGISTRY if game_id not in OPT_IN_GAMES]
