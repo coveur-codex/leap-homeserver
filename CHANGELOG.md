@@ -1,3 +1,9 @@
+# 1.13.0 – Würfeln für LEAP
+
+- „Würfeln“ lässt sich unter „Spiele“ pro Gerät freigeben und ist standardmäßig
+  deaktiviert. Das Spiel benötigt Firmware 1.14.0 und funktioniert nach dem
+  Konfigurationssync offline.
+
 # 1.11.0 – Minesweeper und Breakout
 
 - Minesweeper und Breakout lassen sich getrennt pro Gerät unter „Spiele“ freigeben.
