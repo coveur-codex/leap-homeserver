@@ -1,4 +1,4 @@
-# LEAP Home Server 1.10.0
+# LEAP Home Server 1.11.0
 
 Lokaler, offline-first Content- und Konfigurationsserver für LEAP-Handhelds. FastAPI normalisiert externe RSS- und Wetterdaten, verarbeitet Bilder und liefert ausschließlich stabile LEAP-Datenmodelle an die Geräte.
 
@@ -28,6 +28,7 @@ Alle persistenten Daten liegen im eingebundenen Verzeichnis `./data`: SQLite unt
 6. Unter **Geräte → Quiz → Mathe-Quiz** Rechenart und Grenze einstellen (z. B. Addition bis 20, Subtraktion bis 100 oder Multiplikation bis 10 für das kleine Einmaleins). Leap erzeugt Aufgaben zufällig und offline mit vier Antworten, Rechenweg und Stellenwerttafel. Auf dem Gerät beginnt die Quizseite mit der Katalogauswahl einschließlich Mathe-Quiz.
 7. Im Geräteeditor die 428×142-Vorschau prüfen.
 8. Speicherbelegung für Flash (Firmware), LittleFS und PSRAM in der Geräteübersicht oder im Geräteeditor ablesen. Die Werte stammen vom letzten Check-in einer passenden Firmware und sind mit Zeitstempel versehen.
+9. Unter **Geräte → Spiele** die Spiele-Seite aktivieren und Minesweeper oder Breakout für das jeweilige Gerät freigeben. Die Spiele sind standardmäßig ausgeschaltet und ab Firmware 1.12.0 nach der Synchronisierung offline spielbar.
 
 Im Geräteeditor stehen **Allgemein**, **Seiten** und die **Seiteneinstellungen**
 nebeneinander. Ein Klick auf einen Seitennamen öffnet die passenden Einstellungen;

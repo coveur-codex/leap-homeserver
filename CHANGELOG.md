@@ -1,3 +1,10 @@
+# 1.11.0 – Minesweeper und Breakout
+
+- Minesweeper und Breakout lassen sich getrennt pro Gerät unter „Spiele“ freigeben.
+  Beide sind standardmäßig deaktiviert und benötigen LEAP-Firmware 1.12.0.
+- Die vorhandene Gerätesynchronisierung überträgt die Freigaben. Beide Spiele
+  sind danach auch offline verfügbar.
+
 # 1.9.0 – Fallblöcke für LEAP
 
 - Fallblöcke lässt sich im Geräteeditor unter „Spiele auf dem Gerät“ pro Gerät
